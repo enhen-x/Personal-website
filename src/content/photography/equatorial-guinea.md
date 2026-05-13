@@ -103,4 +103,15 @@ photos:
   - src: /photos/equtarial Guinea/eq-096.jpeg
   - src: /photos/equtarial Guinea/eq-097.jpeg
   - src: /photos/equtarial Guinea/eq-098.jpeg
+  - src: /photos/equtarial Guinea/eq-099.jpeg
+  - src: /photos/equtarial Guinea/eq-100.jpeg
+  - src: /photos/equtarial Guinea/eq-101.jpeg
+  - src: /photos/equtarial Guinea/eq-102.jpeg
+  - src: /photos/equtarial Guinea/eq-103.jpeg
+  - src: /photos/equtarial Guinea/eq-104.jpeg
+  - src: /photos/equtarial Guinea/eq-105.jpeg
+  - src: /photos/equtarial Guinea/eq-106.jpeg
+  - src: /photos/equtarial Guinea/eq-107.jpeg
+  - src: /photos/equtarial Guinea/eq-108.jpeg
+  - src: /photos/equtarial Guinea/eq-109.jpeg
 ---
