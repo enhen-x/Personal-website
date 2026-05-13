@@ -12,10 +12,15 @@ const { Content } = await post.render();
 ---
 
 <BaseLayout title={post.data.title}>
-  <article class="max-w-2xl mx-auto py-16 px-4 prose prose-gray">
-    <a href="/economics" class="text-sm text-gray-400 hover:text-gray-600 no-underline">← 经济探索</a>
-    <h1 class="mt-6">{post.data.title}</h1>
-    <time class="text-sm text-gray-400">{post.data.date.toLocaleDateString('zh-CN')}</time>
-    <Content />
+  <article class="max-w-2xl mx-auto px-8 pt-16 pb-24">
+    <a href="/economics" class="text-gray-400 text-xs hover:text-gray-700 transition-colors">← 经济探索</a>
+    <p class="text-gray-300 text-xs tracking-widest uppercase mt-6 mb-3">ECONOMICS</p>
+    <h1 class="text-3xl font-bold text-gray-900 mb-3">{post.data.title}</h1>
+    <time class="text-gray-300 text-xs">
+      {post.data.date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}
+    </time>
+    <div class="prose prose-gray mt-10 max-w-none">
+      <Content />
+    </div>
   </article>
 </BaseLayout>
