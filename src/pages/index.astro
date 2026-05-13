@@ -30,7 +30,7 @@ const sections = [
   {
     href: '/abroad',
     label: '海外见闻',
-    description: '热带雨林边缘的工地，石油小国里的日常，异乡人的眼睛。',
+    description: '异乡的街道，陌生的语言，一个中国人在世界各处的观察与记录',
     tag: 'ABROAD',
   },
   {
@@ -48,7 +48,7 @@ const sections = [
   {
     href: '/books',
     label: '读书笔记',
-    description: '读过的书，留下的痕迹。',
+    description: '读过的书，留下思考的痕迹',
     tag: 'BOOKS',
   },
   {
@@ -73,20 +73,33 @@ const sections = [
 
   <!-- Where / Who -->
   <section class="max-w-6xl mx-auto px-8 py-10 border-b border-gray-100">
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-px bg-gray-100">
-      <div class="bg-white pr-8 py-6 md:pr-12">
-        <p class="text-gray-300 text-xs tracking-widest uppercase mb-3">WHERE IS IT</p>
-        <p class="text-gray-700 text-sm leading-relaxed">
-          这里是一个记录探索产出的地方——观察、思考、影像。<br />
-          不是简历，不是作品集，更像是一本持续更新的私人志。
-        </p>
+    <div class="flex flex-col md:flex-row gap-8 md:gap-12">
+      <!-- 头像 -->
+      <div class="shrink-0 flex justify-center md:justify-start">
+        <img
+          src="/photos/profile/ef00a9f15c4043ceea0cf65a5646a7c.jpg"
+          alt="profile"
+          class="w-24 h-24 md:w-28 md:h-28 rounded-full object-cover mt-6"
+        />
       </div>
-      <div class="bg-white pl-8 py-6 md:pl-12 border-t md:border-t-0 md:border-l border-gray-100">
-        <p class="text-gray-300 text-xs tracking-widest uppercase mb-3">WHO AM I</p>
-        <p class="text-gray-700 text-sm leading-relaxed">
-          四川人，东南大学道桥专业，现在赤道几内亚做工程。<br />
-          理工、动漫、摄影、西语、投资、人文——探索是唯一的主线。
-        </p>
+      <!-- 内容 -->
+      <div class="flex flex-col md:flex-row gap-px bg-gray-100 flex-1">
+        <div class="bg-white pr-8 py-6 md:pr-12 flex-1">
+          <p class="text-gray-300 text-xs tracking-widest uppercase mb-3">WHO AM I</p>
+          <ul class="text-gray-700 text-sm leading-loose space-y-1">
+            <li>→ Hi，我是 小林Schelling — 一个在赤道几内亚修路的工程师</li>
+            <li>→ 探索理工、动漫、摄影、西语、投资、人文、仍在完善ing</li>
+            <li>→ 下一站是 KTH · Mechanical Engineering</li>
+          </ul>
+        </div>
+        <div class="bg-white pl-8 py-6 md:pl-12 border-t md:border-t-0 md:border-l border-gray-100 flex-1">
+          <p class="text-gray-300 text-xs tracking-widest uppercase mb-3">WHERE IS IT</p>
+          <ul class="text-gray-700 text-sm leading-loose space-y-1">
+            <li>→ 这里是一块精神的自留地</li>
+            <li>→ 种什么、怎么种，都由我说了算</li>
+            <li>→ 这里有我的见闻、正在鼓捣的项目、对经济的思考、在读的书和一些照片</li>
+          </ul>
+        </div>
       </div>
     </div>
   </section>

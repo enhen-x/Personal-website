@@ -9,7 +9,7 @@ const sorted = posts.sort((a, b) => b.data.date.getTime() - a.data.date.getTime(
 <BaseLayout title="海外见闻">
   <section class="max-w-2xl mx-auto py-16 px-4">
     <h1 class="text-3xl font-bold mb-4">海外见闻</h1>
-    <p class="text-gray-500 mb-12">赤道几内亚的人文、历史与生活观察</p>
+    <p class="text-gray-500 mb-12">异乡的街道，陌生的语言，一个中国人在世界各处的观察与记录</p>
     <div class="space-y-8">
       {sorted.map((post) => (
         <a href={`/abroad/${post.slug}`} class="block group">

@@ -1,106 +1,106 @@
 ---
 title: 赤道几内亚印象
 date: 2026-05-13
-description: 热带雨林、石油小国与非洲街头——两年工作生活的影像记录。
+description: 热带雨林、石油小国与非洲街头——两年工作生活的影像记录
 location: 赤道几内亚
-cover: /photos/eq-086.jpeg
+cover: /photos/equtarial Guinea/eq-086.jpeg
 photos:
-  - src: /photos/eq-001.jpeg
-  - src: /photos/eq-002.jpeg
-  - src: /photos/eq-003.jpeg
-  - src: /photos/eq-004.jpeg
-  - src: /photos/eq-005.jpeg
-  - src: /photos/eq-006.jpeg
-  - src: /photos/eq-007.jpeg
-  - src: /photos/eq-008.jpeg
-  - src: /photos/eq-009.jpeg
-  - src: /photos/eq-010.jpeg
-  - src: /photos/eq-011.jpeg
-  - src: /photos/eq-012.jpeg
-  - src: /photos/eq-013.jpeg
-  - src: /photos/eq-014.jpeg
-  - src: /photos/eq-015.jpeg
-  - src: /photos/eq-016.jpeg
-  - src: /photos/eq-017.jpeg
-  - src: /photos/eq-018.jpeg
-  - src: /photos/eq-019.jpeg
-  - src: /photos/eq-020.jpeg
-  - src: /photos/eq-021.jpeg
-  - src: /photos/eq-022.jpeg
-  - src: /photos/eq-023.jpeg
-  - src: /photos/eq-024.jpeg
-  - src: /photos/eq-025.jpeg
-  - src: /photos/eq-026.jpeg
-  - src: /photos/eq-027.jpeg
-  - src: /photos/eq-028.jpeg
-  - src: /photos/eq-029.jpeg
-  - src: /photos/eq-030.jpeg
-  - src: /photos/eq-031.jpeg
-  - src: /photos/eq-032.jpeg
-  - src: /photos/eq-033.jpeg
-  - src: /photos/eq-034.jpeg
-  - src: /photos/eq-035.jpeg
-  - src: /photos/eq-036.jpeg
-  - src: /photos/eq-037.jpeg
-  - src: /photos/eq-038.jpeg
-  - src: /photos/eq-039.jpeg
-  - src: /photos/eq-040.jpeg
-  - src: /photos/eq-041.jpeg
-  - src: /photos/eq-042.jpeg
-  - src: /photos/eq-043.jpeg
-  - src: /photos/eq-044.jpeg
-  - src: /photos/eq-045.jpeg
-  - src: /photos/eq-046.jpeg
-  - src: /photos/eq-047.jpeg
-  - src: /photos/eq-048.jpeg
-  - src: /photos/eq-049.jpeg
-  - src: /photos/eq-050.jpeg
-  - src: /photos/eq-051.jpeg
-  - src: /photos/eq-052.jpeg
-  - src: /photos/eq-053.jpeg
-  - src: /photos/eq-054.jpeg
-  - src: /photos/eq-055.jpeg
-  - src: /photos/eq-056.jpeg
-  - src: /photos/eq-057.jpeg
-  - src: /photos/eq-058.jpeg
-  - src: /photos/eq-059.jpeg
-  - src: /photos/eq-060.jpeg
-  - src: /photos/eq-061.jpeg
-  - src: /photos/eq-062.jpeg
-  - src: /photos/eq-063.jpeg
-  - src: /photos/eq-064.jpeg
-  - src: /photos/eq-065.jpeg
-  - src: /photos/eq-066.jpeg
-  - src: /photos/eq-067.jpeg
-  - src: /photos/eq-068.jpeg
-  - src: /photos/eq-069.jpeg
-  - src: /photos/eq-070.jpeg
-  - src: /photos/eq-071.jpeg
-  - src: /photos/eq-072.jpeg
-  - src: /photos/eq-073.jpeg
-  - src: /photos/eq-074.jpeg
-  - src: /photos/eq-075.jpeg
-  - src: /photos/eq-076.jpeg
-  - src: /photos/eq-077.jpeg
-  - src: /photos/eq-078.jpeg
-  - src: /photos/eq-079.jpeg
-  - src: /photos/eq-080.jpeg
-  - src: /photos/eq-081.jpeg
-  - src: /photos/eq-082.jpeg
-  - src: /photos/eq-083.jpeg
-  - src: /photos/eq-084.jpeg
-  - src: /photos/eq-085.jpeg
-  - src: /photos/eq-086.jpeg
-  - src: /photos/eq-087.jpeg
-  - src: /photos/eq-088.jpeg
-  - src: /photos/eq-089.jpeg
-  - src: /photos/eq-090.jpeg
-  - src: /photos/eq-091.jpeg
-  - src: /photos/eq-092.jpeg
-  - src: /photos/eq-093.jpeg
-  - src: /photos/eq-094.jpeg
-  - src: /photos/eq-095.jpeg
-  - src: /photos/eq-096.jpeg
-  - src: /photos/eq-097.jpeg
-  - src: /photos/eq-098.jpeg
+  - src: /photos/equtarial Guinea/eq-001.jpeg
+  - src: /photos/equtarial Guinea/eq-002.jpeg
+  - src: /photos/equtarial Guinea/eq-003.jpeg
+  - src: /photos/equtarial Guinea/eq-004.jpeg
+  - src: /photos/equtarial Guinea/eq-005.jpeg
+  - src: /photos/equtarial Guinea/eq-006.jpeg
+  - src: /photos/equtarial Guinea/eq-007.jpeg
+  - src: /photos/equtarial Guinea/eq-008.jpeg
+  - src: /photos/equtarial Guinea/eq-009.jpeg
+  - src: /photos/equtarial Guinea/eq-010.jpeg
+  - src: /photos/equtarial Guinea/eq-011.jpeg
+  - src: /photos/equtarial Guinea/eq-012.jpeg
+  - src: /photos/equtarial Guinea/eq-013.jpeg
+  - src: /photos/equtarial Guinea/eq-014.jpeg
+  - src: /photos/equtarial Guinea/eq-015.jpeg
+  - src: /photos/equtarial Guinea/eq-016.jpeg
+  - src: /photos/equtarial Guinea/eq-017.jpeg
+  - src: /photos/equtarial Guinea/eq-018.jpeg
+  - src: /photos/equtarial Guinea/eq-019.jpeg
+  - src: /photos/equtarial Guinea/eq-020.jpeg
+  - src: /photos/equtarial Guinea/eq-021.jpeg
+  - src: /photos/equtarial Guinea/eq-022.jpeg
+  - src: /photos/equtarial Guinea/eq-023.jpeg
+  - src: /photos/equtarial Guinea/eq-024.jpeg
+  - src: /photos/equtarial Guinea/eq-025.jpeg
+  - src: /photos/equtarial Guinea/eq-026.jpeg
+  - src: /photos/equtarial Guinea/eq-027.jpeg
+  - src: /photos/equtarial Guinea/eq-028.jpeg
+  - src: /photos/equtarial Guinea/eq-029.jpeg
+  - src: /photos/equtarial Guinea/eq-030.jpeg
+  - src: /photos/equtarial Guinea/eq-031.jpeg
+  - src: /photos/equtarial Guinea/eq-032.jpeg
+  - src: /photos/equtarial Guinea/eq-033.jpeg
+  - src: /photos/equtarial Guinea/eq-034.jpeg
+  - src: /photos/equtarial Guinea/eq-035.jpeg
+  - src: /photos/equtarial Guinea/eq-036.jpeg
+  - src: /photos/equtarial Guinea/eq-037.jpeg
+  - src: /photos/equtarial Guinea/eq-038.jpeg
+  - src: /photos/equtarial Guinea/eq-039.jpeg
+  - src: /photos/equtarial Guinea/eq-040.jpeg
+  - src: /photos/equtarial Guinea/eq-041.jpeg
+  - src: /photos/equtarial Guinea/eq-042.jpeg
+  - src: /photos/equtarial Guinea/eq-043.jpeg
+  - src: /photos/equtarial Guinea/eq-044.jpeg
+  - src: /photos/equtarial Guinea/eq-045.jpeg
+  - src: /photos/equtarial Guinea/eq-046.jpeg
+  - src: /photos/equtarial Guinea/eq-047.jpeg
+  - src: /photos/equtarial Guinea/eq-048.jpeg
+  - src: /photos/equtarial Guinea/eq-049.jpeg
+  - src: /photos/equtarial Guinea/eq-050.jpeg
+  - src: /photos/equtarial Guinea/eq-051.jpeg
+  - src: /photos/equtarial Guinea/eq-052.jpeg
+  - src: /photos/equtarial Guinea/eq-053.jpeg
+  - src: /photos/equtarial Guinea/eq-054.jpeg
+  - src: /photos/equtarial Guinea/eq-055.jpeg
+  - src: /photos/equtarial Guinea/eq-056.jpeg
+  - src: /photos/equtarial Guinea/eq-057.jpeg
+  - src: /photos/equtarial Guinea/eq-058.jpeg
+  - src: /photos/equtarial Guinea/eq-059.jpeg
+  - src: /photos/equtarial Guinea/eq-060.jpeg
+  - src: /photos/equtarial Guinea/eq-061.jpeg
+  - src: /photos/equtarial Guinea/eq-062.jpeg
+  - src: /photos/equtarial Guinea/eq-063.jpeg
+  - src: /photos/equtarial Guinea/eq-064.jpeg
+  - src: /photos/equtarial Guinea/eq-065.jpeg
+  - src: /photos/equtarial Guinea/eq-066.jpeg
+  - src: /photos/equtarial Guinea/eq-067.jpeg
+  - src: /photos/equtarial Guinea/eq-068.jpeg
+  - src: /photos/equtarial Guinea/eq-069.jpeg
+  - src: /photos/equtarial Guinea/eq-070.jpeg
+  - src: /photos/equtarial Guinea/eq-071.jpeg
+  - src: /photos/equtarial Guinea/eq-072.jpeg
+  - src: /photos/equtarial Guinea/eq-073.jpeg
+  - src: /photos/equtarial Guinea/eq-074.jpeg
+  - src: /photos/equtarial Guinea/eq-075.jpeg
+  - src: /photos/equtarial Guinea/eq-076.jpeg
+  - src: /photos/equtarial Guinea/eq-077.jpeg
+  - src: /photos/equtarial Guinea/eq-078.jpeg
+  - src: /photos/equtarial Guinea/eq-079.jpeg
+  - src: /photos/equtarial Guinea/eq-080.jpeg
+  - src: /photos/equtarial Guinea/eq-081.jpeg
+  - src: /photos/equtarial Guinea/eq-082.jpeg
+  - src: /photos/equtarial Guinea/eq-083.jpeg
+  - src: /photos/equtarial Guinea/eq-084.jpeg
+  - src: /photos/equtarial Guinea/eq-085.jpeg
+  - src: /photos/equtarial Guinea/eq-086.jpeg
+  - src: /photos/equtarial Guinea/eq-087.jpeg
+  - src: /photos/equtarial Guinea/eq-088.jpeg
+  - src: /photos/equtarial Guinea/eq-089.jpeg
+  - src: /photos/equtarial Guinea/eq-090.jpeg
+  - src: /photos/equtarial Guinea/eq-091.jpeg
+  - src: /photos/equtarial Guinea/eq-092.jpeg
+  - src: /photos/equtarial Guinea/eq-093.jpeg
+  - src: /photos/equtarial Guinea/eq-094.jpeg
+  - src: /photos/equtarial Guinea/eq-095.jpeg
+  - src: /photos/equtarial Guinea/eq-096.jpeg
+  - src: /photos/equtarial Guinea/eq-097.jpeg
+  - src: /photos/equtarial Guinea/eq-098.jpeg
 ---
