@@ -3,7 +3,8 @@
     "allow": [
       "PowerShell(node --version)",
       "PowerShell(npm --version)",
-      "WebFetch(domain:www.nasa.gov)"
+      "WebFetch(domain:www.nasa.gov)",
+      "PowerShell(cd \"G:\\\\桌面\\\\web3\\\\个人网页\"; git update-index --chmod=+x node_modules/.bin/astro 2>&1; Write-Host \"exit: $LASTEXITCODE\")"
     ]
   }
 }
