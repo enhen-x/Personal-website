@@ -8,9 +8,9 @@ const sorted = books.sort((a, b) => b.data.date.getTime() - a.data.date.getTime(
 
 <BaseLayout title="读书笔记">
   <section class="max-w-6xl mx-auto px-8 pt-16 pb-8">
-    <p class="text-gray-400 text-xs tracking-widest uppercase mb-4">BOOKS</p>
+    <p class="text-gray-300 text-xs tracking-widest uppercase mb-4">BOOKS</p>
     <h1 class="text-3xl font-bold text-gray-900 mb-2">读书笔记</h1>
-    <p class="text-gray-400 text-sm">读过的书，留下的痕迹。</p>
+    <p class="text-gray-400 text-sm">读过的书，留下思考的痕迹</p>
   </section>
 
   <section class="max-w-6xl mx-auto px-8 pb-20">
@@ -32,7 +32,7 @@ const sorted = books.sort((a, b) => b.data.date.getTime() - a.data.date.getTime(
         ))}
       </div>
     ) : (
-      <p class="text-gray-300 text-sm py-12">笔记整理中。</p>
+      <p class="text-gray-300 text-sm py-12">笔记整理中</p>
     )}
   </section>
 </BaseLayout>

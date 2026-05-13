@@ -7,23 +7,34 @@ const sorted = posts.sort((a, b) => b.data.date.getTime() - a.data.date.getTime(
 ---
 
 <BaseLayout title="主要项目">
-  <section class="max-w-2xl mx-auto py-16 px-4">
-    <h1 class="text-3xl font-bold mb-12">主要项目</h1>
-    <div class="space-y-8">
-      {sorted.map((post) => (
-        <a href={`/projects/${post.slug}`} class="block group border border-gray-100 rounded-lg p-6 hover:border-gray-300 transition-colors">
-          <time class="text-sm text-gray-400">{post.data.date.toLocaleDateString('zh-CN')}</time>
-          <h2 class="text-xl font-semibold mt-1 group-hover:underline">{post.data.title}</h2>
-          <p class="text-gray-600 mt-2">{post.data.description}</p>
-          {post.data.tags && (
-            <div class="flex gap-2 mt-3 flex-wrap">
-              {post.data.tags.map((tag: string) => (
-                <span class="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">{tag}</span>
-              ))}
+  <section class="max-w-6xl mx-auto px-8 pt-16 pb-8">
+    <p class="text-gray-300 text-xs tracking-widest uppercase mb-4">PROJECTS</p>
+    <h1 class="text-3xl font-bold text-gray-900 mb-2">主要项目</h1>
+    <p class="text-gray-400 text-sm">用手和脑做过的事，留下来的痕迹</p>
+  </section>
+
+  <section class="max-w-6xl mx-auto px-8 pb-20">
+    {sorted.length > 0 ? (
+      <div class="divide-y divide-gray-100">
+        {sorted.map((post) => (
+          <a href={`/projects/${post.slug}`} class="group flex items-center gap-6 py-4 hover:bg-gray-50 -mx-4 px-4 transition-colors">
+            <time class="text-gray-300 text-xs tabular-nums w-24 shrink-0">
+              {post.data.date.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })}
+            </time>
+            <div class="flex-1 min-w-0">
+              <h2 class="text-gray-900 text-sm font-medium group-hover:text-gray-500 transition-colors truncate">{post.data.title}</h2>
+              {post.data.description && (
+                <p class="text-gray-400 text-xs mt-0.5 truncate">{post.data.description}</p>
+              )}
             </div>
-          )}
-        </a>
-      ))}
-    </div>
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-gray-200 group-hover:text-gray-400 shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </a>
+        ))}
+      </div>
+    ) : (
+      <p class="text-gray-300 text-sm py-12">项目整理中</p>
+    )}
   </section>
 </BaseLayout>
