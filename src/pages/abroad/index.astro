@@ -6,10 +6,10 @@ const posts = await getCollection('abroad');
 const sorted = posts.sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
 ---
 
-<BaseLayout title="海外见闻">
+<BaseLayout title="见闻">
   <section class="max-w-6xl mx-auto px-8 pt-16 pb-8">
     <p class="text-gray-300 text-xs tracking-widest uppercase mb-4">ABROAD</p>
-    <h1 class="text-3xl font-bold text-gray-900 mb-2">海外见闻</h1>
+    <h1 class="text-3xl font-bold text-gray-900 mb-2">见闻</h1>
     <p class="text-gray-400 text-sm">异乡的街道，陌生的语言，一个中国人在世界各处的观察与记录</p>
   </section>
 

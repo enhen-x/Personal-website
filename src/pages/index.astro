@@ -19,7 +19,7 @@ const allPosts = (
     title: p.data.title,
     date: p.data.date,
     href: `/${['abroad', 'projects', 'economics', 'books'][i]}/${p.slug}`,
-    sectionTag: ['海外见闻', '主要项目', '经济探索', '读书笔记'][i],
+    sectionTag: ['见闻', '项目', '经济', '读书'][i],
   }))
 );
 const recentPosts = allPosts
@@ -29,25 +29,25 @@ const recentPosts = allPosts
 const sections = [
   {
     href: '/abroad',
-    label: '海外见闻',
+    label: '见闻',
     description: '异乡的街道，陌生的语言，一个中国人在世界各处的观察与记录',
     tag: 'ABROAD',
   },
   {
     href: '/projects',
-    label: '主要项目',
+    label: '项目',
     description: '用手和脑做过的事，留下来的痕迹',
     tag: 'PROJECTS',
   },
   {
     href: '/economics',
-    label: '经济探索',
+    label: '经济',
     description: '数字背后的人，市场背后的逻辑，以及更多的疑问',
     tag: 'ECONOMICS',
   },
   {
     href: '/books',
-    label: '读书笔记',
+    label: '读书',
     description: '读过的书，留下思考的痕迹',
     tag: 'BOOKS',
   },
@@ -95,9 +95,9 @@ const sections = [
         <div class="bg-white pl-8 py-6 md:pl-12 border-t md:border-t-0 md:border-l border-gray-100 flex-1">
           <p class="text-gray-300 text-xs tracking-widest uppercase mb-3">WHERE IS IT</p>
           <ul class="text-gray-700 text-sm leading-loose space-y-1">
-            <li>→ 这里是一块精神的自留地</li>
+            <li>→ 这里是 小林Schelling 的精神自留地</li>
             <li>→ 种什么、怎么种，都由我说了算</li>
-            <li>→ 这里有我的见闻、正在鼓捣的项目、对经济的思考、在读的书和一些照片</li>
+            <li>→ 这里有我的见闻、自己鼓捣的项目、对经济的思考、在读的书和一些照片</li>
           </ul>
         </div>
       </div>
