@@ -13,6 +13,20 @@ const sorted = albums.sort((a, b) => b.data.date.getTime() - a.data.date.getTime
     <p class="text-gray-400 mb-12">用镜头记录路上的光与影</p>
 
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <!-- 胶片入口卡片 -->
+      <a href="/photography/film" class="group relative overflow-hidden aspect-[4/3] bg-gray-900 block">
+        <img
+          src="/photos/film/No.1/film-013.jpeg"
+          alt="胶片"
+          class="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500"
+        />
+        <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent"></div>
+        <div class="absolute bottom-0 left-0 right-0 p-5">
+          <span class="text-[#4a9eff] text-xs font-semibold tracking-widest uppercase">FILM</span>
+          <h2 class="text-white text-lg font-bold mt-1">胶片</h2>
+          <p class="text-gray-300 text-sm mt-1">每一卷胶片的记录</p>
+        </div>
+      </a>
       {sorted.map((album) => (
         <a href={`/photography/${album.slug}`} class="group relative overflow-hidden aspect-[4/3] bg-gray-900 block">
           <img

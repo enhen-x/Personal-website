@@ -32,11 +32,28 @@ const photographyCollection = defineCollection({
   }),
 });
 
+const filmCollection = defineCollection({
+  type: 'content',
+  schema: z.object({
+    date: z.date(),
+    title: z.string().optional(),
+    description: z.string().optional(),
+    camera: z.string().optional(),
+    film: z.string().optional(),
+    cover: z.string(),
+    photos: z.array(z.object({
+      src: z.string(),
+      caption: z.string().optional(),
+    })),
+  }),
+});
+
 export const collections = {
   timeline: timelineCollection,
   abroad: defineCollection({ type: 'content', schema: postSchema }),
   projects: defineCollection({ type: 'content', schema: postSchema }),
   economics: defineCollection({ type: 'content', schema: postSchema }),
   photography: photographyCollection,
+  film: filmCollection,
   books: defineCollection({ type: 'content', schema: postSchema }),
 };
