@@ -1,9 +1,11 @@
----
+﻿---
 title: 机场道面板底脱空监测与评估
-date: 2024-05-29
+date: 2024-06-20
 description: 本科毕业设计。基于有限元仿真与振动响应分析，提出一种利用功率谱密度指标定量评估机场水泥混凝土道面板底脱空程度的方法，并延伸为发表于 Measurement 期刊的预测模型研究。
 ---
-## 研究背景
+<div style="height:3rem;"></div>
+研究背景
+<div style="height:1.5rem;"></div>
 
 机场跑道采用水泥混凝土刚性道面结构，长期承受飞机动荷载与自然环境的共同作用。板底脱空是其中一类隐蔽性较强的结构病害——道面板与基层之间出现空隙后，板块失去均匀支承，荷载集中于局部区域，进而引发断板、错台等严重损伤，对飞机起降安全构成威胁。
 
@@ -11,17 +13,39 @@ description: 本科毕业设计。基于有限元仿真与振动响应分析，�
 
 ---
 
-## 研究内容
+<div style="height:3rem;"></div>
+研究内容
+<div style="height:1.5rem;"></div>
 
 **有限元建模**
 
 依据机场道面规范参数，使用 ABAQUS 建立了机场水泥混凝土道面板的三维有限元模型。通过在板底设置不同面积的接触脱离区域模拟脱空状态，施加落锤式弯沉仪冲击荷载，获取各测点的加速度时程响应。
 
+<figure style="margin:1.25rem 0; text-align:center;">
+  <img src="/photos/project/No.1/%E5%9B%BE%E7%89%871.png" alt="有限元应力云图（冲击荷载作用下的板体局部响应）" style="display:block; margin:0 auto;" />
+  <figcaption style="margin-top:0.5rem; font-size:0.9em; color:#666;">图1. 冲击荷载作用后的局部应力集中区，用于说明脱空邻域在动力作用下的高敏感响应位置。</figcaption>
+</figure>
+
 **振动信号分析**
 
 对冲击荷载作用下的加速度时域信号进行频域变换与小波变换分析，观察脱空状态下道面板振动特征的变化规律。研究发现，板底脱空导致自由振动阶段高频区域幅度显著降低，这一现象为后续指标提取提供了依据。
 
+<figure style="margin:1.25rem 0; text-align:center;">
+  <img src="/photos/project/No.1/%E5%9B%BE%E7%89%872.png" alt="多测点加速度时程响应（传感器阵列）" style="display:block; margin:0 auto;" />
+  <figcaption style="margin-top:0.5rem; font-size:0.9em; color:#666;">图2. 多测点加速度时程曲线，体现冲击后自由振动阶段不同测点的响应差异。</figcaption>
+</figure>
+
+<figure style="margin:1.25rem 0; text-align:center;">
+  <img src="/photos/project/No.1/%E5%9B%BE%E7%89%873.png" alt="无脱空与不同脱空程度的时域/频域对比" style="display:block; margin:0 auto;" />
+  <figcaption style="margin-top:0.5rem; font-size:0.9em; color:#666;">图3. 无脱空、轻度脱空、重度脱空工况的时域与频域对比，可见脱空工况下高频分量衰减更明显。</figcaption>
+</figure>
+
 在此基础上，提出基于多测点功率谱密度（PSD）积分值的归一化指标，用于量化脱空引起的局部刚度退化与能量耗散。该指标通过传感器阵列采集，可在有限测点条件下实现对脱空状态的定量表征。
+
+<figure style="margin:1.25rem 0; text-align:center;">
+  <img src="/photos/project/No.1/%E5%9B%BE%E7%89%874.png" alt="时域、频域与PSD曲线综合对比（无脱空/0.8m/1.6m）" style="display:block; margin:0 auto;" />
+  <figcaption style="margin-top:0.5rem; font-size:0.9em; color:#666;">图4. PSD维度对比显示，随着脱空尺度增大，功率谱密度整体下降且高频段衰减增强，与归一化PSD积分指标的表征思路一致。</figcaption>
+</figure>
 
 **正交试验验证**
 
@@ -29,7 +53,9 @@ description: 本科毕业设计。基于有限元仿真与振动响应分析，�
 
 ---
 
-## 延伸研究
+<div style="height:3rem;"></div>
+延伸研究
+<div style="height:1.5rem;"></div>
 
 本科毕设完成后，导师课题组在此工作基础上进行了延伸研究，引入实验室缩尺模型试验对振动响应方法的可行性进行了实验验证，并构建了包含 225 个多工况场景的数据集，采用 Histogram-based Gradient Boosting 算法建立了脱空尺寸预测模型。
 
@@ -41,7 +67,9 @@ description: 本科毕业设计。基于有限元仿真与振动响应分析，�
 
 ---
 
-## 主要结论
+<div style="height:3rem;"></div>
+主要结论
+<div style="height:1.5rem;"></div>
 
 - 板底脱空在冲击荷载作用下会导致道面板高频振动能量的显著衰减，这一特征可作为脱空识别的物理依据。
 - 基于归一化功率谱密度积分值构建的评价指标，能够有效反映不同脱空面积下的结构刚度退化程度。
