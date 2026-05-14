@@ -12,3 +12,21 @@
     font-family: 'Noto Serif SC', serif;
   }
 }
+
+@layer components {
+  .entry-content p,
+  .entry-content img,
+  .entry-content hr,
+  .entry-content figure {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  .entry-content p {
+    line-height: 1.75;
+  }
+
+  .entry-content > * + * {
+    margin-top: 2rem;
+  }
+}

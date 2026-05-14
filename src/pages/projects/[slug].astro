@@ -13,6 +13,30 @@ const { Content } = await post.render();
 ---
 
 <BaseLayout title={post.data.title}>
+  <style is:global>
+    .entry-content p,
+    .entry-content img,
+    .entry-content hr,
+    .entry-content figure {
+      margin-top: 0 !important;
+      margin-bottom: 0 !important;
+    }
+
+    .entry-content p {
+      line-height: 1.75 !important;
+    }
+
+    .entry-content > * + * {
+      margin-top: 2rem !important;
+    }
+
+    .entry-content p > img {
+      display: block;
+      margin-top: 2rem !important;
+      margin-bottom: 0 !important;
+    }
+  </style>
+
   <article class="max-w-2xl mx-auto px-8 pt-16 pb-24">
     <a href="/projects" class="text-gray-400 text-xs hover:text-gray-700 transition-colors">← 主要项目</a>
     <p class="text-gray-300 text-xs tracking-widest uppercase mt-6 mb-3">PROJECTS · No.{no}</p>
@@ -29,7 +53,7 @@ const { Content } = await post.render();
         </div>
       )}
     </div>
-    <div class="prose prose-gray mt-10 max-w-none prose-h2:mt-12 prose-h2:mb-4 prose-p:leading-relaxed prose-hr:my-10">
+    <div class="entry-content prose prose-gray mt-10 max-w-none prose-h2:mt-12 prose-h2:mb-4 prose-p:leading-relaxed prose-hr:my-10">
       <Content />
     </div>
   </article>

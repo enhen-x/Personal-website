@@ -4,7 +4,12 @@
       "PowerShell(node --version)",
       "PowerShell(npm --version)",
       "WebFetch(domain:www.nasa.gov)",
-      "PowerShell(cd \"G:\\\\桌面\\\\web3\\\\个人网页\"; git update-index --chmod=+x node_modules/.bin/astro 2>&1; Write-Host \"exit: $LASTEXITCODE\")"
+      "PowerShell(cd \"G:\\\\桌面\\\\web3\\\\个人网页\"; git update-index --chmod=+x node_modules/.bin/astro 2>&1; Write-Host \"exit: $LASTEXITCODE\")",
+      "PowerShell(pandoc --version 2>$null)",
+      "PowerShell(if \\(-not $?\\) { \"pandoc not found\" })",
+      "PowerShell(pdftotext \"g:\\\\����\\\\web3\\\\������ҳ\\\\src\\\\content\\\\projects\\\\MEAS-D-25-09724_R2.pdf\" \"g:\\\\����\\\\web3\\\\������ҳ\\\\src\\\\content\\\\projects\\\\paper.txt\" 2>&1)",
+      "PowerShell(if \\(-not $?\\) { \"pdftotext not found\" })",
+      "PowerShell(ls \"g:\\\\����\\\\web3\\\\������ҳ\\\\src\\\\content\\\\projects\\\\No.1 ��ҵ���\\\\\")"
     ]
   }
 }

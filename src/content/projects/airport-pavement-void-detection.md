@@ -3,9 +3,9 @@ title: 机场道面板底脱空监测与评估
 date: 2024-06-20
 description: 本科毕业设计。基于有限元仿真与振动响应分析，提出一种利用功率谱密度指标定量评估机场水泥混凝土道面板底脱空程度的方法，并延伸为发表于 Measurement 期刊的预测模型研究。
 ---
-<div style="height:3rem;"></div>
+
 研究背景
-<div style="height:1.5rem;"></div>
+<div style="height:1rem;"></div>
 
 机场跑道采用水泥混凝土刚性道面结构，长期承受飞机动荷载与自然环境的共同作用。板底脱空是其中一类隐蔽性较强的结构病害——道面板与基层之间出现空隙后，板块失去均匀支承，荷载集中于局部区域，进而引发断板、错台等严重损伤，对飞机起降安全构成威胁。
 
@@ -13,9 +13,9 @@ description: 本科毕业设计。基于有限元仿真与振动响应分析，�
 
 ---
 
-<div style="height:3rem;"></div>
+<div style="height:2rem;"></div>
 研究内容
-<div style="height:1.5rem;"></div>
+<div style="height:1em;"></div>
 
 **有限元建模**
 
@@ -53,9 +53,9 @@ description: 本科毕业设计。基于有限元仿真与振动响应分析，�
 
 ---
 
-<div style="height:3rem;"></div>
+<div style="height:2rem;"></div>
 延伸研究
-<div style="height:1.5rem;"></div>
+<div style="height:1rem;"></div>
 
 本科毕设完成后，导师课题组在此工作基础上进行了延伸研究，引入实验室缩尺模型试验对振动响应方法的可行性进行了实验验证，并构建了包含 225 个多工况场景的数据集，采用 Histogram-based Gradient Boosting 算法建立了脱空尺寸预测模型。
 
@@ -67,9 +67,7 @@ description: 本科毕业设计。基于有限元仿真与振动响应分析，�
 
 ---
 
-<div style="height:3rem;"></div>
-主要结论
-<div style="height:1.5rem;"></div>
+<div style="height:2rem;"></div>主要结论
 
 - 板底脱空在冲击荷载作用下会导致道面板高频振动能量的显著衰减，这一特征可作为脱空识别的物理依据。
 - 基于归一化功率谱密度积分值构建的评价指标，能够有效反映不同脱空面积下的结构刚度退化程度。
