@@ -7,21 +7,25 @@ const latestAlbums = albums
   .sort((a, b) => b.data.date.getTime() - a.data.date.getTime())
   .slice(0, 3);
 
-const allPosts = (
-  await Promise.all([
-    getCollection('abroad'),
-    getCollection('projects'),
-    getCollection('economics'),
-    getCollection('books'),
-  ])
-).flatMap((col, i) =>
-  col.map((p) => ({
+const collections = await Promise.all([
+  getCollection('abroad'),
+  getCollection('projects'),
+  getCollection('economics'),
+  getCollection('books'),
+]);
+const sectionNames = ['abroad', 'projects', 'economics', 'books'];
+const sectionTags = ['见闻', '项目', '经济', '读书'];
+
+const allPosts = collections.flatMap((col, i) => {
+  const sorted = col.sort((a, b) => a.data.date.getTime() - b.data.date.getTime());
+  return sorted.map((p, j) => ({
     title: p.data.title,
     date: p.data.date,
-    href: `/${['abroad', 'projects', 'economics', 'books'][i]}/${p.slug}`,
-    sectionTag: ['见闻', '项目', '经济', '读书'][i],
-  }))
-);
+    href: `/${sectionNames[i]}/${p.slug}`,
+    sectionTag: sectionTags[i],
+    no: j + 1,
+  }));
+});
 const recentPosts = allPosts
   .sort((a, b) => b.date.getTime() - a.date.getTime())
   .slice(0, 5);
@@ -92,12 +96,12 @@ const sections = [
             <li>→ 下一站是 KTH · Mechanical Engineering</li>
           </ul>
         </div>
-        <div class="bg-white pl-8 py-6 md:pl-12 border-t md:border-t-0 md:border-l border-gray-100 flex-1">
+        <div class="bg-white pl-8 py-6 md:pl-12 border-t md:border-t-0 md:border-l border-gray-100 flex-1 text-right">
           <p class="text-gray-300 text-xs tracking-widest uppercase mb-3">WHERE IS IT</p>
           <ul class="text-gray-700 text-sm leading-loose space-y-1">
-            <li>→ 这里是 小林Schelling 的精神自留地</li>
-            <li>→ 种什么、怎么种，都由我说了算</li>
-            <li>→ 这里有我的见闻、自己鼓捣的项目、对经济的思考、在读的书和一些照片</li>
+            <li>这里是 小林Schelling 的精神自留地 ←</li>
+            <li>种什么、怎么种，都由我说了算 ←</li>
+            <li>这里有我的见闻、自己鼓捣的项目、对经济的思考、在读的书和一些照片 ←</li>
           </ul>
         </div>
       </div>
@@ -115,7 +119,9 @@ const sections = [
               {post.date.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })}
             </time>
             <span class="text-gray-300 text-xs w-16 shrink-0">{post.sectionTag}</span>
-            <span class="text-gray-700 text-sm group-hover:text-gray-900 transition-colors flex-1 truncate">{post.title}</span>
+            <span class="text-gray-700 text-sm group-hover:text-gray-900 transition-colors flex-1 truncate">
+                <span class="text-gray-300 font-mono mr-1.5">No.{post.no}</span>{post.title}
+              </span>
             <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-gray-200 group-hover:text-gray-400 shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
             </svg>

@@ -4,6 +4,7 @@ import { getCollection } from 'astro:content';
 
 const posts = await getCollection('abroad');
 const sorted = posts.sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
+const total = sorted.length;
 ---
 
 <BaseLayout title="见闻">
@@ -16,8 +17,9 @@ const sorted = posts.sort((a, b) => b.data.date.getTime() - a.data.date.getTime(
   <section class="max-w-6xl mx-auto px-8 pb-20">
     {sorted.length > 0 ? (
       <div class="divide-y divide-gray-100">
-        {sorted.map((post) => (
+        {sorted.map((post, i) => (
           <a href={`/abroad/${post.slug}`} class="group flex items-center gap-6 py-4 hover:bg-gray-50 -mx-4 px-4 transition-colors">
+            <span class="text-gray-200 text-xs tabular-nums w-8 shrink-0 font-mono">No.{total - i}</span>
             <time class="text-gray-300 text-xs tabular-nums w-24 shrink-0">
               {post.data.date.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })}
             </time>

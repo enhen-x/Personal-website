@@ -4,17 +4,18 @@ import BaseLayout from '@/layouts/BaseLayout.astro';
 
 export async function getStaticPaths() {
   const posts = await getCollection('projects');
-  return posts.map((post) => ({ params: { slug: post.slug }, props: { post } }));
+  const sorted = posts.sort((a, b) => a.data.date.getTime() - b.data.date.getTime());
+  return sorted.map((post, i) => ({ params: { slug: post.slug }, props: { post, no: i + 1 } }));
 }
 
-const { post } = Astro.props;
+const { post, no } = Astro.props;
 const { Content } = await post.render();
 ---
 
 <BaseLayout title={post.data.title}>
   <article class="max-w-2xl mx-auto px-8 pt-16 pb-24">
     <a href="/projects" class="text-gray-400 text-xs hover:text-gray-700 transition-colors">← 主要项目</a>
-    <p class="text-gray-300 text-xs tracking-widest uppercase mt-6 mb-3">PROJECTS</p>
+    <p class="text-gray-300 text-xs tracking-widest uppercase mt-6 mb-3">PROJECTS · No.{no}</p>
     <h1 class="text-3xl font-bold text-gray-900 mb-3">{post.data.title}</h1>
     <div class="flex items-center gap-4">
       <time class="text-gray-300 text-xs">
