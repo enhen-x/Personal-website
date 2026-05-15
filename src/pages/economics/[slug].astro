@@ -35,6 +35,10 @@ const { Content } = await post.render();
       margin-top: 2rem !important;
       margin-bottom: 0 !important;
     }
+
+    .entry-content p:has(> img) + p {
+      margin-top: 3rem !important;
+    }
   </style>
 
   <article class="max-w-2xl mx-auto px-8 pt-16 pb-24">
