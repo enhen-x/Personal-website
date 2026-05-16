@@ -16,18 +16,77 @@ const { Content } = await post.render();
   <style is:global>
     .entry-content p,
     .entry-content img,
-    .entry-content hr,
-    .entry-content figure {
+    .entry-content figure,
+    .entry-content h1,
+    .entry-content h2,
+    .entry-content h3,
+    .entry-content h4 {
       margin-top: 0 !important;
       margin-bottom: 0 !important;
+    }
+
+    .entry-content hr {
+      margin-top: 3rem !important;
+      margin-bottom: 3rem !important;
     }
 
     .entry-content p {
       line-height: 1.75 !important;
     }
 
+    .entry-content table {
+      width: 100% !important;
+      table-layout: fixed !important;
+      border-collapse: collapse !important;
+      margin-top: 0 !important;
+      margin-bottom: 0 !important;
+    }
+
+    .entry-content th,
+    .entry-content td {
+      padding: 0.55rem 0.75rem !important;
+      text-align: left !important;
+      vertical-align: top !important;
+      border-bottom: 1px solid #e5e7eb !important;
+      word-break: break-word !important;
+    }
+
+    .entry-content thead th {
+      font-weight: 700 !important;
+      border-bottom: 1.5px solid #d1d5db !important;
+    }
+
+    .entry-content th:first-child,
+    .entry-content td:first-child {
+      width: 32% !important;
+    }
+
     .entry-content > * + * {
       margin-top: 2rem !important;
+    }
+
+    .entry-content :is(h1, h2, h3) {
+      margin-top: 1.5rem !important;
+    }
+
+    .entry-content :is(h1, h2, h3) + * {
+      margin-top: 1.5rem !important;
+    }
+
+    .entry-content h4 {
+      margin-top: 1.5rem !important;
+    }
+
+    .entry-content h4 + * {
+      margin-top: 0 !important;
+    }
+
+    .entry-content p + ol {
+      margin-top: 0 !important;
+    }
+
+    .entry-content p:has(> strong:first-child) {
+      margin-top: 0 !important;
     }
 
     .entry-content p > img {
