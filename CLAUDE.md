@@ -19,6 +19,7 @@ Astro 5 static site with Tailwind CSS. No framework components — all `.astro` 
 **Content Collections** (`src/content/config.ts`):
 - `abroad`, `projects`, `economics`, `books` — all use the same `postSchema` (`title`, `date`, `description`, `tags?`)
 - `photography` — custom schema with `cover` (path string), `photos[]` (`src`, `caption?`), `location?`
+- `film` — custom schema with `cover`, `photos[]`, `camera?`, `film?`; nested under `photography/film/`
 - `timeline` — YAML data collection (currently unused, no page routes)
 
 **Page patterns** — two consistent layouts used across all content sections:
@@ -27,7 +28,7 @@ Astro 5 static site with Tailwind CSS. No framework components — all `.astro` 
 
 2. Detail page (`/[section]/[slug].astro`): `max-w-2xl` article with back link → gray uppercase tag → h1 → date → `prose prose-gray` content.
 
-**Exception**: `photography/` uses a different visual style — dark overlay hero image + CSS columns masonry grid. The list page (`photography/index.astro`) still uses dark card overlays with `#4a9eff` accent color, unlike the white/gray palette everywhere else.
+**Exception**: `photography/` uses a different visual style — dark overlay hero image + CSS columns masonry grid. The list page (`photography/index.astro`) still uses dark card overlays with `#4a9eff` accent color, unlike the white/gray palette everywhere else. `photography/film/` is a nested sub-section with its own list + detail pages, same dark style.
 
 **BaseLayout** (`src/layouts/BaseLayout.astro`): fixed nav with active-path highlighting, GitHub + Bilibili icon links, `<slot />` wrapped in `<main class="pt-[57px]">`.
 

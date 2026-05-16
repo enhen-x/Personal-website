@@ -3,8 +3,9 @@ import '../styles/global.css';
 
 interface Props {
   title: string;
+  description?: string;
 }
-const { title } = Astro.props;
+const { title, description = '个人空间 — 见闻、项目、经济、读书与摄影' } = Astro.props;
 const nav = [
   { href: '/abroad', label: '见闻' },
   { href: '/projects', label: '项目' },
@@ -13,6 +14,9 @@ const nav = [
   { href: '/photography', label: '摄影' },
 ];
 const currentPath = Astro.url.pathname;
+const siteTitle = title === '首页' ? '个人空间' : `${title} | 个人空间`;
+const siteUrl = 'https://personal-website-olive-eight-90.vercel.app';
+const ogImage = `${siteUrl}/photos/profile/ef00a9f15c4043ceea0cf65a5646a7c.jpg`;
 ---
 
 <!doctype html>
@@ -20,7 +24,18 @@ const currentPath = Astro.url.pathname;
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{title}</title>
+    <title>{siteTitle}</title>
+    <meta name="description" content={description} />
+    <meta property="og:title" content={siteTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:url" content={`${siteUrl}${currentPath}`} />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="个人空间" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={siteTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
   </head>
   <body class="bg-white text-gray-900 font-sans antialiased">
     <header class="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur border-b border-gray-200">
