@@ -4,3 +4,4 @@ dist
 src/content/**/*.pdf
 src/content/**/*.docx
 src/content/**/*.txt
+ori-photo/
