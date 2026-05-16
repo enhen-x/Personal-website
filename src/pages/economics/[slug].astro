@@ -16,10 +16,14 @@ const { Content } = await post.render();
   <style is:global>
     .entry-content p,
     .entry-content img,
-    .entry-content hr,
     .entry-content figure {
       margin-top: 0 !important;
       margin-bottom: 0 !important;
+    }
+
+    .entry-content hr {
+      margin-top: 3rem !important;
+      margin-bottom: 3rem !important;
     }
 
     .entry-content p {
