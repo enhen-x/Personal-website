@@ -8,6 +8,7 @@
     "preview": "node ./node_modules/astro/astro.js preview"
   },
   "dependencies": {
+    "@astrojs/sitemap": "^3.7.3",
     "@astrojs/tailwind": "^5.1.4",
     "@tailwindcss/typography": "^0.5.19",
     "astro": "^5.7.0",
