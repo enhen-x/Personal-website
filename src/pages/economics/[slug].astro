@@ -14,37 +14,55 @@ const { Content } = await post.render();
 
 <BaseLayout title={post.data.title}>
   <style is:global>
+    .entry-content {
+      color: #374151;
+      font-size: 1.04rem;
+      line-height: 1.92;
+    }
+
+    .entry-content > :first-child {
+      margin-top: 0 !important;
+    }
+
     .entry-content p,
     .entry-content img,
     .entry-content figure,
     .entry-content h1,
     .entry-content h2,
     .entry-content h3,
-    .entry-content h4 {
-      margin-top: 0 !important;
+    .entry-content h4,
+    .entry-content ul,
+    .entry-content ol,
+    .entry-content blockquote,
+    .entry-content table {
       margin-bottom: 0 !important;
     }
 
     .entry-content hr {
-      margin-top: 3rem !important;
-      margin-bottom: 3rem !important;
+      margin-top: 3.75rem !important;
+      margin-bottom: 3.25rem !important;
+      border-color: #e5e7eb !important;
     }
 
     .entry-content p {
-      line-height: 1.75 !important;
+      line-height: 1.92 !important;
+      letter-spacing: 0.01em;
     }
 
     .entry-content table {
       width: 100% !important;
       table-layout: fixed !important;
       border-collapse: collapse !important;
-      margin-top: 0 !important;
-      margin-bottom: 0 !important;
+      font-size: 0.95rem !important;
+      overflow: hidden;
+      border-radius: 1rem;
+      border: 1px solid #e5e7eb !important;
+      background: #fff;
     }
 
     .entry-content th,
     .entry-content td {
-      padding: 0.55rem 0.75rem !important;
+      padding: 0.8rem 0.95rem !important;
       text-align: left !important;
       vertical-align: top !important;
       border-bottom: 1px solid #e5e7eb !important;
@@ -54,6 +72,8 @@ const { Content } = await post.render();
     .entry-content thead th {
       font-weight: 700 !important;
       border-bottom: 1.5px solid #d1d5db !important;
+      background: #f8fafc;
+      color: #0f172a;
     }
 
     .entry-content th:first-child,
@@ -62,52 +82,149 @@ const { Content } = await post.render();
     }
 
     .entry-content > * + * {
-      margin-top: 2rem !important;
+      margin-top: 1.55rem !important;
     }
 
     .entry-content :is(h1, h2, h3) {
-      margin-top: 1.5rem !important;
+      font-family: 'Noto Serif SC', serif;
+      color: #111827;
+      line-height: 1.3;
+      letter-spacing: -0.015em;
+    }
+
+    .entry-content h2 {
+      margin-top: 4rem !important;
+      padding-bottom: 0.7rem;
+      font-size: 1.7rem !important;
+      font-weight: 700 !important;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .entry-content h3 {
+      margin-top: 2.8rem !important;
+      font-size: 1.22rem !important;
+      font-weight: 700 !important;
+      color: #1f2937;
     }
 
     .entry-content :is(h1, h2, h3) + * {
-      margin-top: 1.5rem !important;
+      margin-top: 1rem !important;
     }
 
     .entry-content h4 {
-      margin-top: 1.5rem !important;
+      margin-top: 2rem !important;
+      font-size: 1rem !important;
+      font-weight: 700 !important;
+      color: #374151;
     }
 
     .entry-content h4 + * {
-      margin-top: 0 !important;
+      margin-top: 0.8rem !important;
     }
 
-    .entry-content p + ol {
-      margin-top: 0 !important;
+    .entry-content :is(ul, ol) {
+      padding-left: 1.25rem !important;
+      color: #4b5563;
     }
 
-    .entry-content p:has(> strong:first-child) {
-      margin-top: 0 !important;
+    .entry-content li {
+      margin-top: 0.55rem !important;
+      padding-left: 0.2rem;
+      line-height: 1.85;
+    }
+
+    .entry-content li::marker {
+      color: #94a3b8;
+    }
+
+    .entry-content p + :is(ol, ul) {
+      margin-top: 0.9rem !important;
     }
 
     .entry-content p > img {
       display: block;
-      margin-top: 2rem !important;
-      margin-bottom: 0 !important;
+      width: 100%;
+      margin-top: 2.4rem !important;
+      border-radius: 1rem;
+      box-shadow: 0 18px 40px -30px rgba(15, 23, 42, 0.4);
     }
 
     .entry-content p:has(> img) + p {
-      margin-top: 3rem !important;
+      margin-top: 0.95rem !important;
+      font-size: 0.92rem !important;
+      line-height: 1.75 !important;
+      color: #6b7280;
+      text-align: center;
+    }
+
+    .entry-content strong {
+      color: #111827;
+      font-weight: 650;
+    }
+
+    .entry-content a {
+      color: #0f766e;
+      text-decoration: underline;
+      text-decoration-color: rgba(15, 118, 110, 0.28);
+      text-underline-offset: 0.18em;
+    }
+
+    .entry-content blockquote {
+      padding: 1rem 1.25rem;
+      border-left: 3px solid #d1d5db;
+      background: #f8fafc;
+      color: #475569;
+      border-radius: 0.75rem;
+    }
+
+    .entry-content h2:last-of-type {
+      margin-top: 4.5rem !important;
+    }
+
+    .entry-content h2:last-of-type + ul {
+      padding-left: 0 !important;
+      list-style: none !important;
+    }
+
+    .entry-content h2:last-of-type + ul li {
+      margin-top: 0.85rem !important;
+      padding: 0.9rem 1rem 0.9rem 1.15rem;
+      border: 1px solid #e5e7eb;
+      border-radius: 0.9rem;
+      background: linear-gradient(180deg, #fcfcfd 0%, #f8fafc 100%);
+    }
+
+    .entry-content h2:last-of-type + ul li::marker {
+      content: '';
+    }
+
+    @media (max-width: 768px) {
+      .entry-content {
+        font-size: 0.98rem;
+        line-height: 1.86;
+      }
+
+      .entry-content h2 {
+        margin-top: 3rem !important;
+        font-size: 1.45rem !important;
+      }
+
+      .entry-content h3 {
+        font-size: 1.12rem !important;
+      }
     }
   </style>
 
-  <article class="max-w-2xl mx-auto px-8 pt-16 pb-24">
-    <a href="/economics" class="text-gray-400 text-xs hover:text-gray-700 transition-colors">← 经济探索</a>
-    <p class="text-gray-300 text-xs tracking-widest uppercase mt-6 mb-3">ECONOMICS · No.{no}</p>
-    <h1 class="text-3xl font-bold text-gray-900 mb-3">{post.data.title}</h1>
-    <time class="text-gray-300 text-xs">
+  <article class="mx-auto max-w-3xl px-6 pt-12 pb-24 sm:px-8 sm:pt-16">
+    <a href="/economics" class="text-xs tracking-[0.18em] text-gray-400 transition-colors hover:text-gray-700">← 经济探索</a>
+    <header class="mt-6 border-b border-gray-200 pb-8">
+      <p class="mb-4 text-[11px] uppercase tracking-[0.32em] text-gray-300">Economics · No.{no}</p>
+      <h1 class="max-w-2xl text-3xl font-bold leading-tight text-gray-900 sm:text-[2.4rem]">{post.data.title}</h1>
+      <time class="mt-4 block text-xs tracking-[0.16em] text-gray-400">
       {post.data.date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}
-    </time>
-    <div class="entry-content prose prose-gray mt-10 max-w-none">
+      </time>
+    </header>
+    <div class="entry-content prose prose-gray mt-10 max-w-none sm:mt-12">
       <Content />
     </div>
   </article>
