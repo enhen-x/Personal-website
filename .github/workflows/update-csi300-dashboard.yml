@@ -1,0 +1,49 @@
+name: Update CSI 300 Valuation Data
+
+on:
+  schedule:
+    # Weekly on Saturday 09:00 BJT (UTC 01:00) so Friday's CSIndex (incl. 930897) & fund NAVs are all settled
+    - cron: '0 1 * * 6'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-csi300-dashboard
+  cancel-in-progress: false
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: 'scripts/requirements.txt'
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && pip install -r scripts/requirements.txt
+
+      - name: Run incremental CSI 300 data update
+        run: python scripts/update_csi300_dashboard.py
+
+      - name: Commit and push updated data
+        run: |
+          set -e
+          PATHS="scripts/data/csi300_base_history.csv public/dashboards/data/csi300-core.json public/dashboards/data/csi300-930897.json public/dashboards/csi300-valuation-dashboard.html"
+          if git diff --quiet -- $PATHS; then
+            echo "No valuation data changes to commit."
+            exit 0
+          fi
+          LATEST_DATE=$(python -c "import json; print(json.load(open('public/dashboards/data/csi300-core.json', encoding='utf-8'))['meta']['latest_date'])")
+          git config user.name "enhen-x"
+          git config user.email "2395487883@qq.com"
+          git add -- $PATHS
+          git commit -m "chore(data): update CSI 300 valuation data to ${LATEST_DATE}"
+          git push origin main
