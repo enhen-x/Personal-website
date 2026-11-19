@@ -24,7 +24,14 @@ const total = sorted.length;
               {post.data.date.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })}
             </time>
             <div class="flex-1 min-w-0">
-              <h2 class="text-gray-900 text-sm font-medium group-hover:text-gray-500 transition-colors truncate">{post.data.title}</h2>
+              <div class="flex items-center gap-2 min-w-0">
+                <h2 class="text-gray-900 text-sm font-medium group-hover:text-gray-500 transition-colors truncate">{post.data.title}</h2>
+                {post.data.embedUrl && (
+                  <span class="shrink-0 text-[10px] tracking-wide px-1.5 py-0.5 rounded border border-teal-200 bg-teal-50/70 text-teal-700 font-medium">
+                    交互看板
+                  </span>
+                )}
+              </div>
               {post.data.description && (
                 <p class="text-gray-400 text-xs mt-0.5 truncate">{post.data.description}</p>
               )}

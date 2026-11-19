@@ -9,10 +9,12 @@ export async function getStaticPaths() {
 }
 
 const { post, no } = Astro.props;
-const { Content } = await post.render();
+const isEmbed = Boolean(post.data.embedUrl);
+const rendered = !isEmbed ? await post.render() : null;
+const Content = rendered?.Content;
 ---
 
-<BaseLayout title={post.data.title}>
+<BaseLayout title={post.data.title} description={post.data.description}>
   <style is:global>
     .entry-content {
       color: #374151;
@@ -215,17 +217,104 @@ const { Content } = await post.render();
     }
   </style>
 
-  <article class="mx-auto max-w-3xl px-6 pt-12 pb-24 sm:px-8 sm:pt-16">
-    <a href="/economics" class="text-xs tracking-[0.18em] text-gray-400 transition-colors hover:text-gray-700">← 经济探索</a>
-    <header class="mt-6 border-b border-gray-200 pb-8">
-      <p class="mb-4 text-[11px] uppercase tracking-[0.32em] text-gray-300">Economics · No.{no}</p>
-      <h1 class="max-w-2xl text-3xl font-bold leading-tight text-gray-900 sm:text-[2.4rem]">{post.data.title}</h1>
-      <time class="mt-4 block text-xs tracking-[0.16em] text-gray-400">
-      {post.data.date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}
-      </time>
-    </header>
-    <div class="entry-content prose prose-gray mt-10 max-w-none sm:mt-12">
-      <Content />
+  {isEmbed ? (
+    <div class="bg-white">
+      <div class="max-w-6xl mx-auto px-8 pt-10 pb-2 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-4 text-xs">
+          <a href="/economics" class="tracking-[0.18em] text-gray-400 transition-colors hover:text-gray-700">
+            ← 经济探索
+          </a>
+          <span class="text-[11px] uppercase tracking-[0.32em] text-gray-300">Economics · No.{no}</span>
+        </div>
+        <a
+          href={post.data.embedUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-3 py-1 text-xs text-gray-500 transition-colors hover:border-gray-400 hover:text-gray-900"
+        >
+          新窗口全屏打开 ↗
+        </a>
+      </div>
+      <iframe
+        id="economics-embed-frame"
+        src={post.data.embedUrl}
+        title={post.data.title}
+        class="block w-full border-0 bg-white"
+        style="height: 2200px;"
+      />
+      <script is:inline>
+        (() => {
+          const frame = document.getElementById('economics-embed-frame');
+          if (!(frame instanceof HTMLIFrameElement)) return;
+
+          let resizeObserver = null;
+
+          const updateHeight = () => {
+            try {
+              const doc = frame.contentDocument;
+              if (!doc) return;
+              const root = doc.querySelector('.wrap') || doc.body;
+              if (!root) return;
+              const rectHeight = root.getBoundingClientRect().height;
+              const scrollHeight = root.scrollHeight || 0;
+              const targetHeight = Math.ceil(Math.max(rectHeight, scrollHeight)) + 16;
+              if (targetHeight > 200) {
+                frame.style.height = `${targetHeight}px`;
+              }
+            } catch {
+              // Ignore transient frame access errors
+            }
+          };
+
+          const initFrame = () => {
+            try {
+              const doc = frame.contentDocument;
+              if (!doc) return;
+              doc.documentElement.style.overflowY = 'hidden';
+
+              if (resizeObserver) {
+                resizeObserver.disconnect();
+                resizeObserver = null;
+              }
+
+              const target = doc.querySelector('.wrap') || doc.body;
+              if (target && typeof ResizeObserver !== 'undefined') {
+                resizeObserver = new ResizeObserver(() => {
+                  requestAnimationFrame(() => updateHeight());
+                });
+                resizeObserver.observe(target);
+              }
+
+              updateHeight();
+              setTimeout(updateHeight, 300);
+              setTimeout(updateHeight, 1000);
+            } catch {
+              // Ignore errors if frame document is not ready
+            }
+          };
+
+          frame.addEventListener('load', initFrame);
+          window.addEventListener('resize', updateHeight);
+
+          if (frame.contentDocument?.readyState === 'complete') {
+            initFrame();
+          }
+        })();
+      </script>
     </div>
-  </article>
+  ) : (
+    <article class="mx-auto max-w-3xl px-6 pt-12 pb-24 sm:px-8 sm:pt-16">
+      <a href="/economics" class="text-xs tracking-[0.18em] text-gray-400 transition-colors hover:text-gray-700">← 经济探索</a>
+      <header class="mt-6 border-b border-gray-200 pb-8">
+        <p class="mb-4 text-[11px] uppercase tracking-[0.32em] text-gray-300">Economics · No.{no}</p>
+        <h1 class="max-w-2xl text-3xl font-bold leading-tight text-gray-900 sm:text-[2.4rem]">{post.data.title}</h1>
+        <time class="mt-4 block text-xs tracking-[0.16em] text-gray-400">
+        {post.data.date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}
+        </time>
+      </header>
+      <div class="entry-content prose prose-gray mt-10 max-w-none sm:mt-12">
+        {Content && <Content />}
+      </div>
+    </article>
+  )}
 </BaseLayout>

@@ -15,6 +15,7 @@ const postSchema = z.object({
   date: z.date(),
   description: z.string(),
   tags: z.array(z.string()).optional(),
+  embedUrl: z.string().optional(),
 });
 
 const photographyCollection = defineCollection({
