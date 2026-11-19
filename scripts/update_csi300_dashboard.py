@@ -17,7 +17,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, TypeVar
 
-import akshare as ak
 import numpy as np
 import pandas as pd
 import requests
@@ -124,17 +123,35 @@ def _round_list(series: pd.Series, decimals: int = 2) -> list:
     return out
 
 
+def fetch_csindex_json(symbol: str, start_yyyymmdd: str, end_yyyymmdd: str) -> pd.DataFrame:
+    """Fetch official CSIndex daily index-perf JSON directly."""
+    url = "https://www.csindex.com.cn/csindex-home/perf/index-perf"
+    headers = {
+        "User-Agent": HEADERS["User-Agent"],
+        "Referer": "https://www.csindex.com.cn/",
+    }
+    r = requests.get(
+        url,
+        params={"indexCode": symbol, "startDate": start_yyyymmdd, "endDate": end_yyyymmdd},
+        headers=headers,
+        timeout=15,
+    )
+    r.raise_for_status()
+    rows = (r.json() or {}).get("data") or []
+    if not rows:
+        raise RuntimeError(f"{symbol} returned empty data from CSIndex")
+    df = pd.DataFrame(rows)
+    df["date"] = pd.to_datetime(df["tradeDate"], format="%Y%m%d", errors="coerce")
+    df["close"] = pd.to_numeric(df["close"], errors="coerce")
+    df["peg"] = pd.to_numeric(df["peg"], errors="coerce") if "peg" in df.columns else np.nan
+    return df
+
+
 def fetch_recent_csindex(start_yyyymmdd: str, end_yyyymmdd: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Fetch recent CSIndex H00300, 000300, and 930897 daily series."""
     def _get_h300() -> pd.DataFrame:
-        df = ak.stock_zh_index_hist_csindex(
-            symbol="H00300", start_date=start_yyyymmdd, end_date=end_yyyymmdd
-        )
-        if df is None or df.empty:
-            raise RuntimeError("H00300 returned empty DataFrame")
-        df["date"] = pd.to_datetime(df["日期"])
-        df["h00300"] = pd.to_numeric(df["收盘"], errors="coerce")
-        df["h00300_pe"] = pd.to_numeric(df["滚动市盈率"], errors="coerce")
+        df = fetch_csindex_json("H00300", start_yyyymmdd, end_yyyymmdd)
+        df = df.rename(columns={"close": "h00300", "peg": "h00300_pe"})
         df.loc[df["h00300_pe"] <= 0, "h00300_pe"] = np.nan
         return (
             df[["date", "h00300", "h00300_pe"]]
@@ -145,13 +162,8 @@ def fetch_recent_csindex(start_yyyymmdd: str, end_yyyymmdd: str) -> tuple[pd.Dat
         )
 
     def _get_p300() -> pd.DataFrame:
-        df = ak.stock_zh_index_hist_csindex(
-            symbol="000300", start_date=start_yyyymmdd, end_date=end_yyyymmdd
-        )
-        if df is None or df.empty:
-            raise RuntimeError("000300 returned empty DataFrame")
-        df["date"] = pd.to_datetime(df["日期"])
-        df["p300"] = pd.to_numeric(df["收盘"], errors="coerce")
+        df = fetch_csindex_json("000300", start_yyyymmdd, end_yyyymmdd)
+        df = df.rename(columns={"close": "p300"})
         return (
             df[["date", "p300"]]
             .dropna(subset=["date", "p300"])
@@ -161,13 +173,8 @@ def fetch_recent_csindex(start_yyyymmdd: str, end_yyyymmdd: str) -> tuple[pd.Dat
         )
 
     def _get_930897() -> pd.DataFrame:
-        df = ak.stock_zh_index_hist_csindex(
-            symbol="930897", start_date=start_yyyymmdd, end_date=end_yyyymmdd
-        )
-        if df is None or df.empty:
-            raise RuntimeError("930897 returned empty DataFrame")
-        df["date"] = pd.to_datetime(df["日期"])
-        df["idx_930897"] = pd.to_numeric(df["收盘"], errors="coerce")
+        df = fetch_csindex_json("930897", start_yyyymmdd, end_yyyymmdd)
+        df = df.rename(columns={"close": "idx_930897"})
         return (
             df[["date", "idx_930897"]]
             .dropna(subset=["date", "idx_930897"])
@@ -183,13 +190,36 @@ def fetch_recent_csindex(start_yyyymmdd: str, end_yyyymmdd: str) -> tuple[pd.Dat
 
 
 def fetch_recent_cn10y(start_yyyymmdd: str) -> pd.DataFrame:
-    """Fetch recent China 10Y Treasury Yield via AkShare."""
+    """Fetch recent China 10Y Treasury Yield directly from Eastmoney datacenter."""
     def _get() -> pd.DataFrame:
-        df = ak.bond_zh_us_rate(start_date=start_yyyymmdd)
-        if df is None or df.empty:
-            raise RuntimeError("bond_zh_us_rate returned empty DataFrame")
-        df["date"] = pd.to_datetime(df["日期"])
-        df["cn10y"] = pd.to_numeric(df["中国国债收益率10年"], errors="coerce")
+        url = "https://datacenter.eastmoney.com/api/data/get"
+        headers = {
+            "User-Agent": HEADERS["User-Agent"],
+            "Referer": "https://data.eastmoney.com/",
+        }
+        r = requests.get(
+            url,
+            params={
+                "type": "RPTA_WEB_TREASURYYIELD",
+                "sty": "SOLAR_DATE,EMM00166466",
+                "st": "SOLAR_DATE",
+                "sr": "-1",
+                "token": "894050c76af8597a853f5b408b759f5d",
+                "p": "1",
+                "ps": "200",
+            },
+            headers=headers,
+            timeout=15,
+        )
+        r.raise_for_status()
+        rows = ((r.json() or {}).get("result") or {}).get("data") or []
+        if not rows:
+            raise RuntimeError("Eastmoney treasury yield returned empty data")
+        df = pd.DataFrame(rows)
+        df["date"] = pd.to_datetime(df["SOLAR_DATE"], errors="coerce").dt.normalize()
+        df["cn10y"] = pd.to_numeric(df["EMM00166466"], errors="coerce")
+        cutoff = pd.to_datetime(start_yyyymmdd, format="%Y%m%d")
+        df = df[df["date"] >= cutoff]
         return (
             df[["date", "cn10y"]]
             .dropna(subset=["date", "cn10y"])
