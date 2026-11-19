@@ -280,8 +280,8 @@ def fetch_incremental_fund_returns(codes: list[str], target_dates: list[str]) ->
     return by_date
 
 
-def append_new_trading_days(base_df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-    """Incrementally fetch and append complete new trading days to base_df."""
+def append_new_trading_days(base_df: pd.DataFrame) -> tuple[pd.DataFrame, int, int]:
+    """Backfill recent official 930897 observations and append complete new trading days."""
     last_date: pd.Timestamp = base_df["date"].max()
     today_bjt = datetime.now(BJT).date()
     end_str = today_bjt.strftime("%Y%m%d")
@@ -292,10 +292,25 @@ def append_new_trading_days(base_df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
     h300_df, p300_df, idx93_df = fetch_recent_csindex(start_str, end_str)
     cn10y_df = fetch_recent_cn10y(cn10y_start_str)
 
+    # Backfill official idx_930897 on existing baseline dates (replaces prior T+0 estimates)
+    backfilled = 0
+    if not idx93_df.empty:
+        official_93 = dict(zip(idx93_df["date"], idx93_df["idx_930897"]))
+        for idx in base_df.index:
+            dt = base_df.at[idx, "date"]
+            if dt in official_93:
+                new_v = float(official_93[dt])
+                old_v = base_df.at[idx, "idx_930897"]
+                if pd.isna(old_v) or abs(float(old_v) - new_v) > 1e-4:
+                    base_df.at[idx, "idx_930897"] = new_v
+                    backfilled += 1
+    if backfilled > 0:
+        print(f"Backfilled official CSIndex 930897 on {backfilled} existing date(s).")
+
     cand = h300_df[h300_df["date"] > last_date].copy()
     if cand.empty:
         print("No new CSIndex H00300 trading days found.")
-        return base_df, 0
+        return base_df, 0, backfilled
 
     cand = cand.merge(p300_df, on="date", how="left")
     cand = cand.merge(idx93_df, on="date", how="left")
@@ -315,24 +330,34 @@ def append_new_trading_days(base_df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
     fund_rets_by_date = fetch_incremental_fund_returns(codes, target_dates)
 
     prev_ew = float(base_df["ew_secbond"].iloc[-1])
+    prev_93 = float(base_df["idx_930897"].iloc[-1])
     new_rows = []
     for _, row in cand.iterrows():
         dt_str = row["date"].strftime("%Y-%m-%d")
         rets = fund_rets_by_date.get(dt_str, [])
         missing_fields = [
             col
-            for col in ("h00300", "p300", "h00300_pe", "idx_930897", "cn10y")
+            for col in ("h00300", "p300", "h00300_pe", "cn10y")
             if pd.isna(row[col])
         ]
         if missing_fields or len(rets) < 200:
             print(
-                f"Stopping before {dt_str}: incomplete data "
+                f"Stopping before {dt_str}: incomplete core data "
                 f"(missing={missing_fields}, valid_funds={len(rets)}/{len(codes)})."
             )
             break
 
         ew_ret = float(np.mean(rets))
         prev_ew = prev_ew * (1.0 + ew_ret)
+        if pd.notna(row["idx_930897"]):
+            val_93 = float(row["idx_930897"])
+            tag_93 = f"{val_93:.2f}"
+        else:
+            # CSIndex 930897 publishes T+1; estimate temporarily using EW daily return until official backfill
+            val_93 = prev_93 * (1.0 + ew_ret)
+            tag_93 = f"{val_93:.2f}(est)"
+        prev_93 = val_93
+
         new_rows.append(
             {
                 "date": row["date"],
@@ -340,22 +365,22 @@ def append_new_trading_days(base_df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
                 "p300": float(row["p300"]),
                 "h00300_pe": float(row["h00300_pe"]),
                 "ew_secbond": prev_ew,
-                "idx_930897": float(row["idx_930897"]),
+                "idx_930897": val_93,
                 "cn10y": float(row["cn10y"]),
             }
         )
         print(
             f"  + {dt_str}: H00300={row['h00300']:.2f}, P300={row['p300']:.2f}, "
-            f"PE={row['h00300_pe']:.2f}, 930897={row['idx_930897']:.2f}, "
+            f"PE={row['h00300_pe']:.2f}, 930897={tag_93}, "
             f"CN10Y={row['cn10y']:.2f}, funds={len(rets)}, ew_ret={ew_ret*100:+.3f}%"
         )
 
     if not new_rows:
-        return base_df, 0
+        return base_df, 0, backfilled
 
     updated = pd.concat([base_df, pd.DataFrame(new_rows)], ignore_index=True)
     updated = updated.sort_values("date").drop_duplicates("date").reset_index(drop=True)
-    return updated, len(new_rows)
+    return updated, len(new_rows), backfilled
 
 
 def compute_panel_and_payloads(base_df: pd.DataFrame) -> tuple[dict, dict, pd.DataFrame]:
@@ -482,14 +507,15 @@ def main() -> None:
 
     base_df = pd.read_csv(BASE_CSV, parse_dates=["date"]).sort_values("date").reset_index(drop=True)
     added_days = 0
+    backfilled = 0
     if not args.recompute_only:
-        base_df, added_days = append_new_trading_days(base_df)
+        base_df, added_days, backfilled = append_new_trading_days(base_df)
 
     core_payload, bench93_payload, full_df = compute_panel_and_payloads(base_df)
     latest_date = core_payload["meta"]["latest_date"]
 
     changed = False
-    if added_days > 0:
+    if added_days > 0 or backfilled > 0:
         out_csv_df = base_df.copy()
         out_csv_df["date"] = out_csv_df["date"].dt.strftime("%Y-%m-%d")
         csv_text = out_csv_df.to_csv(index=False, float_format="%.10g", lineterminator="\n")
