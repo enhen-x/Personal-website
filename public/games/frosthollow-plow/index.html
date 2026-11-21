@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>霜谷铲雪社 — 治愈系 3D 等距铲雪游戏</title>
+    <meta
+      name="description"
+      content="在暮色雪村中驾驶高山铲雪车清理积雪，串联连击倍率、改装升级并聆听治愈系合成器音效。"
+    />
+    <meta property="og:title" content="霜谷铲雪社 — 治愈系 3D 等距铲雪游戏" />
+    <meta
+      property="og:description"
+      content="在暮色雪村中驾驶高山铲雪车清理积雪，串联连击倍率、改装升级并聆听治愈系合成器音效。"
+    />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=JetBrains+Mono:wght@500;700&family=Noto+Sans+SC:wght@400;500;600;700&family=Noto+Serif+SC:wght@600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      // Prevent third-party browser wallet extensions (e.g. Phantom/MetaMask)
+      // conflicting over window.ethereum from surfacing false app errors.
+      window.addEventListener(
+        'error',
+        function (event) {
+          var src = event && event.filename ? String(event.filename) : '';
+          var msg = event && event.message ? String(event.message) : '';
+          if (
+            (src.indexOf('chrome-extension://') === 0 ||
+              src.indexOf('moz-extension://') === 0) &&
+            msg.indexOf('Cannot redefine property: ethereum') !== -1
+          ) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+          }
+        },
+        true
+      );
+    </script>
+    <script type="module" crossorigin src="./assets/index-CWOIP0m4.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-BPMsej1b.css">
+  </head>
+  <body class="bg-[#182334] text-[#f7f3eb] overflow-hidden select-none">
+    <div id="root"></div>
+  </body>
+</html>

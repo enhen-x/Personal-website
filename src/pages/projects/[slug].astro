@@ -9,10 +9,11 @@ export async function getStaticPaths() {
 }
 
 const { post, no } = Astro.props;
+const isEmbed = Boolean(post.data.embedUrl);
 const { Content } = await post.render();
 ---
 
-<BaseLayout title={post.data.title}>
+<BaseLayout title={post.data.title} description={post.data.description}>
   <style is:global>
     .entry-content p,
     .entry-content img,
@@ -100,24 +101,83 @@ const { Content } = await post.render();
     }
   </style>
 
-  <article class="max-w-2xl mx-auto px-8 pt-16 pb-24">
-    <a href="/projects" class="text-gray-400 text-xs hover:text-gray-700 transition-colors">← 主要项目</a>
-    <p class="text-gray-300 text-xs tracking-widest uppercase mt-6 mb-3">PROJECTS · No.{no}</p>
-    <h1 class="text-3xl font-bold text-gray-900 mb-3">{post.data.title}</h1>
-    <div class="flex items-center gap-4">
-      <time class="text-gray-300 text-xs">
-        {post.data.date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}
-      </time>
-      {post.data.tags && (
-        <div class="flex gap-2 flex-wrap">
-          {post.data.tags.map((tag: string) => (
-            <span class="text-xs text-gray-400 border border-gray-200 px-2 py-0.5">{tag}</span>
-          ))}
+  {isEmbed ? (
+    <>
+      <section class="max-w-6xl mx-auto px-8 pt-12 pb-6">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-4 text-xs">
+            <a href="/projects" class="text-gray-400 hover:text-gray-700 transition-colors">
+              ← 主要项目
+            </a>
+            <span class="text-gray-300 text-xs tracking-widest uppercase">PROJECTS · No.{no}</span>
+          </div>
+          <a
+            href={post.data.embedUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-3 py-1 text-xs text-gray-500 transition-colors hover:border-gray-400 hover:text-gray-900"
+          >
+            新窗口全屏游玩 ↗
+          </a>
         </div>
-      )}
-    </div>
-    <div class="entry-content prose prose-gray mt-10 max-w-none">
-      <Content />
-    </div>
-  </article>
+
+        <h1 class="text-3xl font-bold text-gray-900 mt-5 mb-3">{post.data.title}</h1>
+        <div class="flex flex-wrap items-center gap-4">
+          <time class="text-gray-300 text-xs">
+            {post.data.date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}
+          </time>
+          {post.data.tags && (
+            <div class="flex gap-2 flex-wrap">
+              {post.data.tags.map((tag: string) => (
+                <span class="text-xs text-gray-400 border border-gray-200 px-2 py-0.5">{tag}</span>
+              ))}
+            </div>
+          )}
+        </div>
+        {post.data.description && (
+          <p class="text-gray-500 text-sm leading-relaxed mt-4 max-w-3xl">{post.data.description}</p>
+        )}
+
+        <div class="mt-6 rounded-xl overflow-hidden border border-gray-200 bg-[#182334] shadow-sm">
+          <iframe
+            src={post.data.embedUrl}
+            title={post.data.title}
+            class="block w-full border-0 bg-[#182334] h-[72vh] min-h-[540px] max-h-[780px]"
+            allow="autoplay; fullscreen"
+            allowfullscreen
+          />
+        </div>
+        <p class="text-gray-400 text-xs mt-3">
+          点击画面激活键盘控制（WASD / 方向键驾驶、Space 涡轮加速、U 打开车库、M 静音），或点击右上角在新窗口全屏游玩。
+        </p>
+      </section>
+
+      <article class="max-w-2xl mx-auto px-8 pt-8 pb-24">
+        <div class="entry-content prose prose-gray max-w-none">
+          <Content />
+        </div>
+      </article>
+    </>
+  ) : (
+    <article class="max-w-2xl mx-auto px-8 pt-16 pb-24">
+      <a href="/projects" class="text-gray-400 text-xs hover:text-gray-700 transition-colors">← 主要项目</a>
+      <p class="text-gray-300 text-xs tracking-widest uppercase mt-6 mb-3">PROJECTS · No.{no}</p>
+      <h1 class="text-3xl font-bold text-gray-900 mb-3">{post.data.title}</h1>
+      <div class="flex items-center gap-4">
+        <time class="text-gray-300 text-xs">
+          {post.data.date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}
+        </time>
+        {post.data.tags && (
+          <div class="flex gap-2 flex-wrap">
+            {post.data.tags.map((tag: string) => (
+              <span class="text-xs text-gray-400 border border-gray-200 px-2 py-0.5">{tag}</span>
+            ))}
+          </div>
+        )}
+      </div>
+      <div class="entry-content prose prose-gray mt-10 max-w-none">
+        <Content />
+      </div>
+    </article>
+  )}
 </BaseLayout>
