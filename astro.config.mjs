@@ -5,4 +5,7 @@ import sitemap from '@astrojs/sitemap';
 export default defineConfig({
   site: 'https://schelling.org.cn',
   integrations: [tailwind(), sitemap()],
+  build: {
+    inlineStylesheets: 'always',
+  },
 });
