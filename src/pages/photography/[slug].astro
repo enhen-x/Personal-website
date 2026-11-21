@@ -39,6 +39,7 @@ const { data } = album;
             alt={photo.caption ?? ''}
             class="w-full object-cover group-hover:opacity-90 transition-opacity duration-300"
             loading="lazy"
+            decoding="async"
           />
           {photo.caption && (
             <p class="text-gray-500 text-xs px-2 py-2">{photo.caption}</p>

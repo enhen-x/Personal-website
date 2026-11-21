@@ -138,18 +138,120 @@ const { Content } = await post.render();
           <p class="text-gray-500 text-sm leading-relaxed mt-4 max-w-3xl">{post.data.description}</p>
         )}
 
-        <div class="mt-6 rounded-xl overflow-hidden border border-gray-200 bg-[#182334] shadow-sm">
-          <iframe
-            src={post.data.embedUrl}
-            title={post.data.title}
-            class="block w-full border-0 bg-[#182334] h-[72vh] min-h-[540px] max-h-[780px]"
-            allow="autoplay; fullscreen"
-            allowfullscreen
-          />
+        <div
+          id="project-embed-stage"
+          data-embed-url={post.data.embedUrl}
+          data-embed-title={post.data.title}
+          class="relative mt-6 rounded-xl overflow-hidden border border-gray-200 bg-[#182334] shadow-sm h-[72vh] min-h-[540px] max-h-[780px]"
+        >
+          <div
+            id="project-embed-cover"
+            class="absolute inset-0 flex flex-col items-center justify-center px-6 text-center text-[#f7f3eb] bg-[radial-gradient(circle_at_30%_20%,rgba(95,146,214,0.28),transparent_48%),radial-gradient(circle_at_78%_78%,rgba(232,184,109,0.2),transparent_45%),linear-gradient(180deg,#182334_0%,#111927_100%)]"
+          >
+            <span class="text-[11px] tracking-[0.24em] uppercase px-3 py-1 rounded-full border border-white/15 bg-white/5 text-[#d8c49e]">
+              3D WEBGL · 浏览器直接运行
+            </span>
+            <h2 class="text-2xl sm:text-3xl font-bold mt-4 text-[#faf4e8]">{post.data.title}</h2>
+            <p class="text-sm text-[#c7d6e8] max-w-md mt-2.5 leading-relaxed">
+              点击下方按钮后按需加载 3D 场景与音频引擎，先看文字介绍无需等待大资源下载。
+            </p>
+            <div class="mt-6 flex flex-wrap items-center justify-center gap-3">
+              <button
+                id="project-launch-btn"
+                type="button"
+                class="px-6 py-2.5 rounded-lg bg-[#d94638] hover:bg-[#e55344] text-[#fff8ef] text-sm font-semibold shadow-[0_3px_0_#8c241b] transition-colors cursor-pointer"
+              >
+                启动在线试玩
+              </button>
+              <a
+                href={post.data.embedUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="px-4 py-2.5 rounded-lg border border-white/15 bg-white/5 hover:bg-white/10 text-[#f2eadc] text-sm transition-colors"
+              >
+                新窗口全屏游玩 ↗
+              </a>
+            </div>
+            <div class="mt-6 flex flex-wrap items-center justify-center gap-2 text-[11px] text-[#b4c6dc]">
+              <span class="px-2.5 py-1 rounded-md bg-white/5 border border-white/10">WASD / 方向键</span>
+              <span class="px-2.5 py-1 rounded-md bg-white/5 border border-white/10">鼠标左键拖拽</span>
+              <span class="px-2.5 py-1 rounded-md bg-white/5 border border-white/10">Space 涡轮</span>
+              <span class="px-2.5 py-1 rounded-md bg-white/5 border border-white/10">U 车库</span>
+            </div>
+          </div>
+
+          <div
+            id="project-embed-loading"
+            class="hidden absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#182334] text-[#f7f3eb]"
+          >
+            <div class="w-8 h-8 rounded-full border-2 border-white/20 border-t-[#e8b86d] animate-spin"></div>
+            <p class="text-xs tracking-wider text-[#c7d6e8] mt-3">正在加载 3D 场景与资源...</p>
+          </div>
         </div>
         <p class="text-gray-400 text-xs mt-3">
-          点击画面激活键盘控制（WASD / 方向键驾驶、Space 涡轮加速、U 打开车库、M 静音），或点击右上角在新窗口全屏游玩。
+          启动并点击画面后可使用键盘控制（WASD / 方向键驾驶、Space 涡轮加速、U 打开车库、M 静音），或点击右上角在新窗口全屏游玩。
         </p>
+        <script is:inline>
+          (() => {
+            const stage = document.getElementById('project-embed-stage');
+            const cover = document.getElementById('project-embed-cover');
+            const loading = document.getElementById('project-embed-loading');
+            const launchBtn = document.getElementById('project-launch-btn');
+            if (!stage || !cover || !loading || !launchBtn) return;
+
+            const embedUrl = stage.getAttribute('data-embed-url');
+            const embedTitle = stage.getAttribute('data-embed-title') || 'Interactive Project';
+            if (!embedUrl) return;
+
+            let prefetched = false;
+            let launched = false;
+
+            const prefetchEmbed = () => {
+              if (prefetched || launched) return;
+              prefetched = true;
+              const link = document.createElement('link');
+              link.rel = 'prefetch';
+              link.href = embedUrl;
+              document.head.appendChild(link);
+            };
+
+            launchBtn.addEventListener('pointerenter', prefetchEmbed, { once: true });
+            launchBtn.addEventListener('focus', prefetchEmbed, { once: true });
+
+            launchBtn.addEventListener('click', () => {
+              if (launched) return;
+              launched = true;
+
+              cover.classList.add('hidden');
+              loading.classList.remove('hidden');
+
+              const iframe = document.createElement('iframe');
+              iframe.src = embedUrl;
+              iframe.title = embedTitle;
+              iframe.allow = 'autoplay; fullscreen';
+              iframe.allowFullscreen = true;
+              iframe.className = 'block w-full h-full border-0 bg-[#182334]';
+
+              const hideLoading = () => {
+                loading.classList.add('hidden');
+              };
+
+              const fallbackTimer = window.setTimeout(hideLoading, 6000);
+              iframe.addEventListener('load', () => {
+                window.clearTimeout(fallbackTimer);
+                hideLoading();
+                try {
+                  iframe.focus();
+                } catch {}
+              });
+
+              stage.appendChild(iframe);
+              try {
+                iframe.focus();
+              } catch {}
+            });
+          })();
+        </script>
       </section>
 
       <article class="max-w-2xl mx-auto px-8 pt-8 pb-24">
