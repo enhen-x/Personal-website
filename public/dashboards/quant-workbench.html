@@ -588,6 +588,8 @@
   }
   .stmt-chg .up, .stmt-chg .down { font-weight: 500; }
   .stmt-chg .sep { margin: 0 4px; color: var(--border-strong); }
+  #stmt-tbody.hide-deltas .stmt-chg { display: none; }
+  #stmt-tbody.hide-deltas .stmt-main { font-weight: 400; }
 
   /* Watermark grid */
   .wm-grid {
@@ -2065,6 +2067,7 @@
             <button type="button" data-val="core" class="active">核心指标</button>
             <button type="button" data-val="all">全部字段</button>
           </div>
+          <button id="btn-stmt-deltas" class="preset-btn active" type="button" aria-pressed="true">同比/环比: 开</button>
           <select id="sel-stmt-limit" class="select mono" style="width:94px;">
             <option value="12">近 12 期</option>
             <option value="20">近 20 期</option>
@@ -2411,6 +2414,7 @@
       finMode: "quarter",
       stmtType: "income",
       stmtCols: "core",
+      stmtShowDeltas: true,
       stmtLimit: 40,
       klineData: null,
       valKlineData: null,
@@ -5374,6 +5378,7 @@
   function renderStatementTable() {
     const thead = document.getElementById("stmt-thead");
     const tbody = document.getElementById("stmt-tbody");
+    tbody.classList.toggle("hide-deltas", !STATE.stock.stmtShowDeltas);
     const { rows, cols } = getActiveStatementRowsAndCols();
 
     if (!rows.length) {
@@ -5889,6 +5894,15 @@
         STATE.stock.stmtCols = btn.dataset.val;
         renderStatementTable();
       });
+    });
+    document.getElementById("btn-stmt-deltas").addEventListener("click", () => {
+      STATE.stock.stmtShowDeltas = !STATE.stock.stmtShowDeltas;
+      const show = STATE.stock.stmtShowDeltas;
+      const btn = document.getElementById("btn-stmt-deltas");
+      btn.classList.toggle("active", show);
+      btn.setAttribute("aria-pressed", String(show));
+      btn.textContent = show ? "同比/环比: 开" : "同比/环比: 关";
+      document.getElementById("stmt-tbody").classList.toggle("hide-deltas", !show);
     });
     document.getElementById("sel-stmt-limit").addEventListener("change", (e) => {
       STATE.stock.stmtLimit = Number(e.target.value) || 40;
