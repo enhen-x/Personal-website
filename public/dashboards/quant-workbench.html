@@ -663,6 +663,13 @@
     border-color: #111827;
     color: #FFFFFF;
   }
+  .preset-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    background: var(--surface-alt);
+    color: var(--ink-faint);
+    border-color: var(--border);
+  }
   .filter-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1502,6 +1509,9 @@
           <span class="ctrl-label">常用策略预设:</span>
           <button type="button" class="preset-btn scr-preset active" data-preset="liquid">高活跃成交</button>
           <button type="button" class="preset-btn scr-preset" data-preset="quality">高ROE低负债</button>
+          <button type="button" class="preset-btn scr-preset" data-preset="value_div">低估高息</button>
+          <button type="button" class="preset-btn scr-preset" data-preset="deep_pb">深度破净</button>
+          <button type="button" class="preset-btn scr-preset" data-preset="pb_roe">低分位PB-ROE</button>
           <button type="button" class="preset-btn scr-preset" data-preset="growth">高成长绩优</button>
           <button type="button" class="preset-btn scr-preset" data-preset="rd">高研发高毛利</button>
           <button type="button" class="preset-btn scr-preset" data-preset="momentum">强势动量</button>
@@ -1606,6 +1616,55 @@
           <label for="f-min-rd">研发费用率下限 (%)</label>
           <input id="f-min-rd" class="input mono" type="number" step="0.5" placeholder="如 5" />
         </div>
+
+        <div class="field">
+          <label>PE_TTM 区间</label>
+          <div class="range-pair">
+            <input id="f-min-pe" class="input mono" type="number" step="1" placeholder="下限" />
+            <span class="range-sep">~</span>
+            <input id="f-max-pe" class="input mono" type="number" step="1" placeholder="上限" />
+          </div>
+        </div>
+        <div class="field">
+          <label>市净率 PB 区间</label>
+          <div class="range-pair">
+            <input id="f-min-pb" class="input mono" type="number" step="0.1" placeholder="下限" />
+            <span class="range-sep">~</span>
+            <input id="f-max-pb" class="input mono" type="number" step="0.1" placeholder="上限" />
+          </div>
+        </div>
+        <div class="field">
+          <label>市销率 PS_TTM 区间</label>
+          <div class="range-pair">
+            <input id="f-min-ps" class="input mono" type="number" step="0.5" placeholder="下限" />
+            <span class="range-sep">~</span>
+            <input id="f-max-ps" class="input mono" type="number" step="0.5" placeholder="上限" />
+          </div>
+        </div>
+        <div class="field">
+          <label>股息率 TTM 区间 (%)</label>
+          <div class="range-pair">
+            <input id="f-min-div" class="input mono" type="number" step="0.5" placeholder="下限" />
+            <span class="range-sep">~</span>
+            <input id="f-max-div" class="input mono" type="number" step="0.5" placeholder="上限" />
+          </div>
+        </div>
+        <div class="field">
+          <label>总市值区间 (亿元)</label>
+          <div class="range-pair">
+            <input id="f-min-mktcap" class="input mono" type="number" step="10" placeholder="下限" />
+            <span class="range-sep">~</span>
+            <input id="f-max-mktcap" class="input mono" type="number" step="10" placeholder="上限" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="f-max-pe-pct5y">近5年 PE 分位上限 (%)</label>
+          <input id="f-max-pe-pct5y" class="input mono" type="number" step="5" placeholder="如 30" />
+        </div>
+        <div class="field">
+          <label for="f-max-pb-pct5y">近5年 PB 分位上限 (%)</label>
+          <input id="f-max-pb-pct5y" class="input mono" type="number" step="5" placeholder="如 30" />
+        </div>
       </div>
 
       <div class="filter-actions">
@@ -1629,6 +1688,7 @@
           <span class="ctrl-label">字段分组视图:</span>
           <div class="seg" id="seg-scr-view">
             <button type="button" data-view="overview" class="active">综合概览</button>
+            <button type="button" data-view="valuation">估值与股息</button>
             <button type="button" data-view="price">量价动量</button>
             <button type="button" data-view="profit">盈利与成长</button>
             <button type="button" data-view="safety">资产与安全</button>
@@ -1640,6 +1700,8 @@
     <div class="summary-strip">
       <div class="summary-metrics" id="scr-summary-metrics">
         <span>匹配标的: <strong id="scr-total">--</strong> 只</span>
+        <span>本页 PE 中位: <strong id="scr-med-pe">--</strong></span>
+        <span>本页股息率中位: <strong id="scr-med-div">--</strong></span>
         <span>本页 ROE 中位: <strong id="scr-med-roe">--</strong></span>
         <span>本页毛利率中位: <strong id="scr-med-gm">--</strong></span>
         <span>本页负债率中位: <strong id="scr-med-debt">--</strong></span>
@@ -1812,7 +1874,7 @@
       <div class="mod-header">
         <div>
           <h2 class="mod-title">二、多维估值观测台（相对估值 · 历史分位带 · 绝对估值）</h2>
-          <span class="mod-desc">基于不复权现价、basic_eps 反推股本及 TTM 财报序列自动估算 · 无须外部市值数据即可实时定价</span>
+          <span class="mod-desc">基于不复权现价、权威总股本（缺失时反推兜底）与 PIT 财报序列实时定价</span>
         </div>
         <span id="val-overall-pill" class="status-pill pill-mid">计算中</span>
       </div>
@@ -1821,11 +1883,11 @@
       <div class="val-cap-bar" id="val-cap-bar">
         <div class="val-cap-items">
           <span>不复权现价: <strong id="val-unadj-price">--</strong></span>
-          <span>隐含总股本: <strong id="val-implied-shares">--</strong></span>
-          <span>隐含总市值: <strong id="val-implied-mktcap">--</strong></span>
-          <span id="val-shares-src" style="color:var(--ink-faint);">股本估算口径: --</span>
+          <span>总股本: <strong id="val-implied-shares">--</strong></span>
+          <span>总市值: <strong id="val-implied-mktcap">--</strong></span>
+          <span id="val-shares-src" style="color:var(--ink-faint);">股本口径: --</span>
         </div>
-        <span style="font-size:11px;color:var(--ink-faint);">注：亏损或刚定增期以最近有效 EPS 期替代</span>
+        <span style="font-size:11px;color:var(--ink-faint);">权威股本优先，缺失时按 basic_eps 反推兜底</span>
       </div>
 
       <!-- 6 Valuation Multiples KPIs -->
@@ -1910,6 +1972,10 @@
               <button type="button" data-val="1250" class="active">近5年</button>
               <button type="button" data-val="all">全历史</button>
             </div>
+            <div class="seg" id="seg-val-align" title="切换历史估值分位带的财报对齐口径：PIT 按实际披露日避免前视偏差，会计期末按报告截止日对齐">
+              <button type="button" data-val="pit" class="active">按披露日(PIT)</button>
+              <button type="button" data-val="period_end">按会计期末</button>
+            </div>
           </div>
         </div>
         <div id="chart-stk-valband" class="chart-box">
@@ -1934,6 +2000,21 @@
               <button type="button" data-val="np_ttm">TTM 归母净利</button>
               <button type="button" data-val="div_ttm">TTM 分红(DDM)</button>
             </div>
+          </div>
+        </div>
+
+        <div class="val-subhead" style="margin-top:-2px;margin-bottom:10px;padding-top:8px;border-top:1px dashed var(--border);">
+          <div class="inline-group">
+            <span class="ctrl-label">折现率 r 拟合口径:</span>
+            <div class="seg" id="seg-dcf-r-mode" title="完全脱离今日现价拟合股权折现率，避免股价短期涨跌反向牵引模型公允价值">
+              <button type="button" data-val="capm" class="active">纯风险 CAPM</button>
+              <button type="button" data-val="hist_gordon">5年中位股息+增速</button>
+            </div>
+          </div>
+          <div class="inline-group">
+            <span class="ctrl-label">估值边界开关:</span>
+            <button id="btn-dcf-netcash" class="preset-btn" type="button" aria-pressed="false" title="非金融标的在 DCF 权益价值中加回账面净现金（货币资金 − 负债合计）">DCF含净现金: 关</button>
+            <button id="btn-rim-below-book" class="preset-btn" type="button" aria-pressed="false" title="取消 RIM 终态 ROE 不低于资金成本 r 的下限，允许长期低 ROE 标的算出 <1×PB 折价">RIM允许破净: 关</button>
           </div>
         </div>
 
@@ -2093,9 +2174,9 @@
     <h3>接口口径与使用说明</h3>
     <ul>
       <li><strong>服务端透明代理</strong>：前端所有请求均经由同源路由 <code>/api/quant</code> 转发至 Quant Data FastAPI，不在浏览器中存储或暴露 <code>QUANT_API_TOKEN</code>，打开页面即可使用。</li>
-      <li><strong>选股快照与 TTM 口径</strong>：多维筛选读取服务端预计算快照 <code>screener_latest_cn.parquet</code>（日线或财报同步完成后自动刷新）；<code>roe_ttm_pct</code>、<code>ocf_to_np_ratio</code> 基于过去 4 季滚动 TTM 计算，<code>gross_margin_pct</code> / <code>net_margin_pct</code> / <code>rd_ratio_pct</code> 为最新报告期 YTD 口径。</li>
+      <li><strong>选股快照与 TTM 口径</strong>：多维筛选读取服务端预计算快照 <code>screener_latest_cn.parquet</code>（共 48 个字段，含 <code>PE_TTM</code>、<code>PB</code>、<code>PS_TTM</code>、<code>股息率(TTM)</code>、<code>总市值</code> 与近 5 年 PE/PB 分位）；<code>roe_ttm_pct</code>、<code>ocf_to_np_ratio</code> 基于过去 4 季滚动 TTM 计算，<code>gross_margin_pct</code> / <code>net_margin_pct</code> / <code>rd_ratio_pct</code> 为最新报告期 YTD 口径。</li>
       <li><strong>A 股颜色约定与复权口径</strong>：个股涨跌幅与 K 线采用 <code>红涨绿跌</code>；历史 K 线默认读取 <code>forward</code>（前复权）口径，可切换后复权与不复权以核对除权除息跳空与复权因子 <code>factor</code>。</li>
-      <li><strong>多维估值估算口径</strong>：由最新有效盈利期反推 <code>隐含股本 = 归母净利润 / basic_eps</code>，直接读取不复权收盘价 (<code>adjust=none</code>) 估算隐含市值、<code>PE_TTM</code>、<code>PB</code>、<code>PS_TTM</code> 与 <code>TTM FCF = TTM_OCF - TTM_CapEx</code>；<code>股息率 (TTM)</code> 与派息率优先由复权因子 <code>factor</code> 跳变与除息前不复权收盘价精确反推近 12 个月每股现金分红 DPS（自动识别送转拆股并去重跨期重复除息），缺失复权因子时回退至现金流量表近似口径；亏损或刚发生大额股本变动的公司请以公告股本为准。</li>
+      <li><strong>多维估值与 PIT 口径</strong>：总股本优先采用后端权威估值快照 <code>symbol.total_shares</code>，缺失时以最新有效盈利期反推兜底；历史分位带支持 <code>按披露日(PIT)</code>（采用修正比较期重述后的 <code>effective_report_date</code> 消除前视偏差）与 <code>按会计期末</code> 切换，并结合 <code>adjustment_events[]</code> 送转/配股因子还原历史未追溯股本。现价与估值倍数为不复权口径 (<code>adjust=none</code>)，绝对估值默认采用完全脱离今日现价的 <code>纯风险 CAPM</code>（可切换 <code>5年中位股息+增速</code>），并支持 <code>DCF含净现金</code> 与 <code>RIM允许破净</code> 边界开关。</li>
     </ul>
   </section>
 </div>
@@ -2425,7 +2506,12 @@
       valAllLoadedCode: "",
       valMetric: "pe",
       valWindow: 1250,
+      valAlignMode: "pit",
       dcfBase: "fcf_ttm",
+      dcfPreset: "neutral",
+      dcfRMode: "capm",
+      dcfNetCashAdj: false,
+      rimAllowBelowBook: false,
       dcfG1: 10,
       dcfG2: 2.5,
       dcfR: 9.0,
@@ -2475,7 +2561,7 @@
       noteEl.textContent = "自动检验四库就绪度、数据新鲜度、同步任务与个股样本完整性";
       if (!STATE.inspectLoaded) loadInspectData();
     } else if (tab === "screener") {
-      noteEl.textContent = "基于预计算快照的多因子选股筛选器（共 37 个返回字段）";
+      noteEl.textContent = "基于预计算快照的多因子选股筛选器（共 48 个返回字段，含估值与股息率）";
       if (!STATE.screenerLoaded) runScreener(false);
     } else if (tab === "stock") {
       noteEl.textContent = "个股复权日 K 线、成交量、季度/累计营收利润趋势与三大财务报表";
@@ -2803,7 +2889,18 @@
   /* ==================== TAB 2: 多维筛选 ==================== */
   const SCREENER_FIELDS = [
     { key: "avg_turnover_20d", label: "20日均额", view: ["overview", "price"], fmt: "money", sortable: true },
-    { key: "close", label: "收盘价", view: ["overview", "price"], fmt: "num2", sortable: true },
+    { key: "close", label: "收盘价(前复权)", view: ["overview", "price"], fmt: "num2", sortable: true },
+    { key: "unadj_close", label: "不复权价", view: ["valuation", "price"], fmt: "num2", sortable: true },
+    { key: "total_market_cap", label: "总市值", view: ["overview", "valuation"], fmt: "money", sortable: true },
+    { key: "pe_ttm", label: "PE_TTM", view: ["overview", "valuation"], fmt: "num2", sortable: true },
+    { key: "pb", label: "PB", view: ["overview", "valuation"], fmt: "num2", sortable: true },
+    { key: "ps_ttm", label: "PS_TTM", view: ["valuation"], fmt: "num2", sortable: true },
+    { key: "pcf_ttm", label: "PCF_TTM", view: ["valuation"], fmt: "num2", sortable: true },
+    { key: "div_yield_ttm", label: "股息率%", view: ["overview", "valuation"], fmt: "pct", sortable: true },
+    { key: "dps_ttm", label: "每股分红(TTM)", view: ["valuation"], fmt: "num3", sortable: true },
+    { key: "pe_pct_5y", label: "5年PE分位%", view: ["valuation"], fmt: "pct1", sortable: true },
+    { key: "pb_pct_5y", label: "5年PB分位%", view: ["valuation"], fmt: "pct1", sortable: true },
+    { key: "total_shares", label: "总股本", view: ["valuation", "safety"], fmt: "vol", sortable: true },
     { key: "pct_chg_1d", label: "1日涨跌%", view: ["overview", "price"], fmt: "pctColor", sortable: true },
     { key: "pct_chg_5d", label: "5日涨跌%", view: ["price"], fmt: "pctColor", sortable: true },
     { key: "pct_chg_20d", label: "20日涨跌%", view: ["overview", "price"], fmt: "pctColor", sortable: true },
@@ -2839,6 +2936,9 @@
   const SCREENER_PRESETS = {
     liquid: { sort_by: "avg_turnover_20d", sort_dir: "desc" },
     quality: { min_roe: 15, max_debt_ratio: 60, min_ocf_to_np: 0.8, min_turnover_20d_yi: 0.5, sort_by: "roe_ttm_pct", sort_dir: "desc" },
+    value_div: { max_pe: 15, min_div_yield: 4, min_roe: 10, min_turnover_20d_yi: 0.5, sort_by: "div_yield_ttm", sort_dir: "desc" },
+    deep_pb: { max_pb: 1.0, min_roe: 8, min_div_yield: 3, min_turnover_20d_yi: 0.5, sort_by: "pb", sort_dir: "asc" },
+    pb_roe: { min_roe: 12, max_pb_pct_5y: 30, max_pe_pct_5y: 40, min_ocf_to_np: 0.7, sort_by: "roe_ttm_pct", sort_dir: "desc" },
     growth: { min_q_rev_yoy: 15, min_q_np_yoy: 20, min_gross_margin: 30, min_roe: 10, sort_by: "q_np_yoy_pct", sort_dir: "desc" },
     rd: { min_rd_ratio: 5, min_gross_margin: 35, max_debt_ratio: 55, sort_by: "rd_ratio_pct", sort_dir: "desc" },
     momentum: { min_pct_60d: 15, min_turnover_20d_yi: 1.0, min_q_np_yoy: 0, sort_by: "pct_chg_60d", sort_dir: "desc" },
@@ -2873,6 +2973,18 @@
     if (p.min_rd_ratio !== undefined) document.getElementById("f-min-rd").value = p.min_rd_ratio;
     if (p.min_pct_60d !== undefined) document.getElementById("f-min-pct60").value = p.min_pct_60d;
     if (p.max_pct_250d !== undefined) document.getElementById("f-max-pct250").value = p.max_pct_250d;
+    if (p.min_pe !== undefined) document.getElementById("f-min-pe").value = p.min_pe;
+    if (p.max_pe !== undefined) document.getElementById("f-max-pe").value = p.max_pe;
+    if (p.min_pb !== undefined) document.getElementById("f-min-pb").value = p.min_pb;
+    if (p.max_pb !== undefined) document.getElementById("f-max-pb").value = p.max_pb;
+    if (p.min_ps !== undefined) document.getElementById("f-min-ps").value = p.min_ps;
+    if (p.max_ps !== undefined) document.getElementById("f-max-ps").value = p.max_ps;
+    if (p.min_div_yield !== undefined) document.getElementById("f-min-div").value = p.min_div_yield;
+    if (p.max_div_yield !== undefined) document.getElementById("f-max-div").value = p.max_div_yield;
+    if (p.min_mkt_cap_yi !== undefined) document.getElementById("f-min-mktcap").value = p.min_mkt_cap_yi;
+    if (p.max_mkt_cap_yi !== undefined) document.getElementById("f-max-mktcap").value = p.max_mkt_cap_yi;
+    if (p.max_pe_pct_5y !== undefined) document.getElementById("f-max-pe-pct5y").value = p.max_pe_pct_5y;
+    if (p.max_pb_pct_5y !== undefined) document.getElementById("f-max-pb-pct5y").value = p.max_pb_pct_5y;
     if (p.sort_by) document.getElementById("f-sort-by").value = p.sort_by;
     if (p.sort_dir) document.getElementById("f-sort-dir").value = p.sort_dir;
 
@@ -2888,6 +3000,8 @@
       return Number.isFinite(n) ? n : undefined;
     };
     const turnoverYi = numVal("f-min-turnover");
+    const minMktCapYi = numVal("f-min-mktcap");
+    const maxMktCapYi = numVal("f-max-mktcap");
     const limit = Number(document.getElementById("f-limit").value) || 50;
     STATE.screener.limit = limit;
     STATE.screener.sort_by = document.getElementById("f-sort-by").value || "avg_turnover_20d";
@@ -2915,6 +3029,18 @@
       max_debt_ratio: numVal("f-max-debt"),
       min_ocf_to_np: numVal("f-min-ocf"),
       min_rd_ratio: numVal("f-min-rd"),
+      min_pe: numVal("f-min-pe"),
+      max_pe: numVal("f-max-pe"),
+      min_pb: numVal("f-min-pb"),
+      max_pb: numVal("f-max-pb"),
+      min_ps: numVal("f-min-ps"),
+      max_ps: numVal("f-max-ps"),
+      min_div_yield: numVal("f-min-div"),
+      max_div_yield: numVal("f-max-div"),
+      min_mkt_cap: minMktCapYi !== undefined ? Math.round(minMktCapYi * 1e8) : undefined,
+      max_mkt_cap: maxMktCapYi !== undefined ? Math.round(maxMktCapYi * 1e8) : undefined,
+      max_pe_pct_5y: numVal("f-max-pe-pct5y"),
+      max_pb_pct_5y: numVal("f-max-pb-pct5y"),
       sort_by: STATE.screener.sort_by,
       sort_dir: STATE.screener.sort_dir,
       limit,
@@ -2931,7 +3057,9 @@
     if (col.fmt === "money") return `<span title="${esc(v)}">${esc(fmtMoneyShort(v))}</span>`;
     if (col.fmt === "vol") return `<span title="${esc(v)}">${esc(fmtVol(v))}</span>`;
     if (col.fmt === "num2") return esc(fmtNum(v, 2));
+    if (col.fmt === "num3") return esc(fmtNum(v, 3));
     if (col.fmt === "pct") return esc(fmtPct(v, 2, false));
+    if (col.fmt === "pct1") return esc(fmtPct(v, 1, false));
     if (col.fmt === "pctColor") return `<span class="${clsSign(v)}">${esc(fmtPct(v, 2, true))}</span>`;
     return esc(String(v));
   }
@@ -2946,11 +3074,15 @@
 
     // Summary strip
     document.getElementById("scr-total").textContent = fmtInt(total);
+    const medPe = median(items.filter(i => i.pe_ttm > 0 && i.pe_ttm < 500).map(i => i.pe_ttm));
+    const medDiv = median(items.filter(i => i.div_yield_ttm !== null && i.div_yield_ttm !== undefined).map(i => i.div_yield_ttm));
     const medRoe = median(items.map(i => i.roe_ttm_pct));
     const medGm = median(items.map(i => i.gross_margin_pct));
     const medDebt = median(items.map(i => i.debt_to_assets_pct));
     const validPct1 = items.filter(i => i.pct_chg_1d !== null && i.pct_chg_1d !== undefined);
     const upRatio = validPct1.length ? (validPct1.filter(i => i.pct_chg_1d > 0).length / validPct1.length) * 100 : null;
+    document.getElementById("scr-med-pe").textContent = medPe !== null ? `${medPe.toFixed(1)}x` : "--";
+    document.getElementById("scr-med-div").textContent = medDiv !== null ? `${medDiv.toFixed(2)}%` : "--";
     document.getElementById("scr-med-roe").textContent = medRoe !== null ? `${medRoe.toFixed(1)}%` : "--";
     document.getElementById("scr-med-gm").textContent = medGm !== null ? `${medGm.toFixed(1)}%` : "--";
     document.getElementById("scr-med-debt").textContent = medDebt !== null ? `${medDebt.toFixed(1)}%` : "--";
@@ -3785,6 +3917,131 @@
     return (le / arr.length) * 100;
   }
 
+  function addDaysIso(dateStr, days) {
+    if (!dateStr) return "";
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(dateStr));
+    if (!m) return "";
+    const dt = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3] + days));
+    return dt.toISOString().slice(0, 10);
+  }
+
+  function resolveEffectiveReportDate(r) {
+    const erd = String(r?.effective_report_date || "").slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(erd)) return erd;
+    const pe = String(r?.period_end || `${r?.fiscal_year || 2000}-12-31`).slice(0, 10);
+    const rd = String(r?.report_date || "").slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(rd) && /^\d{4}-\d{2}-\d{2}$/.test(pe)) {
+      const lag = daysBetweenDates(pe, rd);
+      if (lag >= 0 && lag <= 200) return rd;
+    }
+    const fp = String(r?.fiscal_period || "").toUpperCase();
+    const fallbackLag = fp === "Q1" ? 30 : (fp === "Q2" ? 60 : (fp === "Q3" ? 30 : 115));
+    return addDaysIso(pe, fallbackLag) || pe;
+  }
+
+  function buildSplitMultiplierHelper(adjustmentEvents) {
+    const events = (adjustmentEvents || [])
+      .filter(e => e && e.ex_date)
+      .map(e => ({
+        ex_date: String(e.ex_date).slice(0, 10),
+        ratio: 1 + (Number(e.per_share_bonus) || 0) + (Number(e.allotment_ratio) || 0),
+        dividend_per_share: Number(e.dividend_per_share) || 0
+      }))
+      .sort((a, b) => a.ex_date.localeCompare(b.ex_date));
+
+    const splitEvents = events.filter(e => e.ratio > 1.0001);
+    let cum = 1;
+    const cumSteps = splitEvents.map(e => {
+      const before = cum;
+      cum *= e.ratio;
+      return { ex_date: e.ex_date, before, after: cum };
+    });
+
+    const getMultAt = (dateStr) => {
+      if (!dateStr || !cumSteps.length) return 1;
+      let mult = 1;
+      for (let i = 0; i < cumSteps.length; i++) {
+        if (cumSteps[i].ex_date <= dateStr) mult = cumSteps[i].after;
+        else break;
+      }
+      return mult;
+    };
+
+    const getMultBefore = (dateStr) => {
+      if (!dateStr || !cumSteps.length) return 1;
+      let mult = 1;
+      for (let i = 0; i < cumSteps.length; i++) {
+        if (cumSteps[i].ex_date < dateStr) mult = cumSteps[i].after;
+        else break;
+      }
+      return mult;
+    };
+
+    return { events, splitEvents, cumSteps, getMultAt, getMultBefore };
+  }
+
+  function extractExDividendFromEvents(adjustmentEvents, lastDate, splitHelper) {
+    if (!Array.isArray(adjustmentEvents) || !lastDate || lastDate === "--") return null;
+    const sh = splitHelper || buildSplitMultiplierHelper(adjustmentEvents);
+    const multNow = sh.getMultAt(lastDate) || 1;
+    const cashEvents = [];
+    for (const e of adjustmentEvents) {
+      if (!e || !e.ex_date) continue;
+      const exDate = String(e.ex_date).slice(0, 10);
+      if (exDate > lastDate) continue;
+      const rawDps = Number(e.dividend_per_share);
+      if (!(rawDps > 0)) continue;
+      const multBefore = sh.getMultBefore(exDate) || 1;
+      const adjFactor = multNow / multBefore;
+      const dps = rawDps / (adjFactor > 0 ? adjFactor : 1);
+      if (dps > 0.0005) {
+        cashEvents.push({
+          date: exDate,
+          rawDps,
+          splitK: 1 + (Number(e.per_share_bonus) || 0) + (Number(e.allotment_ratio) || 0),
+          dps
+        });
+      }
+    }
+    cashEvents.sort((a, b) => a.date.localeCompare(b.date));
+
+    const in365 = cashEvents.filter(e => daysBetweenDates(e.date, lastDate) <= 365);
+    let chosen = in365;
+    let note = "官方除息事件";
+
+    if (chosen.length === 2 && daysBetweenDates(chosen[0].date, chosen[1].date) >= 280) {
+      chosen = chosen.slice(-1);
+      note = "官方除息(去重跨期年报)";
+    } else if (
+      chosen.length === 3 &&
+      daysBetweenDates(chosen[0].date, chosen[1].date) >= 125 &&
+      daysBetweenDates(chosen[1].date, chosen[2].date) >= 125
+    ) {
+      chosen = chosen.slice(-2);
+      note = "官方除息(去重跨期中期)";
+    } else if (chosen.length === 0) {
+      const near = cashEvents.filter(e => {
+        const d = daysBetweenDates(e.date, lastDate);
+        return d > 365 && d <= 395;
+      });
+      if (near.length === 1) {
+        chosen = near;
+        note = "官方除息(近13月顺延)";
+      }
+    }
+
+    const dpsTtm = chosen.reduce((s, e) => s + e.dps, 0);
+    const hasSplit = sh.splitEvents.some(se => chosen.some(ce => se.ex_date >= ce.date && se.ex_date <= lastDate));
+    return {
+      dpsTtm,
+      count: chosen.length,
+      events: chosen,
+      hasSplit,
+      source: "events",
+      note
+    };
+  }
+
   function detectFinancialCompany(symbolName, incRow, balRow, ttmOcf, ttmNp) {
     const name = String(symbolName || "");
     if (/银行|保险|证券|信托|金融|人寿|人保|太保|中国平安|中金公司|东方财富|申万宏源|国泰君安|国泰海通|期货|金租|产融/.test(name)) {
@@ -3939,11 +4196,16 @@
       const cash = b.cash != null ? Number(b.cash) : null;
       const debt = b.total_debt != null ? Number(b.total_debt) : null;
 
+      const erd = resolveEffectiveReportDate(r);
+      const sharesBasisDate = String(r.report_date || erd || r.period_end || `${r.fiscal_year}-12-31`).slice(0, 10);
+
       quarters.push({
         qi,
         label: `${r.fiscal_year}${r.fiscal_period}`,
         period_end: r.period_end || `${r.fiscal_year}-12-31`,
         report_date: r.report_date || "",
+        effective_report_date: erd,
+        sharesBasisDate,
         shares: filledShares[i]?.shares || null,
         sharesSrc: filledShares[i]?.src || "--",
         isExactShares: Boolean(rawSharesArr[i]),
@@ -3989,12 +4251,23 @@
     return quarters;
   }
 
-  function computeHistoricalSeriesStats(bars, quarters, metric) {
+  function computeHistoricalSeriesStats(bars, quarters, metric, opts = {}) {
+    const alignMode = opts.alignMode === "period_end" ? "period_end" : "pit";
+    const authTotalShares = Number(opts.authTotalShares) > 0 ? Number(opts.authTotalShares) : null;
+    const authTradeDate = String(opts.authTradeDate || "2099-12-31").slice(0, 10);
+    const splitHelper = opts.splitHelper || null;
+    const multNow = splitHelper ? (splitHelper.getMultAt(authTradeDate) || 1) : 1;
+
+    const orderedQ = alignMode === "pit"
+      ? [...quarters].sort((a, b) => (a.effective_report_date || a.period_end).localeCompare(b.effective_report_date || b.period_end) || (a.qi - b.qi))
+      : quarters;
+
     const n = bars.length;
     const dates = new Array(n);
     const prices = new Array(n);
     const values = new Array(n);
     const qLabels = new Array(n);
+    const qAlignDates = new Array(n);
     const validVals = [];
 
     let qPtr = -1;
@@ -4006,15 +4279,29 @@
       const unadj = Number(bar.close);
       prices[i] = unadj;
 
-      while (qPtr + 1 < quarters.length && quarters[qPtr + 1].period_end <= bar.date) {
-        qPtr++;
+      while (qPtr + 1 < orderedQ.length) {
+        const nextQ = orderedQ[qPtr + 1];
+        const nextDate = alignMode === "pit" ? nextQ.effective_report_date : nextQ.period_end;
+        if (nextDate <= bar.date) qPtr++;
+        else break;
       }
-      const q = qPtr >= 0 ? quarters[qPtr] : null;
+      const q = qPtr >= 0 ? orderedQ[qPtr] : null;
       qLabels[i] = q ? q.label : "--";
+      qAlignDates[i] = q ? (alignMode === "pit" ? q.effective_report_date : q.period_end) : "--";
+
+      let dayShares = null;
+      if (authTotalShares > 0) {
+        const multDay = splitHelper ? (splitHelper.getMultAt(bar.date) || 1) : 1;
+        dayShares = authTotalShares * (multDay / multNow);
+      } else if (q && q.shares > 0) {
+        const multDay = splitHelper ? (splitHelper.getMultAt(bar.date) || 1) : 1;
+        const multQ = splitHelper ? (splitHelper.getMultAt(q.sharesBasisDate || q.period_end) || 1) : 1;
+        dayShares = q.shares * (multDay / multQ);
+      }
 
       let v = null;
-      if (q && q.shares > 0 && unadj > 0) {
-        const mktCap = unadj * q.shares;
+      if (q && dayShares > 0 && unadj > 0) {
+        const mktCap = unadj * dayShares;
         if (metric === "pe" && q.ttmNp > 0) {
           const pe = mktCap / q.ttmNp;
           if (pe > 0 && pe <= 200) v = +pe.toFixed(2);
@@ -4042,6 +4329,7 @@
     const outPrices = trimStart > 0 ? prices.slice(trimStart) : prices;
     const outValues = trimStart > 0 ? values.slice(trimStart) : values;
     const outQLabels = trimStart > 0 ? qLabels.slice(trimStart) : qLabels;
+    const outQAlignDates = trimStart > 0 ? qAlignDates.slice(trimStart) : qAlignDates;
 
     const sorted = [...validVals].sort((a, b) => a - b);
     const p20 = calcQuantile(sorted, 0.2);
@@ -4058,6 +4346,7 @@
       prices: outPrices,
       values: outValues,
       qLabels: outQLabels,
+      qAlignDates: outQAlignDates,
       validCount: sorted.length,
       firstDate,
       lastDate,
@@ -4168,7 +4457,56 @@
     };
   }
 
-  function buildDcfScenarioModel(quarters, kAdj, kUnadj, cagrNp, approxDivYieldPct, impliedMktCap, isFinancial, qNow) {
+  function computeMedianHistDivYield(bars, adjustmentEvents, splitHelper) {
+    if (!bars?.length || !Array.isArray(adjustmentEvents) || !adjustmentEvents.length) return null;
+    const sh = splitHelper || buildSplitMultiplierHelper(adjustmentEvents);
+    const histBars = bars.length >= 65 ? bars.slice(0, -1) : bars;
+    const winBars = histBars.slice(-1250);
+    if (winBars.length < 60) return null;
+
+    const cashEvs = adjustmentEvents
+      .filter(e => e && e.ex_date && Number(e.dividend_per_share) > 0)
+      .map(e => {
+        const exDate = String(e.ex_date).slice(0, 10);
+        return {
+          exDate,
+          ts: Date.parse(exDate + "T00:00:00Z"),
+          rawDps: Number(e.dividend_per_share),
+          multBefore: sh.getMultBefore(exDate) || 1
+        };
+      })
+      .filter(e => Number.isFinite(e.ts))
+      .sort((a, b) => a.ts - b.ts);
+    if (!cashEvs.length) return null;
+
+    const samples = [];
+    let posCount = 0;
+    for (let i = 0; i < winBars.length; i += 5) {
+      const b = winBars[i];
+      const px = Number(b?.close);
+      if (!(px > 0) || !b.date) continue;
+      const dStr = String(b.date).slice(0, 10);
+      const ts = Date.parse(dStr + "T00:00:00Z");
+      if (!Number.isFinite(ts)) continue;
+      const multDay = sh.getMultAt(dStr) || 1;
+      const winStart = ts - 365 * 86400000;
+      let dps12m = 0;
+      for (let j = 0; j < cashEvs.length; j++) {
+        const ev = cashEvs[j];
+        if (ev.ts > ts) break;
+        if (ev.ts >= winStart) {
+          dps12m += ev.rawDps * (ev.multBefore / multDay);
+        }
+      }
+      const dy = clamp((dps12m / px) * 100, 0, 30);
+      if (dy > 0) posCount++;
+      samples.push(dy);
+    }
+    if (!samples.length || posCount < samples.length * 0.2) return null;
+    return median(samples);
+  }
+
+  function buildDcfScenarioModel(quarters, kAdj, kUnadj, cagrNp, isFinancial, qNow, adjEvents, splitHelper) {
     const roundHalf = (v) => Math.round(v * 2) / 2;
     const roundQtr = (v) => Math.round(v * 4) / 4;
 
@@ -4200,9 +4538,10 @@
     const deltaG1 = roundHalf(clamp(std5Y * 0.35, 1.0, Math.min(3.5, Math.max(1.5, baseG1 * 0.5))));
     const baseG2 = baseG1 <= 4.0 ? 2.0 : 2.5;
 
-    // 1Y realized annualized volatility from up to 250 daily bars
-    const volBars = (kAdj?.items?.length >= 20 ? kAdj.items : kUnadj?.items) || [];
-    const volSlice = volBars.slice(-250);
+    // 1Y realized annualized volatility from trailing 250 bars up to T-1 (independent of today's spot close)
+    const volBarsRaw = (kAdj?.items?.length >= 20 ? kAdj.items : kUnadj?.items) || [];
+    const volBarsBase = volBarsRaw.length >= 25 ? volBarsRaw.slice(0, -1) : volBarsRaw;
+    const volSlice = volBarsBase.slice(-250);
     const rets = [];
     for (let i = 1; i < volSlice.length; i++) {
       const p0 = Number(volSlice[i - 1].close);
@@ -4216,23 +4555,28 @@
       vol1Y = Math.sqrt(rVar * 242) * 100;
     }
 
-    // Stock-specific cost of equity blending Gordon implied return and volatility-based CAPM
+    // Pure risk CAPM (spot-price independent: uses book equity scale instead of current market cap)
     const rf = 2.0;
     const erp = 5.5;
     const betaVol = clamp(vol1Y / 20.0, 0.72, 1.65);
-    const sizeAdj = impliedMktCap >= 3000e8 ? -0.25 : (impliedMktCap > 0 && impliedMktCap < 300e8 ? 0.50 : 0);
+    const eqScale = Number(qNow?.equity) || 0;
+    const sizeAdj = eqScale >= 1000e8 ? -0.25 : (eqScale > 0 && eqScale < 100e8 ? 0.50 : 0);
     const debtRatio = (qNow?.assets > 0 && qNow?.debt != null) ? (qNow.debt / qNow.assets) * 100 : 0;
     const levAdj = (!isFinancial && debtRatio > 70) ? 0.35 : 0;
     const rCapm = clamp(rf + erp * betaVol + sizeAdj + levAdj, 6.25, 11.75);
 
-    let rGordon = null;
-    let rTarget = rCapm;
-    if (approxDivYieldPct !== null && approxDivYieldPct >= 1.5) {
+    // Optional spot-independent 5Y historical median dividend yield + g fit
+    const divYield5YMed = computeMedianHistDivYield(kUnadj?.items || [], adjEvents, splitHelper);
+    let rGordonHist = null;
+    let rTargetHist = rCapm;
+    if (divYield5YMed !== null && divYield5YMed >= 1.0) {
       const gEff = Math.min(baseG1, baseG2 + (baseG1 - baseG2) * 0.40);
-      rGordon = clamp(approxDivYieldPct * (1 + gEff / 100) + gEff, 6.25, 11.50);
-      rTarget = 0.55 * rGordon + 0.45 * rCapm;
+      rGordonHist = clamp(divYield5YMed * (1 + gEff / 100) + gEff, 6.00, 11.50);
+      rTargetHist = 0.65 * rGordonHist + 0.35 * rCapm;
     }
-    const baseR = roundQtr(clamp(rTarget, Math.max(6.25, baseG2 + 2.5), 12.0));
+
+    const baseRCapm = roundQtr(clamp(rCapm, Math.max(6.25, baseG2 + 2.5), 12.0));
+    const baseRHist = roundQtr(clamp(rTargetHist, Math.max(6.00, baseG2 + 2.5), 12.0));
     const deltaR = vol1Y >= 32 ? 0.75 : 0.50;
 
     const roundFive = (v) => Math.round(v / 5) * 5;
@@ -4242,7 +4586,7 @@
 
     const consG2 = Math.max(1.0, +(baseG2 - 0.5).toFixed(1));
     const optG2 = Math.min(3.5, +(baseG2 + 0.5).toFixed(1));
-    const presets = {
+    const makePresets = (baseR) => ({
       conservative: {
         g1: +(baseG1 - deltaG1).toFixed(1),
         g2: consG2,
@@ -4261,7 +4605,19 @@
         r: Math.max(optG2 + 1.5, +(baseR - deltaR).toFixed(2)),
         mos: optMos
       }
+    });
+
+    const presetsByMode = {
+      capm: makePresets(baseRCapm),
+      hist_gordon: makePresets(baseRHist)
     };
+    const rHintByMode = {
+      capm: `纯风险CAPM(无风险2%+波动率${vol1Y.toFixed(0)}%+规模/杠杆) · 脱离现价 · 情景±${deltaR.toFixed(2)}%`,
+      hist_gordon: rGordonHist !== null
+        ? `5年中位股息(${divYield5YMed.toFixed(1)}%)+增速(${rGordonHist.toFixed(1)}%)与CAPM拟合 · 脱离现价 · 情景±${deltaR.toFixed(2)}%`
+        : `近5年中位股息不足1%，自动回退纯风险CAPM(${rCapm.toFixed(2)}%) · 情景±${deltaR.toFixed(2)}%`
+    };
+    const activeMode = STATE.stock.dcfRMode === "hist_gordon" ? "hist_gordon" : "capm";
 
     const g1Hint = n >= 2
       ? `近${n}年净利YoY均值 ${rawMeanUnclipped.toFixed(1)}% · 波动带 ±${deltaG1.toFixed(1)}%`
@@ -4269,9 +4625,6 @@
     const g1Title = n >= 2
       ? `近${n}年年度净利YoY: ${yoySamples.map(x => `${x.label} ${fmtPct(x.yoy, 1, true)}`).join(", ")}`
       : "";
-    const rHint = rGordon !== null
-      ? `股息+增速(${rGordon.toFixed(1)}%)与波动率(${vol1Y.toFixed(0)}%)拟合 · 情景±${deltaR.toFixed(2)}%`
-      : `无风险利率+波动率(${vol1Y.toFixed(0)}%)CAPM拟合 · 情景±${deltaR.toFixed(2)}%`;
     const mosHint = `按中性g₁(${baseG1.toFixed(1)}%)匹配基准 ${baseMos}% · 买入价=公允×(1−MOS)`;
 
     return {
@@ -4280,15 +4633,18 @@
       std5Y,
       vol1Y,
       rCapm,
-      rGordon,
+      rGordon: rGordonHist,
+      divYield5YMed,
       deltaG1,
       deltaR,
       baseMos,
       yoySamples,
-      presets,
+      presetsByMode,
+      presets: presetsByMode[activeMode],
+      rHintByMode,
       g1Hint,
       g1Title,
-      rHint,
+      rHint: rHintByMode[activeMode],
       mosHint
     };
   }
@@ -4301,9 +4657,12 @@
     const kAdj = (STATE.stock.valFwdKlineData && STATE.stock.valFwdLoadedCode === curCode && STATE.stock.valFwdKlineData.items?.length >= 2)
       ? STATE.stock.valFwdKlineData
       : ((kMain && kMain.adjust !== "none" && kMain.items?.length >= 2) ? kMain : null);
-    const symbolName = kMain?.symbol?.name || kUnadj?.symbol?.name || finData?.symbol?.name || "";
+    const symSnap = finData?.symbol || kMain?.symbol || kUnadj?.symbol || null;
+    const symbolName = symSnap?.name || kMain?.symbol?.name || kUnadj?.symbol?.name || "";
     const quarters = buildQuarterlyValuationSeries(finData, symbolName);
     const qNow = quarters[quarters.length - 1] || null;
+    const adjEvents = Array.isArray(finData?.adjustment_events) ? finData.adjustment_events : [];
+    const splitHelper = buildSplitMultiplierHelper(adjEvents);
 
     // Strictly use direct unadjusted close (adjust=none)
     let unadjPrice = null;
@@ -4314,7 +4673,25 @@
       priceDate = lb.date;
     }
 
-    const shares = qNow?.shares || null;
+    const authTotalSharesRaw = Number(symSnap?.total_shares);
+    const authTradeDate = String(symSnap?.trade_date || priceDate || "2099-12-31").slice(0, 10);
+    let shares = null;
+    let sharesSrc = qNow?.sharesSrc || "--";
+    let isExactShares = Boolean(qNow?.isExactShares);
+    let sharesSourceKind = "implied";
+    if (Number.isFinite(authTotalSharesRaw) && authTotalSharesRaw > 0) {
+      const mSnap = splitHelper.getMultAt(authTradeDate) || 1;
+      const mNow = (priceDate && priceDate !== "--" ? splitHelper.getMultAt(priceDate) : mSnap) || mSnap;
+      shares = authTotalSharesRaw * (mNow / mSnap);
+      sharesSrc = symSnap?.trade_date ? `快照 ${symSnap.trade_date}` : "权威总股本";
+      isExactShares = true;
+      sharesSourceKind = "authoritative";
+    } else if (qNow?.shares > 0) {
+      const mQ = splitHelper.getMultAt(qNow.sharesBasisDate || qNow.period_end) || 1;
+      const mNow = (priceDate && priceDate !== "--" ? splitHelper.getMultAt(priceDate) : mQ) || mQ;
+      shares = qNow.shares * (mNow / mQ);
+    }
+
     const impliedMktCap = (unadjPrice > 0 && shares > 0) ? unadjPrice * shares : null;
 
     // 3Y average FCF (from latest 12 quarters = 3 annual FCF points: q[n-1], q[n-5], q[n-9])
@@ -4351,15 +4728,31 @@
     const fcfYieldPct = (impliedMktCap && qNow?.ttmFcf !== null) ? (qNow.ttmFcf / impliedMktCap) * 100 : null;
     const pFcf = (impliedMktCap && qNow?.ttmFcf > 0) ? impliedMktCap / qNow.ttmFcf : null;
 
-    const exDiv = (kUnadj?.items?.length >= 2 && kAdj?.items?.length >= 2)
-      ? extractExDividendTTM(kUnadj.items, kAdj.items, qNow?.ttmDivGross ?? 0, shares)
+    const snapDpsRaw = symSnap?.dps_ttm !== null && symSnap?.dps_ttm !== undefined ? Number(symSnap.dps_ttm) : null;
+    const exDivFromEvents = (adjEvents.length > 0 && priceDate && priceDate !== "--")
+      ? extractExDividendFromEvents(adjEvents, priceDate, splitHelper)
       : null;
+    const exDiv = exDivFromEvents !== null
+      ? exDivFromEvents
+      : ((kUnadj?.items?.length >= 2 && kAdj?.items?.length >= 2)
+        ? extractExDividendTTM(kUnadj.items, kAdj.items, qNow?.ttmDivGross ?? 0, shares)
+        : null);
 
     let dpsTtm = null;
     let ttmDivActual = null;
     let approxDivYieldPct = null;
     let approxPayoutPct = null;
-    if (exDiv !== null) {
+    if (exDiv !== null && (exDiv.count > 0 || snapDpsRaw === null)) {
+      dpsTtm = exDiv.dpsTtm;
+      approxDivYieldPct = (unadjPrice > 0) ? (dpsTtm / unadjPrice) * 100 : null;
+      approxPayoutPct = (epsTtm > 0) ? (dpsTtm / epsTtm) * 100 : null;
+      ttmDivActual = (shares > 0) ? dpsTtm * shares : (qNow?.ttmDiv ?? null);
+    } else if (snapDpsRaw !== null && Number.isFinite(snapDpsRaw)) {
+      dpsTtm = snapDpsRaw;
+      approxDivYieldPct = (unadjPrice > 0) ? (dpsTtm / unadjPrice) * 100 : null;
+      approxPayoutPct = (epsTtm > 0) ? (dpsTtm / epsTtm) * 100 : null;
+      ttmDivActual = (shares > 0) ? dpsTtm * shares : (qNow?.ttmDiv ?? null);
+    } else if (exDiv !== null) {
       dpsTtm = exDiv.dpsTtm;
       approxDivYieldPct = (unadjPrice > 0) ? (dpsTtm / unadjPrice) * 100 : null;
       approxPayoutPct = (epsTtm > 0) ? (dpsTtm / epsTtm) * 100 : null;
@@ -4375,10 +4768,10 @@
       kAdj,
       kUnadj,
       cagrNp,
-      approxDivYieldPct,
-      impliedMktCap,
       Boolean(qNow?.isFinancial),
-      qNow
+      qNow,
+      adjEvents,
+      splitHelper
     );
 
     const peg = (peTtm > 0 && cagrNp > 0) ? peTtm / cagrNp : null;
@@ -4395,24 +4788,31 @@
       ? ((qNow.cash - qNow.debt) / impliedMktCap) * 100
       : null;
 
-    // Historical bands
+    // Historical bands (PIT vs period_end + split-adjusted share restoration)
     const barsAll = kUnadj?.items || [];
     const barsWin = STATE.stock.valWindow === "all"
       ? barsAll
       : barsAll.slice(-Math.min(barsAll.length, Number(STATE.stock.valWindow) || 1250));
+    const bandOpts = {
+      alignMode: STATE.stock.valAlignMode,
+      authTotalShares: sharesSourceKind === "authoritative" ? authTotalSharesRaw : null,
+      authTradeDate,
+      splitHelper
+    };
     const bands = {
-      pe: computeHistoricalSeriesStats(barsWin, quarters, "pe"),
-      pb: computeHistoricalSeriesStats(barsWin, quarters, "pb"),
-      ps: computeHistoricalSeriesStats(barsWin, quarters, "ps"),
-      fcf: computeHistoricalSeriesStats(barsWin, quarters, "fcf")
+      pe: computeHistoricalSeriesStats(barsWin, quarters, "pe", bandOpts),
+      pb: computeHistoricalSeriesStats(barsWin, quarters, "pb", bandOpts),
+      ps: computeHistoricalSeriesStats(barsWin, quarters, "ps", bandOpts),
+      fcf: computeHistoricalSeriesStats(barsWin, quarters, "fcf", bandOpts)
     };
 
     return {
       priceDate,
       unadjPrice,
       shares,
-      sharesSrc: qNow?.sharesSrc || "--",
-      isExactShares: Boolean(qNow?.isExactShares),
+      sharesSrc,
+      sharesSourceKind,
+      isExactShares,
       impliedMktCap,
       isFinancial: Boolean(qNow?.isFinancial),
       divIncludesBondInterest: Boolean(qNow?.divIncludesBondInterest),
@@ -4450,7 +4850,9 @@
     if (STATE.stock.dcfAutoFittedCode === code) return;
     STATE.stock.dcfAutoFittedCode = code;
 
-    const neut = snap?.dcfModel?.presets?.neutral;
+    const rMode = STATE.stock.dcfRMode === "hist_gordon" ? "hist_gordon" : "capm";
+    const neut = snap?.dcfModel?.presetsByMode?.[rMode]?.neutral || snap?.dcfModel?.presets?.neutral;
+    STATE.stock.dcfPreset = "neutral";
     STATE.stock.dcfG1 = neut ? neut.g1 : 7.0;
     STATE.stock.dcfG2 = neut ? neut.g2 : 2.5;
     STATE.stock.dcfR = neut ? neut.r : 9.0;
@@ -4491,7 +4893,9 @@
     document.getElementById("lbl-dcf-r").textContent = `${STATE.stock.dcfR.toFixed(2)}%`;
     document.getElementById("lbl-dcf-mos").textContent = `${STATE.stock.dcfMos}%`;
 
-    const model = STATE.stock.valSnap?.dcfModel;
+    const snap = STATE.stock.valSnap;
+    const model = snap?.dcfModel;
+    const rMode = STATE.stock.dcfRMode === "hist_gordon" ? "hist_gordon" : "capm";
     const g1HintEl = document.getElementById("hint-dcf-g1");
     if (g1HintEl && model) {
       g1HintEl.textContent = model.g1Hint;
@@ -4499,7 +4903,7 @@
     }
     const rHintEl = document.getElementById("hint-dcf-r");
     if (rHintEl && model) {
-      rHintEl.textContent = model.rHint;
+      rHintEl.textContent = model.rHintByMode?.[rMode] || model.rHint;
     }
     const mosHintEl = document.getElementById("hint-dcf-mos");
     if (mosHintEl && model) {
@@ -4509,6 +4913,28 @@
     document.querySelectorAll("#seg-dcf-base button").forEach(b => b.classList.toggle("active", b.dataset.val === STATE.stock.dcfBase));
     document.querySelectorAll("#seg-val-metric button").forEach(b => b.classList.toggle("active", b.dataset.val === STATE.stock.valMetric));
     document.querySelectorAll("#seg-val-window button").forEach(b => b.classList.toggle("active", String(b.dataset.val) === String(STATE.stock.valWindow)));
+    document.querySelectorAll("#seg-val-align button").forEach(b => b.classList.toggle("active", b.dataset.val === STATE.stock.valAlignMode));
+    document.querySelectorAll("#seg-dcf-r-mode button").forEach(b => b.classList.toggle("active", b.dataset.val === rMode));
+    document.querySelectorAll(".val-preset").forEach(b => b.classList.toggle("active", b.dataset.preset === STATE.stock.dcfPreset));
+
+    const isFin = Boolean(snap?.isFinancial);
+    const ncBtn = document.getElementById("btn-dcf-netcash");
+    if (ncBtn) {
+      const ncActive = Boolean(STATE.stock.dcfNetCashAdj && !isFin);
+      ncBtn.disabled = isFin;
+      ncBtn.classList.toggle("active", ncActive);
+      ncBtn.setAttribute("aria-pressed", String(ncActive));
+      ncBtn.textContent = isFin
+        ? "DCF含净现金: 金融股不适用"
+        : (ncActive ? "DCF含净现金: 开" : "DCF含净现金: 关");
+    }
+    const rimBtn = document.getElementById("btn-rim-below-book");
+    if (rimBtn) {
+      const rimActive = Boolean(STATE.stock.rimAllowBelowBook);
+      rimBtn.classList.toggle("active", rimActive);
+      rimBtn.setAttribute("aria-pressed", String(rimActive));
+      rimBtn.textContent = rimActive ? "RIM允许破净: 开" : "RIM允许破净: 关";
+    }
   }
 
   function calcTwoStageDCF(baseCF, shares, g1Pct, g2Pct, rPct) {
@@ -4553,13 +4979,15 @@
     return (lo + hi) / 2;
   }
 
-  function calcRIM(bvps, roePct, payoutPct, g2Pct, rPct) {
+  function calcRIM(bvps, roePct, payoutPct, g2Pct, rPct, allowBelowBook = false) {
     const r = rPct / 100;
     const g2 = g2Pct / 100;
     if (!(bvps > 0) || !(r > g2 + 0.005)) return null;
 
     const roe0 = clamp((roePct ?? 10) / 100, -0.25, 0.45);
-    const targetRoe = clamp(Math.max(r, roe0 * 0.72), 0.04, 0.30);
+    const targetRoe = allowBelowBook
+      ? clamp(roe0 * 0.72, 0.02, 0.30)
+      : clamp(Math.max(r, roe0 * 0.72), 0.04, 0.30);
     const retention = clamp(1 - (payoutPct != null ? payoutPct / 100 : 0.30), 0.15, 0.90);
 
     let bv = bvps;
@@ -4573,7 +5001,8 @@
     const termRI = ((targetRoe - r) * bv) / (r - g2);
     const pvTerm = termRI / Math.pow(1 + r, 5);
     const rawVal = bvps + pvRI + pvTerm;
-    return clamp(rawVal, bvps * 0.4, bvps * 12);
+    const minFloor = allowBelowBook ? bvps * 0.25 : bvps * 0.4;
+    return clamp(rawVal, minFloor, bvps * 12);
   }
 
   function getActiveBaseCashFlow(snap) {
@@ -4583,11 +5012,24 @@
     return snap.qNow?.ttmFcf ?? null;
   }
 
+  function getEffectiveNetCashPerShare(snap) {
+    if (!STATE.stock.dcfNetCashAdj || !snap || snap.isFinancial || STATE.stock.dcfBase === "div_ttm") return 0;
+    const cash = snap.qNow?.cash;
+    const debt = snap.qNow?.debt;
+    const shares = snap.shares;
+    if (cash != null && debt != null && shares > 0) {
+      return (cash - debt) / shares;
+    }
+    return 0;
+  }
+
   function renderValuationKPIs(snap) {
     document.getElementById("val-unadj-price").textContent = snap.unadjPrice !== null ? `¥${fmtNum(snap.unadjPrice)}` : "--";
     document.getElementById("val-implied-shares").textContent = snap.shares !== null ? `${(snap.shares / 1e8).toFixed(2)}亿股` : "--";
     document.getElementById("val-implied-mktcap").textContent = snap.impliedMktCap !== null ? `${(snap.impliedMktCap / 1e8).toFixed(1)}亿元` : "--";
-    document.getElementById("val-shares-src").textContent = `股本估算期: ${snap.sharesSrc}${snap.isExactShares ? "" : " (顺延)"}`;
+    document.getElementById("val-shares-src").textContent = snap.sharesSourceKind === "authoritative"
+      ? `股本口径: 权威总股本 (${snap.sharesSrc})`
+      : `股本估算期(兜底): ${snap.sharesSrc}${snap.isExactShares ? "" : " (顺延)"}`;
 
     const setCard = (id, mainText, pillText, pillCls, barPct, barColor, metaText) => {
       document.getElementById(id).textContent = mainText;
@@ -4734,9 +5176,10 @@
       return;
     }
 
+    const alignTxt = STATE.stock.valAlignMode === "pit" ? "PIT披露日" : "会计期末";
     const spanTxt = (band.firstDate && band.lastDate) ? `${band.firstDate} ~ ${band.lastDate} · ` : "";
     statsEl.textContent =
-      `${spanTxt}有效交易日 ${band.validCount} 天 · 当前 ${fmtNum(band.latestVal)}${cfg.suffix} (${band.pct !== null ? band.pct.toFixed(1) + "%" : "--"} 分位) · P20=${fmtNum(band.p20)}${cfg.suffix} · P50=${fmtNum(band.p50)}${cfg.suffix} · P80=${fmtNum(band.p80)}${cfg.suffix}`;
+      `[${alignTxt} · 送转还原] ${spanTxt}有效交易日 ${band.validCount} 天 · 当前 ${fmtNum(band.latestVal)}${cfg.suffix} (${band.pct !== null ? band.pct.toFixed(1) + "%" : "--"} 分位) · P20=${fmtNum(band.p20)}${cfg.suffix} · P50=${fmtNum(band.p50)}${cfg.suffix} · P80=${fmtNum(band.p80)}${cfg.suffix}`;
 
     const n = band.dates.length;
     const xIdx = band.dates.map((_, i) => i);
@@ -4749,11 +5192,13 @@
 
     const onCursor = attachBarTooltip(shell.stage, shell.tooltip, band.dates, (idx) => {
       const v = band.values[idx];
+      const qPeriod = band.qLabels[idx] || "--";
+      const qAlignDate = band.qAlignDates?.[idx] || "--";
       return {
         rows: [
           { name: cfg.name, color: "#111827", val: v !== null ? `${fmtNum(v)}${cfg.suffix}` : "--" },
           { name: "不复权价", color: "#6B7280", val: band.prices[idx] !== null ? `¥${fmtNum(band.prices[idx])}` : "--" },
-          { name: "财报期", color: "#3730A3", val: band.qLabels[idx] || "--" }
+          { name: STATE.stock.valAlignMode === "pit" ? "财报(PIT)" : "财报(期末)", color: "#3730A3", val: `${qPeriod} (${qAlignDate})` }
         ]
       };
     });
@@ -4886,7 +5331,7 @@
     const curPrice = snap.unadjPrice;
     const shares = snap.shares;
     const baseCF = getActiveBaseCashFlow(snap);
-    const { dcfG1, dcfG2, dcfR, dcfMos, dcfBase } = STATE.stock;
+    const { dcfG1, dcfG2, dcfR, dcfMos, dcfBase, dcfNetCashAdj, rimAllowBelowBook } = STATE.stock;
 
     const dcfNameMap = {
       fcf_ttm: "两阶段 DCF",
@@ -4896,25 +5341,38 @@
     };
     const dcfLabel = dcfNameMap[dcfBase] || "两阶段 DCF";
     const dcfTag = dcfBase === "div_ttm" ? "DDM 中枢" : "DCF 中枢";
+    const ncAdj = getEffectiveNetCashPerShare(snap);
+    const ncActive = dcfNetCashAdj && !snap.isFinancial && dcfBase !== "div_ttm";
 
     const dcfMidObj = calcTwoStageDCF(baseCF, shares, dcfG1, dcfG2, dcfR);
     const dcfLowObj = calcTwoStageDCF(baseCF, shares, dcfG1, dcfG2, Math.min(18, dcfR + 1.0));
     const dcfHighObj = calcTwoStageDCF(baseCF, shares, dcfG1, dcfG2, Math.max(dcfG2 + 1.0, dcfR - 1.0));
 
-    const dcfMid = dcfMidObj?.valuePerShare ?? null;
+    const applyNc = (obj) => {
+      if (!obj) return null;
+      const v = obj.valuePerShare + ncAdj;
+      return v > 0 ? v : null;
+    };
+    const dcfMid = applyNc(dcfMidObj);
+    const dcfLow = applyNc(dcfLowObj);
+    const dcfHigh = applyNc(dcfHighObj);
     const dcfTarget = dcfMid !== null ? dcfMid * (1 - dcfMos / 100) : null;
-    const impliedR = solveImpliedReturn(baseCF, shares, dcfG1, dcfG2, curPrice);
+    const opCurPrice = (curPrice > 0 && curPrice - ncAdj > 0) ? (curPrice - ncAdj) : null;
+    const impliedR = opCurPrice !== null ? solveImpliedReturn(baseCF, shares, dcfG1, dcfG2, opCurPrice) : null;
     if (dcfMid !== null && curPrice > 0) {
       const upPct = ((dcfMid / curPrice - 1) * 100);
       const irrTxt = impliedR !== null ? ` · 现价隐含回报 ${impliedR.toFixed(2)}%` : "";
-      sumEl.textContent = `${dcfTag} ¥${fmtNum(dcfMid)} (${fmtPct(upPct, 1, true)}) · 安全边际买点 ¥${fmtNum(dcfTarget)}${irrTxt}`;
+      const ncTxt = ncActive ? ` · 含净现金 ${ncAdj >= 0 ? "+" : ""}¥${fmtNum(ncAdj)}/股` : "";
+      sumEl.textContent = `${dcfTag} ¥${fmtNum(dcfMid)} (${fmtPct(upPct, 1, true)}) · 安全边际买点 ¥${fmtNum(dcfTarget)}${irrTxt}${ncTxt}`;
+    } else if (ncActive && dcfMidObj?.valuePerShare > 0 && dcfMidObj.valuePerShare + ncAdj <= 0) {
+      sumEl.textContent = `计入净现金(${ncAdj >= 0 ? "+" : ""}¥${fmtNum(ncAdj)}/股)后权益估值 ≤ 0，可关闭「DCF含净现金」`;
     } else {
       sumEl.textContent = baseCF <= 0 ? "所选基期现金流 ≤ 0，可切换至“TTM 归母净利”" : "参数无效 (须满足 r > g₂ + 0.5%)";
     }
 
-    const rimMid = calcRIM(snap.bvps, snap.roeTtm, snap.approxPayoutPct, dcfG2, dcfR);
-    const rimLow = calcRIM(snap.bvps, snap.roeTtm, snap.approxPayoutPct, dcfG2, Math.min(18, dcfR + 1.0));
-    const rimHigh = calcRIM(snap.bvps, snap.roeTtm, snap.approxPayoutPct, dcfG2, Math.max(dcfG2 + 1.0, dcfR - 1.0));
+    const rimMid = calcRIM(snap.bvps, snap.roeTtm, snap.approxPayoutPct, dcfG2, dcfR, rimAllowBelowBook);
+    const rimLow = calcRIM(snap.bvps, snap.roeTtm, snap.approxPayoutPct, dcfG2, Math.min(18, dcfR + 1.0), rimAllowBelowBook);
+    const rimHigh = calcRIM(snap.bvps, snap.roeTtm, snap.approxPayoutPct, dcfG2, Math.max(dcfG2 + 1.0, dcfR - 1.0), rimAllowBelowBook);
 
     const peBand = snap.bands.pe;
     const peLow = (snap.epsTtm > 0 && peBand.p20 !== null) ? snap.epsTtm * peBand.p20 : null;
@@ -4927,8 +5385,8 @@
     const pbHigh = (snap.bvps > 0 && pbBand.p80 !== null) ? snap.bvps * pbBand.p80 : null;
 
     const models = [
-      { name: dcfLabel, sub: `r=${dcfR.toFixed(1)}%±1% | MOS ${dcfMos}%`, low: dcfLowObj?.valuePerShare, mid: dcfMid, high: dcfHighObj?.valuePerShare, target: dcfTarget, color: "" },
-      { name: "剩余收益 RIM", sub: `PB-ROE 5年渐近`, low: rimLow, mid: rimMid, high: rimHigh, color: "indigo" },
+      { name: dcfLabel, sub: `r=${dcfR.toFixed(1)}%±1% | MOS ${dcfMos}%${ncActive ? " | +净现金" : ""}`, low: dcfLow, mid: dcfMid, high: dcfHigh, target: dcfTarget, color: "" },
+      { name: "剩余收益 RIM", sub: rimAllowBelowBook ? "PB-ROE 5年渐近(允许破净)" : "PB-ROE 5年渐近", low: rimLow, mid: rimMid, high: rimHigh, color: "indigo" },
       { name: "历史 PE_TTM 锚", sub: `P20 ~ P50 ~ P80`, low: peLow, mid: peMid, high: peHigh, color: "ochre" },
       { name: "历史 PB 锚", sub: `P20 ~ P50 ~ P80`, low: pbLow, mid: pbMid, high: pbHigh, color: "ochre" }
     ];
@@ -5005,6 +5463,7 @@
       return;
     }
 
+    const ncAdj = getEffectiveNetCashPerShare(snap);
     const rSteps = [-1.0, -0.5, 0, 0.5, 1.0].map(d => +(clamp(dcfR + d, Math.max(dcfG2 + 1.0, 5.0), 16.0)).toFixed(2));
     const gSteps = [-4, -2, 0, 2, 4].map(d => +(dcfG1 + d).toFixed(1));
 
@@ -5015,7 +5474,8 @@
       for (let gi = 0; gi < gSteps.length; gi++) {
         const gVal = gSteps[gi];
         const res = calcTwoStageDCF(baseCF, shares, gVal, dcfG2, rVal);
-        const val = res?.valuePerShare ?? null;
+        const rawVal = res ? res.valuePerShare + ncAdj : null;
+        const val = (rawVal !== null && rawVal > 0) ? rawVal : null;
         const isCenter = ri === 2 && gi === 2;
         if (val === null) {
           html += `<td class="flat">--</td>`;
@@ -5240,6 +5700,7 @@
     fiscal_period: "季度",
     period_end: "报告期末",
     report_date: "披露日",
+    effective_report_date: "PIT生效披露日",
     q_operating_income: "单季营业收入",
     q_operating_costs: "单季营业成本",
     q_operating_profit: "单季营业利润",
@@ -5594,7 +6055,8 @@
           symbol: finData.symbol,
           income_statements: (finData.income_statements || []).slice(0, STATE.stock.stmtLimit),
           balance_sheets: (finData.balance_sheets || []).slice(0, STATE.stock.stmtLimit),
-          cash_flow_statements: (finData.cash_flow_statements || []).slice(0, STATE.stock.stmtLimit)
+          cash_flow_statements: (finData.cash_flow_statements || []).slice(0, STATE.stock.stmtLimit),
+          adjustment_events: finData.adjustment_events || []
         };
       } else {
         STATE.stock.finData = finData;
@@ -5822,6 +6284,15 @@
         }
       });
     });
+    document.querySelectorAll("#seg-val-align button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll("#seg-val-align button").forEach(b => b.classList.toggle("active", b === btn));
+        STATE.stock.valAlignMode = btn.dataset.val === "period_end" ? "period_end" : "pit";
+        if (STATE.stock.valFinData || STATE.stock.finData) {
+          renderStockValuation();
+        }
+      });
+    });
     document.querySelectorAll("#seg-dcf-base button").forEach(btn => {
       btn.addEventListener("click", () => {
         document.querySelectorAll("#seg-dcf-base button").forEach(b => b.classList.toggle("active", b === btn));
@@ -5829,12 +6300,35 @@
         renderValuationModels();
       });
     });
+    document.querySelectorAll("#seg-dcf-r-mode button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        STATE.stock.dcfRMode = btn.dataset.val === "hist_gordon" ? "hist_gordon" : "capm";
+        const snap = STATE.stock.valSnap;
+        const presetKey = STATE.stock.dcfPreset === "custom" ? "neutral" : (STATE.stock.dcfPreset || "neutral");
+        const p = snap?.dcfModel?.presetsByMode?.[STATE.stock.dcfRMode]?.[presetKey];
+        if (p) {
+          STATE.stock.dcfR = p.r;
+        }
+        renderValuationModels();
+      });
+    });
+    document.getElementById("btn-dcf-netcash").addEventListener("click", () => {
+      if (STATE.stock.valSnap?.isFinancial) return;
+      STATE.stock.dcfNetCashAdj = !STATE.stock.dcfNetCashAdj;
+      renderValuationModels();
+    });
+    document.getElementById("btn-rim-below-book").addEventListener("click", () => {
+      STATE.stock.rimAllowBelowBook = !STATE.stock.rimAllowBelowBook;
+      renderValuationModels();
+    });
     document.querySelectorAll(".val-preset").forEach(btn => {
       btn.addEventListener("click", () => {
         document.querySelectorAll(".val-preset").forEach(b => b.classList.toggle("active", b === btn));
         const snap = STATE.stock.valSnap;
         const mode = btn.dataset.preset;
-        const p = snap?.dcfModel?.presets?.[mode];
+        STATE.stock.dcfPreset = mode;
+        const rMode = STATE.stock.dcfRMode === "hist_gordon" ? "hist_gordon" : "capm";
+        const p = snap?.dcfModel?.presetsByMode?.[rMode]?.[mode] || snap?.dcfModel?.presets?.[mode];
         if (p) {
           STATE.stock.dcfG1 = p.g1;
           STATE.stock.dcfG2 = p.g2;
@@ -5869,6 +6363,7 @@
     ].forEach(([id, key]) => {
       document.getElementById(id).addEventListener("input", (e) => {
         STATE.stock[key] = Number(e.target.value);
+        STATE.stock.dcfPreset = "custom";
         document.querySelectorAll(".val-preset").forEach(b => b.classList.remove("active"));
         renderValuationModels();
       });
