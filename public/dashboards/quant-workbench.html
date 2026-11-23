@@ -4,6 +4,44 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>A股数据检验、多维筛选与个股看板</title>
+<script>
+(function () {
+  var map = (window.__QUANT_PRELOAD__ = Object.create(null));
+  function kick(ep, params) {
+    var u = new URL('/api/quant', window.location.origin);
+    u.searchParams.set('endpoint', ep);
+    if (params) {
+      Object.keys(params).sort().forEach(function (k) {
+        var v = params[k];
+        if (v !== undefined && v !== null && v !== '') u.searchParams.set(k, String(v));
+      });
+    }
+    var url = u.toString();
+    map[url] = fetch(url).then(function (res) {
+      var hdr = res.headers.get('X-Proxy-Latency-Ms');
+      var latencyMs = hdr ? Number(hdr) : null;
+      return res.text().then(function (text) {
+        return { ok: res.ok, status: res.status, text: text, latencyMs: latencyMs };
+      });
+    }).catch(function () {
+      delete map[url];
+      return null;
+    });
+  }
+  var h = (window.location.hash || '').replace(/^#/, '');
+  if (!h || h === 'inspect') {
+    kick('/health');
+    kick('/api/overview');
+  } else if (h === 'screener') {
+    kick('/api/screener', { limit: 50, offset: 0, sort_by: 'avg_turnover_20d', sort_dir: 'desc' });
+  } else if (h === 'stock' || h.indexOf('stock/') === 0) {
+    var code = h.indexOf('stock/') === 0 ? decodeURIComponent(h.slice(6)).trim().toUpperCase() : '600519.SH';
+    if (!code) code = '600519.SH';
+    kick('/api/stocks/' + encodeURIComponent(code) + '/kline', { adjust: 'forward', limit: 250 });
+    kick('/api/stocks/' + encodeURIComponent(code) + '/financials', { limit: 40 });
+  }
+})();
+</script>
 <link
   rel="stylesheet"
   href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&family=Noto+Sans+SC:wght@400;500;600&display=swap"
@@ -1137,7 +1175,7 @@
             </tr>
           </thead>
           <tbody id="probe-tbody">
-            <tr><td colspan="4" class="center flat">点击“执行抽检”或等待默认样本完成校验…</td></tr>
+            <tr><td colspan="4" class="center flat">点击右上角「执行抽检」或下方快捷标的即可在线核验个股 K 线与三大财报完整性</td></tr>
           </tbody>
         </table>
       </div>
@@ -1650,45 +1688,133 @@
   }
 
   /* ==================== API Client ==================== */
-  async function quantFetch(endpoint, params = {}) {
+  const API_CACHE = new Map();
+  const INFLIGHT = new Map();
+
+  function getClientCacheTtlMs(endpoint) {
+    if (endpoint === "/health") return 20000;
+    if (endpoint === "/api/overview") return 60000;
+    if (endpoint === "/api/screener") return 180000;
+    if (endpoint === "/api/stocks") return 300000;
+    if (/\/kline$/.test(endpoint)) return 180000;
+    if (/\/financials$/.test(endpoint)) return 600000;
+    return 60000;
+  }
+
+  function buildQuantUrl(endpoint, params = {}, fresh = false) {
     const url = new URL("/api/quant", window.location.origin);
     url.searchParams.set("endpoint", endpoint);
-    for (const [k, v] of Object.entries(params)) {
+    const keys = Object.keys(params).sort();
+    for (const k of keys) {
+      const v = params[k];
       if (v !== undefined && v !== null && v !== "") {
         url.searchParams.set(k, String(v));
       }
     }
-
-    const t0 = performance.now();
-    const res = await fetch(url.toString(), { cache: "no-store" });
-    const clientMs = Math.round(performance.now() - t0);
-    const proxyMsHeader = res.headers.get("X-Proxy-Latency-Ms");
-    const latencyMs = proxyMsHeader ? Number(proxyMsHeader) : clientMs;
-
-    updateLatencyBadge(latencyMs);
-
-    const text = await res.text();
-    let payload = null;
-    try {
-      payload = text ? JSON.parse(text) : null;
-    } catch {
-      payload = { raw: text };
+    if (fresh) {
+      url.searchParams.set("fresh", "1");
     }
-
-    if (!res.ok) {
-      const err = new Error(payload?.error || payload?.detail || `HTTP ${res.status}`);
-      err.status = res.status;
-      err.code = payload?.code || "";
-      err.hint = payload?.hint || "";
-      err.detail = payload?.detail || "";
-      throw err;
-    }
-    return payload;
+    return url.toString();
   }
 
-  function updateLatencyBadge(ms) {
+  async function quantFetch(endpoint, params = {}, options = {}) {
+    const fresh = Boolean(options?.fresh);
+    const cacheKey = buildQuantUrl(endpoint, params, false);
+    const fetchUrl = buildQuantUrl(endpoint, params, fresh);
+
+    if (!fresh) {
+      const cached = API_CACHE.get(cacheKey);
+      if (cached) {
+        if (Date.now() < cached.expiresAt) {
+          updateLatencyBadge(cached.latencyMs, true);
+          return cached.data;
+        }
+        API_CACHE.delete(cacheKey);
+      }
+
+      const pending = INFLIGHT.get(cacheKey);
+      if (pending) {
+        return pending;
+      }
+    }
+
+    const reqPromise = (async () => {
+      const t0 = performance.now();
+      let ok = false;
+      let status = 0;
+      let text = "";
+      let latencyMs = null;
+
+      const preloadMap = window.__QUANT_PRELOAD__;
+      if (!fresh && preloadMap && preloadMap[cacheKey]) {
+        const prePromise = preloadMap[cacheKey];
+        delete preloadMap[cacheKey];
+        const pre = await prePromise;
+        if (pre) {
+          ok = pre.ok;
+          status = pre.status;
+          text = pre.text;
+          latencyMs = Number.isFinite(pre.latencyMs) ? pre.latencyMs : Math.round(performance.now() - t0);
+        }
+      }
+
+      if (!status) {
+        const res = await fetch(fetchUrl, fresh ? { cache: "no-store" } : undefined);
+        const clientMs = Math.round(performance.now() - t0);
+        const proxyMsHeader = res.headers.get("X-Proxy-Latency-Ms");
+        latencyMs = proxyMsHeader ? Number(proxyMsHeader) : clientMs;
+        ok = res.ok;
+        status = res.status;
+        text = await res.text();
+      }
+
+      updateLatencyBadge(latencyMs, false);
+
+      let payload = null;
+      try {
+        payload = text ? JSON.parse(text) : null;
+      } catch {
+        payload = { raw: text };
+      }
+
+      if (!ok) {
+        const err = new Error(payload?.error || payload?.detail || `HTTP ${status}`);
+        err.status = status;
+        err.code = payload?.code || "";
+        err.hint = payload?.hint || "";
+        err.detail = payload?.detail || "";
+        throw err;
+      }
+
+      API_CACHE.set(cacheKey, {
+        data: payload,
+        latencyMs,
+        expiresAt: Date.now() + getClientCacheTtlMs(endpoint)
+      });
+      return payload;
+    })();
+
+    if (!fresh) {
+      INFLIGHT.set(cacheKey, reqPromise);
+    }
+
+    try {
+      return await reqPromise;
+    } finally {
+      if (!fresh && INFLIGHT.get(cacheKey) === reqPromise) {
+        INFLIGHT.delete(cacheKey);
+      }
+    }
+  }
+
+  function updateLatencyBadge(ms, fromCache = false) {
     const el = document.getElementById("srv-latency");
-    if (!el || !Number.isFinite(ms)) return;
+    if (!el) return;
+    if (fromCache) {
+      el.textContent = "缓存";
+      return;
+    }
+    if (!Number.isFinite(ms)) return;
     el.textContent = `${Math.round(ms)}ms`;
   }
 
@@ -2104,21 +2230,34 @@
     }
   }
 
-  async function loadInspectData() {
+  async function loadInspectData(forceFresh = false) {
     try {
       const [health, overview] = await Promise.all([
-        quantFetch("/health"),
-        quantFetch("/api/overview")
+        quantFetch("/health", {}, { fresh: forceFresh }),
+        quantFetch("/api/overview", {}, { fresh: forceFresh })
       ]);
       clearGlobalAlert();
       renderHealthAndStatus(health);
       renderOverview(overview);
       STATE.inspectLoaded = true;
-      runStockProbe(document.getElementById("probe-code-input").value);
+
+      if (!STATE.screenerLoaded && !window.__SCR_PREFETCHED__) {
+        window.__SCR_PREFETCHED__ = true;
+        setTimeout(() => {
+          if (!STATE.screenerLoaded) {
+            quantFetch("/api/screener", {
+              sort_by: "avg_turnover_20d",
+              sort_dir: "desc",
+              limit: 50,
+              offset: 0
+            }).catch(() => {});
+          }
+        }, 150);
+      }
     } catch (err) {
       showGlobalAlert(err);
       try {
-        const health = await quantFetch("/health");
+        const health = await quantFetch("/health", {}, { fresh: forceFresh });
         renderHealthAndStatus(health);
       } catch {}
     }
@@ -3421,10 +3560,10 @@
       btn.addEventListener("click", () => setTab(btn.dataset.tab));
     });
 
-    document.getElementById("btn-refresh-global").addEventListener("click", () => loadInspectData());
-    document.getElementById("btn-rerun-overview").addEventListener("click", () => loadInspectData());
+    document.getElementById("btn-refresh-global").addEventListener("click", () => loadInspectData(true));
+    document.getElementById("btn-rerun-overview").addEventListener("click", () => loadInspectData(true));
     document.getElementById("btn-retry-active").addEventListener("click", () => {
-      if (STATE.activeTab === "inspect") loadInspectData();
+      if (STATE.activeTab === "inspect") loadInspectData(true);
       else if (STATE.activeTab === "screener") runScreener(false);
       else loadStockDashboard(STATE.stock.code);
     });

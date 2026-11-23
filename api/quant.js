@@ -13,6 +13,29 @@ function isAllowedEndpoint(endpoint) {
   return ALLOWED_ENDPOINT_PATTERNS.some((pattern) => pattern.test(endpoint));
 }
 
+function getCacheControl(endpoint, isFresh) {
+  if (isFresh) return 'no-store';
+  if (endpoint === '/health') {
+    return 'public, max-age=15, s-maxage=30, stale-while-revalidate=60';
+  }
+  if (endpoint === '/api/overview') {
+    return 'public, max-age=30, s-maxage=120, stale-while-revalidate=600';
+  }
+  if (endpoint === '/api/screener') {
+    return 'public, max-age=60, s-maxage=300, stale-while-revalidate=1800';
+  }
+  if (endpoint === '/api/stocks') {
+    return 'public, max-age=120, s-maxage=600, stale-while-revalidate=3600';
+  }
+  if (/^\/api\/stocks\/[A-Za-z0-9._-]+\/kline$/.test(endpoint)) {
+    return 'public, max-age=60, s-maxage=300, stale-while-revalidate=3600';
+  }
+  if (/^\/api\/stocks\/[A-Za-z0-9._-]+\/financials$/.test(endpoint)) {
+    return 'public, max-age=300, s-maxage=1800, stale-while-revalidate=86400';
+  }
+  return 'no-store';
+}
+
 function jsonResponse(payload, status, extraHeaders = {}) {
   return new Response(JSON.stringify(payload), {
     status,
@@ -82,8 +105,10 @@ export async function GET(request) {
     );
   }
 
+  const isFresh = reqUrl.searchParams.get('fresh') === '1';
+
   for (const [key, value] of reqUrl.searchParams.entries()) {
-    if (key !== 'endpoint' && value !== '') {
+    if (key !== 'endpoint' && key !== 'fresh' && value !== '') {
       upstreamUrl.searchParams.append(key, value);
     }
   }
@@ -104,14 +129,20 @@ export async function GET(request) {
 
     const elapsedMs = Date.now() - start;
     const body = await upstreamRes.arrayBuffer();
+    const cachePolicy = upstreamRes.status === 200 ? getCacheControl(endpoint, isFresh) : 'no-store';
+
+    const responseHeaders = {
+      'Content-Type': upstreamRes.headers.get('content-type') || 'application/json; charset=utf-8',
+      'Cache-Control': cachePolicy,
+      'X-Proxy-Latency-Ms': String(elapsedMs),
+    };
+    if (cachePolicy !== 'no-store') {
+      responseHeaders['CDN-Cache-Control'] = cachePolicy;
+    }
 
     return new Response(body, {
       status: upstreamRes.status,
-      headers: {
-        'Content-Type': upstreamRes.headers.get('content-type') || 'application/json; charset=utf-8',
-        'Cache-Control': 'no-store',
-        'X-Proxy-Latency-Ms': String(elapsedMs),
-      },
+      headers: responseHeaders,
     });
   } catch (err) {
     const elapsedMs = Date.now() - start;
