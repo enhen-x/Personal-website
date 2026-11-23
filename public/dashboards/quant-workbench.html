@@ -1874,6 +1874,7 @@
             <div class="seg" id="seg-val-window">
               <button type="button" data-val="750">近3年</button>
               <button type="button" data-val="1250" class="active">近5年</button>
+              <button type="button" data-val="all">全历史</button>
             </div>
           </div>
         </div>
@@ -1897,6 +1898,7 @@
               <button type="button" data-val="fcf_ttm" class="active">TTM FCF</button>
               <button type="button" data-val="fcf_3y">3年均值FCF</button>
               <button type="button" data-val="np_ttm">TTM 归母净利</button>
+              <button type="button" data-val="div_ttm">近似分红(DDM)</button>
             </div>
           </div>
         </div>
@@ -1938,6 +1940,8 @@
             <div class="slider-hint">目标买入价 = 公允价值 × (1 − 安全边际)</div>
           </div>
         </div>
+
+        <div id="val-dcf-warn" class="alert-banner warn hidden" style="margin:0 0 12px 0;padding:8px 12px;font-size:12px;"></div>
 
         <div class="two-col" style="margin-bottom:0;">
           <div class="val-subcard" style="margin-bottom:0;background:var(--surface-alt);">
@@ -2371,6 +2375,7 @@
       valKlineData: null,
       finData: null,
       valFinData: null,
+      valAllLoadedCode: "",
       valMetric: "pe",
       valWindow: 1250,
       dcfBase: "fcf_ttm",
@@ -3733,34 +3738,47 @@
     return (le / arr.length) * 100;
   }
 
-  function buildQuarterlyValuationSeries(finData) {
+  function detectFinancialCompany(symbolName, incRow, balRow, ttmOcf, ttmNp) {
+    const name = String(symbolName || "");
+    if (/银行|保险|证券|信托|金融|人寿|人保|太保|中国平安|中金公司|东方财富|申万宏源|国泰君安|国泰海通|期货|金租|产融/.test(name)) {
+      return true;
+    }
+    const opInc = Number(incRow?.operating_income);
+    const intExp = Number(incRow?.interest_expenses);
+    if (Number.isFinite(opInc) && opInc > 0 && Number.isFinite(intExp) && intExp > opInc * 0.15) {
+      return true;
+    }
+    const debtRatio = Number(balRow?.debt_to_assets_pct);
+    if (Number.isFinite(debtRatio) && debtRatio > 84 && ttmNp > 0 && ttmOcf > ttmNp * 2.2) {
+      return true;
+    }
+    return false;
+  }
+
+  function buildQuarterlyValuationSeries(finData, symbolName = "") {
     const incList = [...(finData?.income_statements || [])].sort((a, b) => quarterIndex(a.fiscal_year, a.fiscal_period) - quarterIndex(b.fiscal_year, b.fiscal_period));
     const balMap = new Map((finData?.balance_sheets || []).map(r => [`${r.fiscal_year}-${r.fiscal_period}`, r]));
     const cfsMap = new Map((finData?.cash_flow_statements || []).map(r => [`${r.fiscal_year}-${r.fiscal_period}`, r]));
 
     if (!incList.length) return [];
 
-    // First compute raw single-quarter dividends (pay_dividends_profits_interest_cash - interest_expenses)
-    const qDivList = new Array(incList.length).fill(null);
-    const ytdDivNet = new Array(incList.length).fill(null);
+    const idxByYm = new Map();
+    const divGrossYtd = new Array(incList.length).fill(null);
+    const intExpYtd = new Array(incList.length).fill(null);
     for (let i = 0; i < incList.length; i++) {
       const r = incList[i];
-      const key = `${r.fiscal_year}-${r.fiscal_period}`;
-      const c = cfsMap.get(key);
-      if (c && c.pay_dividends_profits_interest_cash !== null && c.pay_dividends_profits_interest_cash !== undefined) {
-        const divGross = Number(c.pay_dividends_profits_interest_cash);
-        const intExp = Number(r.interest_expenses || 0);
-        if (Number.isFinite(divGross)) {
-          ytdDivNet[i] = Math.max(0, divGross - (Number.isFinite(intExp) ? Math.max(0, intExp) : 0));
-        }
-      }
       const fp = String(r.fiscal_period || "").toUpperCase();
-      if (ytdDivNet[i] !== null) {
-        if (fp === "Q1") {
-          qDivList[i] = ytdDivNet[i];
-        } else if (i > 0 && incList[i - 1].fiscal_year === r.fiscal_year && quarterIndex(r.fiscal_year, fp) - quarterIndex(incList[i - 1].fiscal_year, incList[i - 1].fiscal_period) === 1 && ytdDivNet[i - 1] !== null) {
-          qDivList[i] = Math.max(0, ytdDivNet[i] - ytdDivNet[i - 1]);
-        }
+      const key = `${r.fiscal_year}-${r.fiscal_period}`;
+      idxByYm.set(`${r.fiscal_year}-${fp}`, i);
+
+      const c = cfsMap.get(key);
+      if (c && c.pay_dividends_profits_interest_cash != null) {
+        const divGross = Number(c.pay_dividends_profits_interest_cash);
+        if (Number.isFinite(divGross)) divGrossYtd[i] = Math.max(0, divGross);
+      }
+      if (r.interest_expenses != null) {
+        const intExp = Number(r.interest_expenses);
+        if (Number.isFinite(intExp)) intExpYtd[i] = Math.max(0, intExp);
       }
     }
 
@@ -3794,16 +3812,16 @@
       const c = cfsMap.get(key) || {};
       const qi = quarterIndex(r.fiscal_year, r.fiscal_period);
       const fp = String(r.fiscal_period || "").toUpperCase();
+      const fy = Number(r.fiscal_year);
 
       let ttmRev = null;
       let ttmNp = null;
       let ttmOcf = null;
       let ttmCapex = null;
-      let ttmDiv = null;
 
       if (i >= 3 && qi - quarterIndex(incList[i - 3].fiscal_year, incList[i - 3].fiscal_period) === 3) {
-        let revS = 0, npS = 0, ocfS = 0, capS = 0, divS = 0;
-        let revOk = true, npOk = true, ocfOk = true, capOk = true, divOk = true;
+        let revS = 0, npS = 0, ocfS = 0, capS = 0;
+        let revOk = true, npOk = true, ocfOk = true, capOk = true;
         for (let k = i - 3; k <= i; k++) {
           const rk = incList[k];
           const ck = cfsMap.get(`${rk.fiscal_year}-${rk.fiscal_period}`) || {};
@@ -3811,13 +3829,11 @@
           if (rk.q_parent_holder_net_profit == null) npOk = false; else npS += Number(rk.q_parent_holder_net_profit);
           if (ck.q_act_cash_flow_net == null) ocfOk = false; else ocfS += Number(ck.q_act_cash_flow_net);
           if (ck.q_pay_fixed_assets_etc_cash == null) capOk = false; else capS += Math.max(0, Number(ck.q_pay_fixed_assets_etc_cash));
-          if (qDivList[k] == null) divOk = false; else divS += qDivList[k];
         }
         if (revOk) ttmRev = revS;
         if (npOk) ttmNp = npS;
         if (ocfOk) ttmOcf = ocfS;
         if (capOk) ttmCapex = capS;
-        if (divOk) ttmDiv = divS;
       }
 
       // Fall back to Q4 full-year YTD figures when consecutive single-quarter fields are unavailable
@@ -3826,17 +3842,50 @@
         if (ttmNp === null && r.parent_holder_net_profit != null) ttmNp = Number(r.parent_holder_net_profit);
         if (ttmOcf === null && c.act_cash_flow_net != null) ttmOcf = Number(c.act_cash_flow_net);
         if (ttmCapex === null && c.pay_fixed_assets_etc_cash != null) ttmCapex = Math.max(0, Number(c.pay_fixed_assets_etc_cash));
-        if (ttmDiv === null && ytdDivNet[i] !== null) ttmDiv = ytdDivNet[i];
-      } else if (ttmDiv === null) {
-        // Look back up to 4 quarters for latest Q4 annual dividend
-        for (let k = i; k >= Math.max(0, i - 4); k--) {
-          if (String(incList[k].fiscal_period || "").toUpperCase() === "Q4" && ytdDivNet[k] !== null) {
-            ttmDiv = ytdDivNet[k];
-            break;
+      }
+
+      // Compute TTM gross dividends/interest cash payout using exact YTD identity (prevQ4 - prevSameQ + curr)
+      let ttmDivGross = null;
+      const currCfsExists = Boolean(c && c.act_cash_flow_net != null);
+      if (fp === "Q4") {
+        if (divGrossYtd[i] !== null) ttmDivGross = divGrossYtd[i];
+      } else {
+        const prevQ4Idx = idxByYm.get(`${fy - 1}-Q4`);
+        const prevSameIdx = idxByYm.get(`${fy - 1}-${fp}`);
+        const prevQ4Div = prevQ4Idx !== undefined ? divGrossYtd[prevQ4Idx] : null;
+        if (prevQ4Div !== null && prevSameIdx !== undefined && (divGrossYtd[i] !== null || currCfsExists)) {
+          ttmDivGross = Math.max(0, prevQ4Div - (divGrossYtd[prevSameIdx] ?? 0) + (divGrossYtd[i] ?? 0));
+        } else {
+          for (let k = i; k >= Math.max(0, i - 4); k--) {
+            if (String(incList[k].fiscal_period || "").toUpperCase() === "Q4" && divGrossYtd[k] !== null) {
+              ttmDivGross = divGrossYtd[k];
+              break;
+            }
           }
         }
       }
 
+      // Compute TTM interest expense using the same YTD identity
+      let ttmIntExp = null;
+      if (fp === "Q4") {
+        if (intExpYtd[i] !== null) ttmIntExp = intExpYtd[i];
+      } else {
+        const prevQ4Idx = idxByYm.get(`${fy - 1}-Q4`);
+        const prevSameIdx = idxByYm.get(`${fy - 1}-${fp}`);
+        const prevQ4Int = prevQ4Idx !== undefined ? intExpYtd[prevQ4Idx] : null;
+        if (prevQ4Int !== null && prevSameIdx !== undefined) {
+          ttmIntExp = Math.max(0, prevQ4Int - (intExpYtd[prevSameIdx] ?? 0) + (intExpYtd[i] ?? 0));
+        } else {
+          for (let k = i; k >= Math.max(0, i - 4); k--) {
+            if (String(incList[k].fiscal_period || "").toUpperCase() === "Q4" && intExpYtd[k] !== null) {
+              ttmIntExp = intExpYtd[k];
+              break;
+            }
+          }
+        }
+      }
+
+      const isFinQ = detectFinancialCompany(symbolName, r, b, ttmOcf, ttmNp);
       const ttmFcf = ttmOcf !== null ? (ttmOcf - (ttmCapex || 0)) : null;
       const equity = b.holder_equity_total != null ? Number(b.holder_equity_total) : null;
       const assets = b.assets_total != null ? Number(b.assets_total) : null;
@@ -3856,13 +3905,40 @@
         ttmOcf,
         ttmCapex,
         ttmFcf,
-        ttmDiv,
+        ttmDivGross,
+        ttmIntExp,
+        ttmDiv: ttmDivGross,
+        isFinancial: isFinQ,
+        divIncludesBondInterest: isFinQ,
         equity,
         assets,
         cash,
         debt
       });
     }
+
+    // Apply consistent company-level financial classification based on the latest 4 quarters
+    const recentStart = Math.max(0, quarters.length - 4);
+    const companyIsFinancial = quarters.slice(recentStart).some(q => q.isFinancial);
+    for (let i = 0; i < quarters.length; i++) {
+      const q = quarters[i];
+      const isFin = companyIsFinancial || q.isFinancial;
+      q.isFinancial = isFin;
+      if (q.ttmDivGross === null) {
+        q.ttmDiv = null;
+        q.divIncludesBondInterest = false;
+      } else if (isFin) {
+        q.ttmDiv = q.ttmDivGross;
+        q.divIncludesBondInterest = true;
+      } else if (q.ttmIntExp !== null && q.ttmIntExp > 0 && q.ttmIntExp < q.ttmDivGross * 0.75) {
+        q.ttmDiv = Math.max(0, q.ttmDivGross - q.ttmIntExp);
+        q.divIncludesBondInterest = false;
+      } else {
+        q.ttmDiv = q.ttmDivGross;
+        q.divIncludesBondInterest = Boolean(q.ttmIntExp !== null && q.ttmIntExp > 0);
+      }
+    }
+
     return quarters;
   }
 
@@ -3875,6 +3951,8 @@
     const validVals = [];
 
     let qPtr = -1;
+    let firstValidIdx = -1;
+    let lastValidIdx = -1;
     for (let i = 0; i < n; i++) {
       const bar = bars[i];
       dates[i] = bar.date;
@@ -3905,25 +3983,52 @@
         }
       }
       values[i] = v;
-      if (v !== null) validVals.push(v);
+      if (v !== null) {
+        if (firstValidIdx === -1) firstValidIdx = i;
+        lastValidIdx = i;
+        validVals.push(v);
+      }
     }
+
+    const trimStart = firstValidIdx > 0 ? firstValidIdx : 0;
+    const outDates = trimStart > 0 ? dates.slice(trimStart) : dates;
+    const outPrices = trimStart > 0 ? prices.slice(trimStart) : prices;
+    const outValues = trimStart > 0 ? values.slice(trimStart) : values;
+    const outQLabels = trimStart > 0 ? qLabels.slice(trimStart) : qLabels;
 
     const sorted = [...validVals].sort((a, b) => a - b);
     const p20 = calcQuantile(sorted, 0.2);
     const p50 = calcQuantile(sorted, 0.5);
     const p80 = calcQuantile(sorted, 0.8);
     const mean = sorted.length ? sorted.reduce((s, x) => s + x, 0) / sorted.length : null;
-    const latestVal = [...values].reverse().find(v => v !== null) ?? null;
+    const latestVal = [...outValues].reverse().find(v => v !== null) ?? null;
     const pct = latestVal !== null ? percentileRank(sorted, latestVal) : null;
+    const firstDate = firstValidIdx >= 0 ? dates[firstValidIdx] : "";
+    const lastDate = lastValidIdx >= 0 ? dates[lastValidIdx] : "";
 
-    return { dates, prices, values, qLabels, validCount: sorted.length, p20, p50, p80, mean, latestVal, pct };
+    return {
+      dates: outDates,
+      prices: outPrices,
+      values: outValues,
+      qLabels: outQLabels,
+      validCount: sorted.length,
+      firstDate,
+      lastDate,
+      p20,
+      p50,
+      p80,
+      mean,
+      latestVal,
+      pct
+    };
   }
 
   function computeValuationSnapshot() {
     const finData = STATE.stock.valFinData || STATE.stock.finData;
     const kMain = STATE.stock.klineData;
     const kUnadj = STATE.stock.valKlineData || (kMain?.adjust === "none" ? kMain : null);
-    const quarters = buildQuarterlyValuationSeries(finData);
+    const symbolName = kMain?.symbol?.name || kUnadj?.symbol?.name || finData?.symbol?.name || "";
+    const quarters = buildQuarterlyValuationSeries(finData, symbolName);
     const qNow = quarters[quarters.length - 1] || null;
 
     // Strictly use direct unadjusted close (adjust=none)
@@ -3986,7 +4091,9 @@
 
     // Historical bands
     const barsAll = kUnadj?.items || [];
-    const barsWin = barsAll.slice(-Math.min(barsAll.length, STATE.stock.valWindow));
+    const barsWin = STATE.stock.valWindow === "all"
+      ? barsAll
+      : barsAll.slice(-Math.min(barsAll.length, Number(STATE.stock.valWindow) || 1250));
     const bands = {
       pe: computeHistoricalSeriesStats(barsWin, quarters, "pe"),
       pb: computeHistoricalSeriesStats(barsWin, quarters, "pb"),
@@ -4004,6 +4111,8 @@
       sharesSrc: qNow?.sharesSrc || "--",
       isExactShares: Boolean(qNow?.isExactShares),
       impliedMktCap,
+      isFinancial: Boolean(qNow?.isFinancial),
+      divIncludesBondInterest: Boolean(qNow?.divIncludesBondInterest),
       qNow,
       quarters,
       fcf3yAvg,
@@ -4041,8 +4150,22 @@
     STATE.stock.dcfR = 9.0;
     STATE.stock.dcfMos = 20;
 
-    if ((snap.qNow?.ttmFcf || 0) <= 0 && (snap.qNow?.ttmNp || 0) > 0) {
-      STATE.stock.dcfBase = (snap.fcf3yAvg || 0) > 0 ? "fcf_3y" : "np_ttm";
+    const ttmFcf = snap.qNow?.ttmFcf ?? 0;
+    const ttmNp = snap.qNow?.ttmNp ?? 0;
+    const fcf3y = snap.fcf3yAvg ?? 0;
+    const ttmDistorted = ttmNp > 0 && ttmFcf > ttmNp * 1.8;
+    const fcf3yDistorted = ttmNp > 0 && fcf3y > ttmNp * 1.8;
+
+    if (snap.isFinancial) {
+      STATE.stock.dcfBase = ttmNp > 0 ? "np_ttm" : ((snap.qNow?.ttmDiv || 0) > 0 ? "div_ttm" : "fcf_3y");
+    } else if (ttmFcf <= 0 || ttmDistorted) {
+      if (fcf3y > 0 && !fcf3yDistorted) {
+        STATE.stock.dcfBase = "fcf_3y";
+      } else if (ttmNp > 0) {
+        STATE.stock.dcfBase = "np_ttm";
+      } else {
+        STATE.stock.dcfBase = (snap.qNow?.ttmDiv || 0) > 0 ? "div_ttm" : "fcf_ttm";
+      }
     } else {
       STATE.stock.dcfBase = "fcf_ttm";
     }
@@ -4064,7 +4187,7 @@
 
     document.querySelectorAll("#seg-dcf-base button").forEach(b => b.classList.toggle("active", b.dataset.val === STATE.stock.dcfBase));
     document.querySelectorAll("#seg-val-metric button").forEach(b => b.classList.toggle("active", b.dataset.val === STATE.stock.valMetric));
-    document.querySelectorAll("#seg-val-window button").forEach(b => b.classList.toggle("active", Number(b.dataset.val) === STATE.stock.valWindow));
+    document.querySelectorAll("#seg-val-window button").forEach(b => b.classList.toggle("active", String(b.dataset.val) === String(STATE.stock.valWindow)));
   }
 
   function calcTwoStageDCF(baseCF, shares, g1Pct, g2Pct, rPct) {
@@ -4114,6 +4237,7 @@
   function getActiveBaseCashFlow(snap) {
     if (STATE.stock.dcfBase === "fcf_3y") return snap.fcf3yAvg;
     if (STATE.stock.dcfBase === "np_ttm") return snap.qNow?.ttmNp ?? null;
+    if (STATE.stock.dcfBase === "div_ttm") return snap.qNow?.ttmDiv ?? null;
     return snap.qNow?.ttmFcf ?? null;
   }
 
@@ -4184,14 +4308,17 @@
     );
 
     const divY = snap.approxDivYieldPct;
+    const divMeta = snap.qNow?.divIncludesBondInterest
+      ? `含债券/优先股付息(金融口径) · TTM流出 ${fmtMoneyShort(snap.qNow?.ttmDiv)}`
+      : `近似TTM分红 ${fmtMoneyShort(snap.qNow?.ttmDiv)} · 派息率 ${snap.approxPayoutPct !== null ? snap.approxPayoutPct.toFixed(0) + "%" : "--"}`;
     setCard(
       "val-kpi-div",
       divY !== null ? fmtPct(divY, 2, false) : "--",
-      divY !== null ? (divY >= 3.0 ? "高股息" : (divY >= 1.5 ? "稳健" : "低派息")) : "--",
-      divY !== null ? (divY >= 3.0 ? "pill-pass" : "pill-mid") : "pill-fail",
-      clamp((divY || 0) * 18, 0, 100),
+      divY !== null ? (divY >= 3.0 ? "高股息" : (divY >= 1.5 ? "稳健" : (divY > 0 ? "低派息" : "零派息"))) : "--",
+      divY !== null ? (divY >= 3.0 ? "pill-pass" : (divY > 0 ? "pill-mid" : "pill-fail")) : "pill-fail",
+      divY !== null ? clamp(divY * 18, divY > 0 ? 4 : 0, 100) : 0,
       "var(--emerald)",
-      `近似TTM分红 ${fmtMoneyShort(snap.qNow?.ttmDiv)} · 派息率 ${snap.approxPayoutPct !== null ? snap.approxPayoutPct.toFixed(0) + "%" : "--"}`
+      divMeta
     );
 
     const peg = snap.peg;
@@ -4248,8 +4375,9 @@
       return;
     }
 
+    const spanTxt = (band.firstDate && band.lastDate) ? `${band.firstDate} ~ ${band.lastDate} · ` : "";
     statsEl.textContent =
-      `有效交易日 ${band.validCount} 天 · 当前 ${fmtNum(band.latestVal)}${cfg.suffix} (${band.pct !== null ? band.pct.toFixed(1) + "%" : "--"} 分位) · P20=${fmtNum(band.p20)}${cfg.suffix} · P50=${fmtNum(band.p50)}${cfg.suffix} · P80=${fmtNum(band.p80)}${cfg.suffix}`;
+      `${spanTxt}有效交易日 ${band.validCount} 天 · 当前 ${fmtNum(band.latestVal)}${cfg.suffix} (${band.pct !== null ? band.pct.toFixed(1) + "%" : "--"} 分位) · P20=${fmtNum(band.p20)}${cfg.suffix} · P50=${fmtNum(band.p50)}${cfg.suffix} · P80=${fmtNum(band.p80)}${cfg.suffix}`;
 
     const n = band.dates.length;
     const xIdx = band.dates.map((_, i) => i);
@@ -4314,7 +4442,7 @@
           grid: { show: true, stroke: "#F3F4F6", width: 1 },
           ticks: { show: true, stroke: "#E5E7EB", width: 1, size: 4 },
           space: 75,
-          incrs: [1, 2, 5, 10, 20, 30, 60, 120, 250, 500],
+          incrs: [1, 2, 5, 10, 20, 30, 60, 120, 250, 500, 1000],
           values: (u, splits) => splits.map(v => {
             if (Math.abs(v - Math.round(v)) > 1e-6) return "";
             const i = Math.round(v);
@@ -4399,7 +4527,16 @@
     const curPrice = snap.unadjPrice;
     const shares = snap.shares;
     const baseCF = getActiveBaseCashFlow(snap);
-    const { dcfG1, dcfG2, dcfR, dcfMos } = STATE.stock;
+    const { dcfG1, dcfG2, dcfR, dcfMos, dcfBase } = STATE.stock;
+
+    const dcfNameMap = {
+      fcf_ttm: "两阶段 DCF",
+      fcf_3y: "两阶段 DCF (3Y)",
+      np_ttm: "两阶段 DCF (净利)",
+      div_ttm: "两阶段 DDM (分红)"
+    };
+    const dcfLabel = dcfNameMap[dcfBase] || "两阶段 DCF";
+    const dcfTag = dcfBase === "div_ttm" ? "DDM 中枢" : "DCF 中枢";
 
     const dcfMidObj = calcTwoStageDCF(baseCF, shares, dcfG1, dcfG2, dcfR);
     const dcfLowObj = calcTwoStageDCF(baseCF, shares, dcfG1, dcfG2, Math.min(18, dcfR + 1.0));
@@ -4409,7 +4546,7 @@
     const dcfTarget = dcfMid !== null ? dcfMid * (1 - dcfMos / 100) : null;
     if (dcfMid !== null && curPrice > 0) {
       const upPct = ((dcfMid / curPrice - 1) * 100);
-      sumEl.textContent = `DCF 中枢 ¥${fmtNum(dcfMid)} (${fmtPct(upPct, 1, true)}) · 安全边际买点 ¥${fmtNum(dcfTarget)}`;
+      sumEl.textContent = `${dcfTag} ¥${fmtNum(dcfMid)} (${fmtPct(upPct, 1, true)}) · 安全边际买点 ¥${fmtNum(dcfTarget)}`;
     } else {
       sumEl.textContent = baseCF <= 0 ? "所选基期现金流 ≤ 0，可切换至“TTM 归母净利”" : "参数无效 (须满足 r > g₂ + 0.5%)";
     }
@@ -4429,7 +4566,7 @@
     const pbHigh = (snap.bvps > 0 && pbBand.p80 !== null) ? snap.bvps * pbBand.p80 : null;
 
     const models = [
-      { name: "两阶段 DCF", sub: `r=${dcfR.toFixed(1)}%±1% | MOS ${dcfMos}%`, low: dcfLowObj?.valuePerShare, mid: dcfMid, high: dcfHighObj?.valuePerShare, target: dcfTarget, color: "" },
+      { name: dcfLabel, sub: `r=${dcfR.toFixed(1)}%±1% | MOS ${dcfMos}%`, low: dcfLowObj?.valuePerShare, mid: dcfMid, high: dcfHighObj?.valuePerShare, target: dcfTarget, color: "" },
       { name: "剩余收益 RIM", sub: `PB-ROE 5年渐近`, low: rimLow, mid: rimMid, high: rimHigh, color: "indigo" },
       { name: "历史 PE_TTM 锚", sub: `P20 ~ P50 ~ P80`, low: peLow, mid: peMid, high: peHigh, color: "ochre" },
       { name: "历史 PB 锚", sub: `P20 ~ P50 ~ P80`, low: pbLow, mid: pbMid, high: pbHigh, color: "ochre" }
@@ -4449,10 +4586,19 @@
       return;
     }
 
+    const refVals = [];
+    if (curPrice > 0) refVals.push(curPrice);
+    for (const m of models) {
+      if (m.mid > 0) refVals.push(m.mid);
+    }
+    refVals.sort((a, b) => a - b);
     const rawMin = Math.min(...allNums);
     const rawMax = Math.max(...allNums);
+    const medRef = refVals.length ? refVals[Math.floor(refVals.length / 2)] : (curPrice || rawMax);
+    const anchor = Math.max(curPrice || 0, medRef || 0);
     const axisMin = Math.max(0, rawMin * 0.85);
-    const axisMax = Math.max(axisMin + 1, rawMax * 1.10);
+    const cappedMax = (anchor > 0 && rawMax > anchor * 2.6) ? (anchor * 2.4) : (rawMax * 1.10);
+    const axisMax = Math.max(axisMin + 1, cappedMax);
     const toPct = (v) => clamp(((v - axisMin) / (axisMax - axisMin)) * 100, 0, 100);
     const curPct = curPrice > 0 ? toPct(curPrice) : null;
 
@@ -4460,8 +4606,9 @@
       const hasRange = m.low > 0 && m.high > 0 && m.mid > 0;
       const lo = hasRange ? Math.min(m.low, m.high) : null;
       const hi = hasRange ? Math.max(m.low, m.high) : null;
-      const leftPct = lo !== null ? toPct(lo) : 0;
-      const widthPct = (lo !== null && hi !== null) ? Math.max(2, toPct(hi) - leftPct) : 0;
+      const leftPct = lo !== null ? Math.min(97, toPct(lo)) : 0;
+      const rightPct = hi !== null ? toPct(hi) : leftPct;
+      const widthPct = (lo !== null && hi !== null) ? Math.max(2, Math.min(100 - leftPct, rightPct - leftPct)) : 0;
       const midPct = m.mid > 0 ? toPct(m.mid) : null;
       const mosPct = m.target > 0 ? toPct(m.target) : null;
       const upside = (m.mid > 0 && curPrice > 0) ? ((m.mid / curPrice - 1) * 100) : null;
@@ -4568,10 +4715,30 @@
     `).join("");
   }
 
+  function renderDcfWarning(snap) {
+    const warnEl = document.getElementById("val-dcf-warn");
+    if (!warnEl || !snap) return;
+    const base = STATE.stock.dcfBase;
+    const baseCF = getActiveBaseCashFlow(snap);
+    const ttmNp = snap.qNow?.ttmNp ?? 0;
+
+    if (snap.isFinancial && (base === "fcf_ttm" || base === "fcf_3y")) {
+      warnEl.innerHTML = `<div class="alert-title">金融标的 FCF 口径失真提示</div><div class="alert-desc">银行/保险/券商的经营现金流含客户存贷款、保费准备金及同业资金变动（当前基期 ${fmtMoneyShort(baseCF)}），直接套用 FCF 会显著高估 DCF。建议切换为上方「TTM 归母净利」或「近似分红(DDM)」口径。</div>`;
+      warnEl.classList.remove("hidden");
+    } else if (!snap.isFinancial && base !== "np_ttm" && baseCF > 0 && ttmNp > 0 && baseCF > ttmNp * 1.8) {
+      warnEl.innerHTML = `<div class="alert-title">基期现金流显著高于净利提示</div><div class="alert-desc">所选基期现金流 (${fmtMoneyShort(baseCF)}) 达 TTM 归母净利 (${fmtMoneyShort(ttmNp)}) 的 ${(baseCF / ttmNp).toFixed(1)} 倍，DCF 结果可能受营运资金波动放大，建议切换「3年均值FCF」或「TTM 归母净利」交叉核对。</div>`;
+      warnEl.classList.remove("hidden");
+    } else {
+      warnEl.classList.add("hidden");
+      warnEl.textContent = "";
+    }
+  }
+
   function renderValuationModels() {
     const snap = STATE.stock.valSnap;
     if (!snap) return;
     syncValuationControls();
+    renderDcfWarning(snap);
     renderFootballField(snap);
     renderDcfSensitivity(snap);
   }
@@ -4831,7 +4998,7 @@
       });
       clearGlobalAlert();
       STATE.stock.klineData = kData;
-      if (STATE.stock.adjust === "none" && STATE.stock.klineLimit >= 1250) {
+      if (STATE.stock.adjust === "none" && STATE.stock.klineLimit >= 1250 && STATE.stock.valAllLoadedCode !== code) {
         STATE.stock.valKlineData = kData;
         renderStockValuation();
       }
@@ -4851,7 +5018,7 @@
       });
       clearGlobalAlert();
       STATE.stock.finData = finData;
-      if (STATE.stock.stmtLimit >= 40) {
+      if (STATE.stock.stmtLimit >= 40 && STATE.stock.valAllLoadedCode !== STATE.stock.code) {
         STATE.stock.valFinData = finData;
         renderStockValuation();
       }
@@ -4863,11 +5030,46 @@
     }
   }
 
+  async function loadFullHistoryValuation() {
+    const code = STATE.stock.code;
+    if (!code) return;
+    if (STATE.stock.valAllLoadedCode === code) {
+      if (STATE.stock.valFinData || STATE.stock.finData) renderStockValuation();
+      return;
+    }
+
+    const statsEl = document.getElementById("val-band-stats");
+    const box = document.getElementById("chart-stk-valband");
+    if (statsEl) statsEl.textContent = "正在拉取全历史不复权行情与财报（最长覆盖 20+ 年）…";
+    if (box) box.innerHTML = `<div class="chart-empty">正在载入全历史估值分位带…</div>`;
+
+    try {
+      const [kAll, finAll] = await Promise.all([
+        quantFetch(`/api/stocks/${encodeURIComponent(code)}/kline`, { adjust: "none", limit: 6000 }),
+        quantFetch(`/api/stocks/${encodeURIComponent(code)}/financials`, { limit: 160 })
+      ]);
+      if (STATE.stock.code !== code) return;
+      STATE.stock.valKlineData = kAll;
+      STATE.stock.valFinData = finAll;
+      STATE.stock.valAllLoadedCode = code;
+      clearGlobalAlert();
+      if (STATE.stock.valWindow === "all") {
+        renderStockValuation();
+      }
+    } catch (err) {
+      showGlobalAlert(err);
+      if (STATE.stock.code === code && (STATE.stock.valFinData || STATE.stock.finData)) {
+        renderStockValuation();
+      }
+    }
+  }
+
   async function loadStockDashboard(code) {
     const clean = (code || STATE.stock.code || "600519.SH").trim().toUpperCase();
     STATE.stock.code = clean;
     STATE.stock.loadedCode = clean;
     STATE.stock.dcfAutoFittedCode = "";
+    STATE.stock.valAllLoadedCode = "";
     document.querySelectorAll(".stk-chip").forEach(b => b.classList.toggle("active", b.dataset.code === clean));
 
     document.getElementById("chart-stk-price").innerHTML = `<div class="chart-empty">正在载入 ${esc(clean)} 行情…</div>`;
@@ -4877,8 +5079,10 @@
     document.getElementById("chart-stk-cash").innerHTML = `<div class="chart-empty">载入中…</div>`;
 
     try {
-      const needExtraValKline = !(STATE.stock.adjust === "none" && STATE.stock.klineLimit >= 1250);
-      const valFinLimit = Math.max(40, STATE.stock.stmtLimit);
+      const wantAll = STATE.stock.valWindow === "all";
+      const valKlineLimit = wantAll ? 6000 : 1250;
+      const needExtraValKline = !(STATE.stock.adjust === "none" && STATE.stock.klineLimit >= valKlineLimit);
+      const valFinLimit = wantAll ? 160 : Math.max(40, STATE.stock.stmtLimit);
       const reqs = [
         quantFetch(`/api/stocks/${encodeURIComponent(clean)}/kline`, {
           adjust: STATE.stock.adjust,
@@ -4891,7 +5095,7 @@
       if (needExtraValKline) {
         reqs.push(quantFetch(`/api/stocks/${encodeURIComponent(clean)}/kline`, {
           adjust: "none",
-          limit: 1250
+          limit: valKlineLimit
         }));
       }
 
@@ -4900,6 +5104,7 @@
       STATE.stock.klineData = kData;
       STATE.stock.valKlineData = needExtraValKline ? valKData : kData;
       STATE.stock.valFinData = finData;
+      STATE.stock.valAllLoadedCode = wantAll ? clean : "";
       if (STATE.stock.stmtLimit < valFinLimit) {
         STATE.stock.finData = {
           symbol: finData.symbol,
@@ -5125,8 +5330,12 @@
     document.querySelectorAll("#seg-val-window button").forEach(btn => {
       btn.addEventListener("click", () => {
         document.querySelectorAll("#seg-val-window button").forEach(b => b.classList.toggle("active", b === btn));
-        STATE.stock.valWindow = Number(btn.dataset.val) || 1250;
-        if (STATE.stock.valFinData || STATE.stock.finData) renderStockValuation();
+        STATE.stock.valWindow = btn.dataset.val === "all" ? "all" : (Number(btn.dataset.val) || 1250);
+        if (STATE.stock.valWindow === "all") {
+          loadFullHistoryValuation();
+        } else if (STATE.stock.valFinData || STATE.stock.finData) {
+          renderStockValuation();
+        }
       });
     });
     document.querySelectorAll("#seg-dcf-base button").forEach(btn => {
