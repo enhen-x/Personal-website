@@ -38,6 +38,7 @@
     var code = h.indexOf('stock/') === 0 ? decodeURIComponent(h.slice(6)).trim().toUpperCase() : '600519.SH';
     if (!code) code = '600519.SH';
     kick('/api/stocks/' + encodeURIComponent(code) + '/kline', { adjust: 'forward', limit: 250 });
+    kick('/api/stocks/' + encodeURIComponent(code) + '/kline', { adjust: 'forward', limit: 1250 });
     kick('/api/stocks/' + encodeURIComponent(code) + '/financials', { limit: 40 });
   }
 })();
@@ -938,6 +939,279 @@
     font-size: 11.5px;
     color: #111827;
   }
+
+  /* ==================== Valuation Observatory ==================== */
+  .val-cap-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    font-size: 12px;
+    color: var(--ink-muted);
+  }
+  .val-cap-items {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px;
+  }
+  .val-cap-items strong {
+    color: var(--ink);
+    font-family: var(--font-mono);
+  }
+  .val-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  @media (max-width: 1080px) {
+    .val-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+  @media (max-width: 640px) {
+    .val-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  .val-subcard {
+    background: #FFFFFF;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+  }
+  .val-subhead {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .val-subtitle {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--ink);
+    margin: 0;
+  }
+  .val-sliders-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  @media (max-width: 1024px) {
+    .val-sliders-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 560px) {
+    .val-sliders-grid { grid-template-columns: 1fr; }
+  }
+  .slider-box {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 11px;
+  }
+  .slider-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 6px;
+    margin-bottom: 3px;
+  }
+  .slider-name {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .slider-val {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--emerald);
+  }
+  .slider-box input[type="range"] {
+    width: 100%;
+    accent-color: var(--emerald);
+    cursor: pointer;
+    margin: 2px 0;
+  }
+  .slider-hint {
+    font-size: 10.5px;
+    color: var(--ink-faint);
+    line-height: 1.35;
+  }
+
+  /* Football Field */
+  .football-wrap {
+    position: relative;
+    padding: 18px 8px 6px 8px;
+  }
+  .fb-row {
+    display: grid;
+    grid-template-columns: 118px 1fr 118px;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+    font-size: 12px;
+  }
+  @media (max-width: 640px) {
+    .fb-row { grid-template-columns: 96px 1fr 94px; gap: 6px; font-size: 11px; }
+  }
+  .fb-name {
+    font-weight: 600;
+    color: var(--ink);
+    line-height: 1.3;
+  }
+  .fb-name small {
+    display: block;
+    font-weight: 400;
+    font-size: 10.5px;
+    color: var(--ink-faint);
+  }
+  .fb-track {
+    position: relative;
+    height: 22px;
+    background: #F3F4F6;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  .fb-band {
+    position: absolute;
+    top: 4px;
+    height: 12px;
+    border-radius: 999px;
+    background: rgba(15, 118, 110, 0.25);
+    border: 1px solid rgba(15, 118, 110, 0.55);
+  }
+  .fb-band.indigo {
+    background: rgba(55, 48, 163, 0.20);
+    border-color: rgba(55, 48, 163, 0.55);
+  }
+  .fb-band.ochre {
+    background: rgba(180, 83, 9, 0.20);
+    border-color: rgba(180, 83, 9, 0.55);
+  }
+  .fb-mid-dot {
+    position: absolute;
+    top: 5px;
+    width: 10px;
+    height: 10px;
+    margin-left: -5px;
+    border-radius: 50%;
+    background: #111827;
+    border: 2px solid #FFFFFF;
+    box-shadow: 0 0 0 1px rgba(17, 24, 39, 0.25);
+  }
+  .fb-mos-tick {
+    position: absolute;
+    top: 2px;
+    bottom: 2px;
+    width: 2px;
+    background: var(--emerald);
+  }
+  .fb-cur-line {
+    position: absolute;
+    top: -4px;
+    bottom: -4px;
+    width: 0;
+    border-left: 1.5px dashed #B91C1C;
+    z-index: 3;
+    pointer-events: none;
+  }
+  .fb-cur-label {
+    position: absolute;
+    top: -17px;
+    transform: translateX(-50%);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--crimson);
+    background: rgba(255, 255, 255, 0.92);
+    padding: 0 4px;
+    white-space: nowrap;
+  }
+  .fb-vals {
+    text-align: right;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.3;
+    color: var(--ink);
+  }
+  .fb-vals small {
+    display: block;
+    font-size: 10.5px;
+  }
+
+  /* Sensitivity Heatmap */
+  .sens-table th,
+  .sens-table td {
+    text-align: center;
+    padding: 7px 6px;
+    font-size: 11.5px;
+    line-height: 1.3;
+  }
+  .sens-table td.hm-cheap {
+    background: rgba(15, 118, 110, 0.12);
+    color: #0F766E;
+    font-weight: 600;
+  }
+  .sens-table td.hm-fair {
+    background: #F8FAFC;
+    color: #111827;
+  }
+  .sens-table td.hm-rich {
+    background: rgba(185, 28, 28, 0.10);
+    color: #B91C1C;
+  }
+  .sens-table td.hm-center {
+    outline: 2px solid #111827;
+    outline-offset: -2px;
+    font-weight: 700;
+  }
+  .sens-sub {
+    display: block;
+    font-size: 10px;
+    font-weight: 500;
+    opacity: 0.85;
+  }
+
+  /* DuPont Strip */
+  .dupont-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+  }
+  @media (max-width: 960px) {
+    .dupont-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  .dp-card {
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .dp-lbl {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--ink-muted);
+    margin-bottom: 3px;
+  }
+  .dp-val {
+    font-family: var(--font-mono);
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .dp-sub {
+    font-size: 11px;
+    color: var(--ink-faint);
+    margin-top: 2px;
+  }
 </style>
 </head>
 <body>
@@ -1499,12 +1773,211 @@
       </div>
     </div>
 
+    <!-- Valuation Observatory Module -->
+    <div class="module-card" id="stk-valuation-module">
+      <div class="mod-header">
+        <div>
+          <h2 class="mod-title">二、多维估值观测台（相对估值 · 历史分位带 · 绝对估值）</h2>
+          <span class="mod-desc">基于不复权现价、basic_eps 反推股本及 TTM 财报序列自动估算 · 无须外部市值数据即可实时定价</span>
+        </div>
+        <span id="val-overall-pill" class="status-pill pill-mid">计算中</span>
+      </div>
+
+      <!-- Implied Capitalization Strip -->
+      <div class="val-cap-bar" id="val-cap-bar">
+        <div class="val-cap-items">
+          <span>不复权现价: <strong id="val-unadj-price">--</strong></span>
+          <span>隐含总股本: <strong id="val-implied-shares">--</strong></span>
+          <span>隐含总市值: <strong id="val-implied-mktcap">--</strong></span>
+          <span id="val-shares-src" style="color:var(--ink-faint);">股本估算口径: --</span>
+        </div>
+        <span style="font-size:11px;color:var(--ink-faint);">注：亏损或刚定增期以最近有效 EPS 期替代</span>
+      </div>
+
+      <!-- 6 Valuation Multiples KPIs -->
+      <div class="val-kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-head">
+            <span class="kpi-title">市盈率 PE_TTM</span>
+            <span id="val-kpi-pe-pill" class="status-pill pill-mid">--</span>
+          </div>
+          <div id="val-kpi-pe" class="kpi-num">--</div>
+          <div class="kpi-bar-track"><div id="val-kpi-pe-bar" class="kpi-bar-fill" style="width:0%;background:var(--emerald);"></div></div>
+          <div id="val-kpi-pe-meta" class="kpi-meta">--</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-head">
+            <span class="kpi-title">市净率 PB</span>
+            <span id="val-kpi-pb-pill" class="status-pill pill-mid">--</span>
+          </div>
+          <div id="val-kpi-pb" class="kpi-num">--</div>
+          <div class="kpi-bar-track"><div id="val-kpi-pb-bar" class="kpi-bar-fill" style="width:0%;background:var(--indigo);"></div></div>
+          <div id="val-kpi-pb-meta" class="kpi-meta">--</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-head">
+            <span class="kpi-title">市销率 PS_TTM</span>
+            <span id="val-kpi-ps-pill" class="status-pill pill-mid">--</span>
+          </div>
+          <div id="val-kpi-ps" class="kpi-num">--</div>
+          <div class="kpi-bar-track"><div id="val-kpi-ps-bar" class="kpi-bar-fill" style="width:0%;background:var(--ochre);"></div></div>
+          <div id="val-kpi-ps-meta" class="kpi-meta">--</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-head">
+            <span class="kpi-title">自由现金流收益率</span>
+            <span id="val-kpi-fcf-pill" class="status-pill pill-mid">--</span>
+          </div>
+          <div id="val-kpi-fcf" class="kpi-num">--</div>
+          <div class="kpi-bar-track"><div id="val-kpi-fcf-bar" class="kpi-bar-fill" style="width:0%;background:var(--emerald);"></div></div>
+          <div id="val-kpi-fcf-meta" class="kpi-meta">--</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-head">
+            <span class="kpi-title">近似股息率</span>
+            <span id="val-kpi-div-pill" class="status-pill pill-mid">--</span>
+          </div>
+          <div id="val-kpi-div" class="kpi-num">--</div>
+          <div class="kpi-bar-track"><div id="val-kpi-div-bar" class="kpi-bar-fill" style="width:0%;background:var(--emerald);"></div></div>
+          <div id="val-kpi-div-meta" class="kpi-meta">--</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-head">
+            <span class="kpi-title">动态 PEG</span>
+            <span id="val-kpi-peg-pill" class="status-pill pill-mid">--</span>
+          </div>
+          <div id="val-kpi-peg" class="kpi-num">--</div>
+          <div class="kpi-bar-track"><div id="val-kpi-peg-bar" class="kpi-bar-fill" style="width:0%;background:var(--indigo);"></div></div>
+          <div id="val-kpi-peg-meta" class="kpi-meta">--</div>
+        </div>
+      </div>
+
+      <!-- Historical Valuation Band Chart -->
+      <div class="val-subcard">
+        <div class="val-subhead">
+          <div>
+            <h3 class="val-subtitle">历史估值分位带（P20 / P50 / P80 均值回归通道）</h3>
+            <span id="val-band-stats" class="mod-desc">载入近 5 年历史估值样本中…</span>
+          </div>
+          <div class="inline-group">
+            <div class="seg" id="seg-val-metric">
+              <button type="button" data-val="pe" class="active">PE_TTM</button>
+              <button type="button" data-val="pb">PB</button>
+              <button type="button" data-val="ps">PS_TTM</button>
+              <button type="button" data-val="fcf">FCF Yield%</button>
+            </div>
+            <div class="seg" id="seg-val-window">
+              <button type="button" data-val="750">近3年</button>
+              <button type="button" data-val="1250" class="active">近5年</button>
+            </div>
+          </div>
+        </div>
+        <div id="chart-stk-valband" class="chart-box">
+          <div class="chart-empty">计算历史估值分位带中…</div>
+        </div>
+      </div>
+
+      <!-- Interactive DCF / RIM Controls -->
+      <div class="val-subcard">
+        <div class="val-subhead">
+          <div class="preset-pills" id="val-presets">
+            <span class="ctrl-label">绝对估值情景预设:</span>
+            <button type="button" class="preset-btn val-preset" data-preset="conservative">保守假设</button>
+            <button type="button" class="preset-btn val-preset active" data-preset="neutral">自动中性基准</button>
+            <button type="button" class="preset-btn val-preset" data-preset="optimistic">乐观假设</button>
+          </div>
+          <div class="inline-group">
+            <span class="ctrl-label">基期现金流口径:</span>
+            <div class="seg" id="seg-dcf-base">
+              <button type="button" data-val="fcf_ttm" class="active">TTM FCF</button>
+              <button type="button" data-val="fcf_3y">3年均值FCF</button>
+              <button type="button" data-val="np_ttm">TTM 归母净利</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="val-sliders-grid">
+          <div class="slider-box">
+            <div class="slider-head">
+              <span class="slider-name">前 5 年增速 g₁</span>
+              <span id="lbl-dcf-g1" class="slider-val">10.0%</span>
+            </div>
+            <input id="rng-dcf-g1" type="range" min="-5" max="30" step="0.5" value="10" />
+            <div id="hint-dcf-g1" class="slider-hint">按历史净利 CAGR 自动拟合基准</div>
+          </div>
+
+          <div class="slider-box">
+            <div class="slider-head">
+              <span class="slider-name">永续增长率 g₂</span>
+              <span id="lbl-dcf-g2" class="slider-val">2.5%</span>
+            </div>
+            <input id="rng-dcf-g2" type="range" min="1.0" max="4.0" step="0.1" value="2.5" />
+            <div class="slider-hint">长期名义 GDP 锚，通常取 2.0%–3.0%</div>
+          </div>
+
+          <div class="slider-box">
+            <div class="slider-head">
+              <span class="slider-name">股权折现率 r (WACC)</span>
+              <span id="lbl-dcf-r" class="slider-val">9.00%</span>
+            </div>
+            <input id="rng-dcf-r" type="range" min="6.0" max="14.0" step="0.25" value="9.0" />
+            <div class="slider-hint">要求回报率，越高代表要求越严苛安全边际</div>
+          </div>
+
+          <div class="slider-box">
+            <div class="slider-head">
+              <span class="slider-name">安全边际折扣 MOS</span>
+              <span id="lbl-dcf-mos" class="slider-val">20%</span>
+            </div>
+            <input id="rng-dcf-mos" type="range" min="0" max="40" step="5" value="20" />
+            <div class="slider-hint">目标买入价 = 公允价值 × (1 − 安全边际)</div>
+          </div>
+        </div>
+
+        <div class="two-col" style="margin-bottom:0;">
+          <div class="val-subcard" style="margin-bottom:0;background:var(--surface-alt);">
+            <div class="val-subhead">
+              <h3 class="val-subtitle">多模型公允价值区间对比（「足球场」图）</h3>
+              <span id="val-dcf-summary" class="mono" style="font-size:11.5px;color:var(--ink-muted);">--</span>
+            </div>
+            <div id="val-football" class="football-wrap">
+              <div class="flat" style="text-align:center;padding:30px 0;">等待财报与行情数据…</div>
+            </div>
+          </div>
+
+          <div class="val-subcard" style="margin-bottom:0;background:var(--surface-alt);">
+            <div class="val-subhead">
+              <h3 class="val-subtitle">两阶段 DCF 敏感性热力矩阵 (r × g₁)</h3>
+              <span style="font-size:11px;color:var(--ink-faint);">绿=低于现价空间 · 红=高于公允价</span>
+            </div>
+            <div id="val-sens-wrap" style="overflow-x:auto;">
+              <div class="flat" style="text-align:center;padding:30px 0;">等待计算…</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DuPont & Financial Quality Strip -->
+      <div class="dupont-grid" id="val-dupont-grid">
+        <div class="dp-card"><div class="dp-lbl">TTM ROE</div><div class="dp-val">--</div><div class="dp-sub">杜邦分解基准</div></div>
+        <div class="dp-card"><div class="dp-lbl">销售净利率</div><div class="dp-val">--</div><div class="dp-sub">盈利能力</div></div>
+        <div class="dp-card"><div class="dp-lbl">资产周转率</div><div class="dp-val">--</div><div class="dp-sub">营运效率</div></div>
+        <div class="dp-card"><div class="dp-lbl">权益乘数</div><div class="dp-val">--</div><div class="dp-sub">财务杠杆</div></div>
+        <div class="dp-card"><div class="dp-lbl">应计排雷 / 净现金</div><div class="dp-val">--</div><div class="dp-sub">现金含金量校验</div></div>
+      </div>
+    </div>
+
     <!-- Financial Trend Charts -->
     <div class="two-col">
       <div class="module-card">
         <div class="mod-header">
           <div>
-            <h2 class="mod-title">二、营业收入与归母净利润趋势</h2>
+            <h2 class="mod-title">三、营业收入与归母净利润趋势</h2>
             <span class="mod-desc">单位：亿元（按报告期末升序排列）</span>
           </div>
           <div class="seg" id="seg-fin-mode">
@@ -1520,7 +1993,7 @@
       <div class="module-card">
         <div class="mod-header">
           <div>
-            <h2 class="mod-title">三、现金流含金量与资产负债率</h2>
+            <h2 class="mod-title">四、现金流含金量与资产负债率</h2>
             <span class="mod-desc">左轴：单季经营现金流 vs 单季归母净利（亿元） · 右轴：资产负债率（%）</span>
           </div>
         </div>
@@ -1534,7 +2007,7 @@
     <div class="module-card">
       <div class="mod-header">
         <div>
-          <h2 class="mod-title">四、三大财务报表历史明细</h2>
+          <h2 class="mod-title">五、三大财务报表历史明细</h2>
           <span class="mod-desc">支持核心指标视图与全部原始字段切换（鼠标悬停数值可看原始精确元值）</span>
         </div>
         <div class="inline-group">
@@ -1574,6 +2047,7 @@
       <li><strong>服务端透明代理</strong>：前端所有请求均经由同源路由 <code>/api/quant</code> 转发至 Quant Data FastAPI，不在浏览器中存储或暴露 <code>QUANT_API_TOKEN</code>，打开页面即可使用。</li>
       <li><strong>选股快照与 TTM 口径</strong>：多维筛选读取服务端预计算快照 <code>screener_latest_cn.parquet</code>（日线或财报同步完成后自动刷新）；<code>roe_ttm_pct</code>、<code>ocf_to_np_ratio</code> 基于过去 4 季滚动 TTM 计算，<code>gross_margin_pct</code> / <code>net_margin_pct</code> / <code>rd_ratio_pct</code> 为最新报告期 YTD 口径。</li>
       <li><strong>A 股颜色约定与复权口径</strong>：个股涨跌幅与 K 线采用 <code>红涨绿跌</code>；历史 K 线默认读取 <code>forward</code>（前复权）口径，可切换后复权与不复权以核对除权除息跳空与复权因子 <code>factor</code>。</li>
+      <li><strong>多维估值估算口径</strong>：由最新有效盈利期反推 <code>隐含股本 = 归母净利润 / basic_eps</code>，结合不复权价 <code>unadjusted_close = close / factor</code> 估算隐含市值、<code>PE_TTM</code>、<code>PB</code>、<code>PS_TTM</code>、<code>TTM FCF = TTM_OCF - TTM_CapEx</code> 及 <code>近似分红 = pay_dividends_profits_interest_cash - interest_expenses</code>；亏损或刚发生大额股本变动的公司请以公告股本为准。</li>
     </ul>
   </section>
 </div>
@@ -1894,7 +2368,18 @@
       stmtCols: "core",
       stmtLimit: 40,
       klineData: null,
-      finData: null
+      valKlineData: null,
+      finData: null,
+      valFinData: null,
+      valMetric: "pe",
+      valWindow: 1250,
+      dcfBase: "fcf_ttm",
+      dcfG1: 10,
+      dcfG2: 2.5,
+      dcfR: 9.0,
+      dcfMos: 20,
+      dcfAutoFittedCode: "",
+      valSnap: null
     }
   };
 
@@ -3221,15 +3706,907 @@
     CHARTS.stkCash = { plot: cashPlot, containerId: "chart-stk-cash" };
   }
 
+  /* ==================== Valuation Engine & Visualizations ==================== */
+  function quarterIndex(fy, fp) {
+    const qMap = { Q1: 1, Q2: 2, Q3: 3, Q4: 4 };
+    const q = qMap[String(fp || "").toUpperCase()] || 0;
+    const y = Number(fy);
+    if (!Number.isFinite(y) || !q) return 0;
+    return y * 4 + q;
+  }
+
+  function calcQuantile(sortedArr, q) {
+    if (!sortedArr.length) return null;
+    const idx = (sortedArr.length - 1) * q;
+    const lo = Math.floor(idx);
+    const hi = Math.ceil(idx);
+    if (lo === hi) return sortedArr[lo];
+    return sortedArr[lo] + (sortedArr[hi] - sortedArr[lo]) * (idx - lo);
+  }
+
+  function percentileRank(arr, val) {
+    if (!arr.length || val === null || val === undefined || !Number.isFinite(val)) return null;
+    let le = 0;
+    for (let i = 0; i < arr.length; i++) {
+      if (arr[i] <= val) le++;
+    }
+    return (le / arr.length) * 100;
+  }
+
+  function buildQuarterlyValuationSeries(finData) {
+    const incList = [...(finData?.income_statements || [])].sort((a, b) => quarterIndex(a.fiscal_year, a.fiscal_period) - quarterIndex(b.fiscal_year, b.fiscal_period));
+    const balMap = new Map((finData?.balance_sheets || []).map(r => [`${r.fiscal_year}-${r.fiscal_period}`, r]));
+    const cfsMap = new Map((finData?.cash_flow_statements || []).map(r => [`${r.fiscal_year}-${r.fiscal_period}`, r]));
+
+    if (!incList.length) return [];
+
+    // First compute raw single-quarter dividends (pay_dividends_profits_interest_cash - interest_expenses)
+    const qDivList = new Array(incList.length).fill(null);
+    const ytdDivNet = new Array(incList.length).fill(null);
+    for (let i = 0; i < incList.length; i++) {
+      const r = incList[i];
+      const key = `${r.fiscal_year}-${r.fiscal_period}`;
+      const c = cfsMap.get(key);
+      if (c && c.pay_dividends_profits_interest_cash !== null && c.pay_dividends_profits_interest_cash !== undefined) {
+        const divGross = Number(c.pay_dividends_profits_interest_cash);
+        const intExp = Number(r.interest_expenses || 0);
+        if (Number.isFinite(divGross)) {
+          ytdDivNet[i] = Math.max(0, divGross - (Number.isFinite(intExp) ? Math.max(0, intExp) : 0));
+        }
+      }
+      const fp = String(r.fiscal_period || "").toUpperCase();
+      if (ytdDivNet[i] !== null) {
+        if (fp === "Q1") {
+          qDivList[i] = ytdDivNet[i];
+        } else if (i > 0 && incList[i - 1].fiscal_year === r.fiscal_year && quarterIndex(r.fiscal_year, fp) - quarterIndex(incList[i - 1].fiscal_year, incList[i - 1].fiscal_period) === 1 && ytdDivNet[i - 1] !== null) {
+          qDivList[i] = Math.max(0, ytdDivNet[i] - ytdDivNet[i - 1]);
+        }
+      }
+    }
+
+    const rawSharesArr = incList.map(r => {
+      const np = Number(r.parent_holder_net_profit);
+      const eps = Number(r.basic_eps);
+      if (Number.isFinite(np) && Number.isFinite(eps) && Math.abs(eps) >= 0.05 && np * eps > 0) {
+        return { shares: np / eps, src: `${r.fiscal_year}${r.fiscal_period}` };
+      }
+      return null;
+    });
+
+    // Forward-fill then backward-fill shares across quarters
+    const filledShares = new Array(incList.length).fill(null);
+    let lastValid = null;
+    for (let i = 0; i < incList.length; i++) {
+      if (rawSharesArr[i]) lastValid = rawSharesArr[i];
+      filledShares[i] = lastValid;
+    }
+    let nextValid = null;
+    for (let i = incList.length - 1; i >= 0; i--) {
+      if (rawSharesArr[i]) nextValid = rawSharesArr[i];
+      if (!filledShares[i]) filledShares[i] = nextValid;
+    }
+
+    const quarters = [];
+    for (let i = 0; i < incList.length; i++) {
+      const r = incList[i];
+      const key = `${r.fiscal_year}-${r.fiscal_period}`;
+      const b = balMap.get(key) || {};
+      const c = cfsMap.get(key) || {};
+      const qi = quarterIndex(r.fiscal_year, r.fiscal_period);
+      const fp = String(r.fiscal_period || "").toUpperCase();
+
+      let ttmRev = null;
+      let ttmNp = null;
+      let ttmOcf = null;
+      let ttmCapex = null;
+      let ttmDiv = null;
+
+      if (i >= 3 && qi - quarterIndex(incList[i - 3].fiscal_year, incList[i - 3].fiscal_period) === 3) {
+        let revS = 0, npS = 0, ocfS = 0, capS = 0, divS = 0;
+        let revOk = true, npOk = true, ocfOk = true, capOk = true, divOk = true;
+        for (let k = i - 3; k <= i; k++) {
+          const rk = incList[k];
+          const ck = cfsMap.get(`${rk.fiscal_year}-${rk.fiscal_period}`) || {};
+          if (rk.q_operating_income == null) revOk = false; else revS += Number(rk.q_operating_income);
+          if (rk.q_parent_holder_net_profit == null) npOk = false; else npS += Number(rk.q_parent_holder_net_profit);
+          if (ck.q_act_cash_flow_net == null) ocfOk = false; else ocfS += Number(ck.q_act_cash_flow_net);
+          if (ck.q_pay_fixed_assets_etc_cash == null) capOk = false; else capS += Math.max(0, Number(ck.q_pay_fixed_assets_etc_cash));
+          if (qDivList[k] == null) divOk = false; else divS += qDivList[k];
+        }
+        if (revOk) ttmRev = revS;
+        if (npOk) ttmNp = npS;
+        if (ocfOk) ttmOcf = ocfS;
+        if (capOk) ttmCapex = capS;
+        if (divOk) ttmDiv = divS;
+      }
+
+      // Fall back to Q4 full-year YTD figures when consecutive single-quarter fields are unavailable
+      if (fp === "Q4") {
+        if (ttmRev === null && r.operating_income != null) ttmRev = Number(r.operating_income);
+        if (ttmNp === null && r.parent_holder_net_profit != null) ttmNp = Number(r.parent_holder_net_profit);
+        if (ttmOcf === null && c.act_cash_flow_net != null) ttmOcf = Number(c.act_cash_flow_net);
+        if (ttmCapex === null && c.pay_fixed_assets_etc_cash != null) ttmCapex = Math.max(0, Number(c.pay_fixed_assets_etc_cash));
+        if (ttmDiv === null && ytdDivNet[i] !== null) ttmDiv = ytdDivNet[i];
+      } else if (ttmDiv === null) {
+        // Look back up to 4 quarters for latest Q4 annual dividend
+        for (let k = i; k >= Math.max(0, i - 4); k--) {
+          if (String(incList[k].fiscal_period || "").toUpperCase() === "Q4" && ytdDivNet[k] !== null) {
+            ttmDiv = ytdDivNet[k];
+            break;
+          }
+        }
+      }
+
+      const ttmFcf = ttmOcf !== null ? (ttmOcf - (ttmCapex || 0)) : null;
+      const equity = b.holder_equity_total != null ? Number(b.holder_equity_total) : null;
+      const assets = b.assets_total != null ? Number(b.assets_total) : null;
+      const cash = b.cash != null ? Number(b.cash) : null;
+      const debt = b.total_debt != null ? Number(b.total_debt) : null;
+
+      quarters.push({
+        qi,
+        label: `${r.fiscal_year}${r.fiscal_period}`,
+        period_end: r.period_end || `${r.fiscal_year}-12-31`,
+        report_date: r.report_date || "",
+        shares: filledShares[i]?.shares || null,
+        sharesSrc: filledShares[i]?.src || "--",
+        isExactShares: Boolean(rawSharesArr[i]),
+        ttmRev,
+        ttmNp,
+        ttmOcf,
+        ttmCapex,
+        ttmFcf,
+        ttmDiv,
+        equity,
+        assets,
+        cash,
+        debt
+      });
+    }
+    return quarters;
+  }
+
+  function computeHistoricalSeriesStats(bars, quarters, metric) {
+    const n = bars.length;
+    const dates = new Array(n);
+    const prices = new Array(n);
+    const values = new Array(n);
+    const qLabels = new Array(n);
+    const validVals = [];
+
+    let qPtr = -1;
+    for (let i = 0; i < n; i++) {
+      const bar = bars[i];
+      dates[i] = bar.date;
+      const factor = Number(bar.factor) || 1;
+      const unadj = factor > 0 ? Number(bar.close) / factor : Number(bar.close);
+      prices[i] = unadj;
+
+      while (qPtr + 1 < quarters.length && quarters[qPtr + 1].period_end <= bar.date) {
+        qPtr++;
+      }
+      const q = qPtr >= 0 ? quarters[qPtr] : null;
+      qLabels[i] = q ? q.label : "--";
+
+      let v = null;
+      if (q && q.shares > 0 && unadj > 0) {
+        const mktCap = unadj * q.shares;
+        if (metric === "pe" && q.ttmNp > 0) {
+          const pe = mktCap / q.ttmNp;
+          if (pe > 0 && pe <= 200) v = +pe.toFixed(2);
+        } else if (metric === "pb" && q.equity > 0) {
+          const pb = mktCap / q.equity;
+          if (pb > 0 && pb <= 50) v = +pb.toFixed(2);
+        } else if (metric === "ps" && q.ttmRev > 0) {
+          const ps = mktCap / q.ttmRev;
+          if (ps > 0 && ps <= 60) v = +ps.toFixed(2);
+        } else if (metric === "fcf" && q.ttmFcf !== null) {
+          const fy = (q.ttmFcf / mktCap) * 100;
+          if (fy >= -30 && fy <= 30) v = +fy.toFixed(2);
+        }
+      }
+      values[i] = v;
+      if (v !== null) validVals.push(v);
+    }
+
+    const sorted = [...validVals].sort((a, b) => a - b);
+    const p20 = calcQuantile(sorted, 0.2);
+    const p50 = calcQuantile(sorted, 0.5);
+    const p80 = calcQuantile(sorted, 0.8);
+    const mean = sorted.length ? sorted.reduce((s, x) => s + x, 0) / sorted.length : null;
+    const latestVal = [...values].reverse().find(v => v !== null) ?? null;
+    const pct = latestVal !== null ? percentileRank(sorted, latestVal) : null;
+
+    return { dates, prices, values, qLabels, validCount: sorted.length, p20, p50, p80, mean, latestVal, pct };
+  }
+
+  function computeValuationSnapshot() {
+    const finData = STATE.stock.valFinData || STATE.stock.finData;
+    const kMain = STATE.stock.klineData;
+    const kHist = STATE.stock.valKlineData || (STATE.stock.adjust === "forward" ? kMain : null);
+    const quarters = buildQuarterlyValuationSeries(finData);
+    const qNow = quarters[quarters.length - 1] || null;
+
+    // Latest unadjusted close: prefer forward kline (close / factor) or non-adjusted kline directly
+    let unadjPrice = null;
+    let priceDate = "--";
+    if (kHist?.items?.length) {
+      const lb = kHist.items[kHist.items.length - 1];
+      const fac = Number(lb.factor) || 1;
+      unadjPrice = fac > 0 ? Number(lb.close) / fac : Number(lb.close);
+      priceDate = lb.date;
+    } else if (kMain?.items?.length) {
+      const lb = kMain.items[kMain.items.length - 1];
+      const fac = Number(lb.factor) || 1;
+      unadjPrice = STATE.stock.adjust === "none" ? Number(lb.close) : (fac > 0 ? Number(lb.close) / fac : Number(lb.close));
+      priceDate = lb.date;
+    }
+
+    const shares = qNow?.shares || null;
+    const impliedMktCap = (unadjPrice > 0 && shares > 0) ? unadjPrice * shares : null;
+
+    // 3Y average FCF (from latest 12 quarters = 3 annual FCF points: q[n-1], q[n-5], q[n-9])
+    const fcfSamples = [];
+    for (let idx = quarters.length - 1; idx >= 0 && fcfSamples.length < 3; idx -= 4) {
+      if (quarters[idx].ttmFcf !== null) fcfSamples.push(quarters[idx].ttmFcf);
+    }
+    const fcf3yAvg = fcfSamples.length ? fcfSamples.reduce((a, b) => a + b, 0) / fcfSamples.length : null;
+
+    // 3Y / 2Y / 1Y Net Profit CAGR
+    let cagrNp = null;
+    let cagrLabel = "3年CAGR";
+    const tryHorizon = (lagQuarters, years, lbl) => {
+      const prevIdx = quarters.length - 1 - lagQuarters;
+      if (prevIdx >= 0 && qNow?.ttmNp > 0 && quarters[prevIdx]?.ttmNp > 0) {
+        cagrNp = (Math.pow(qNow.ttmNp / quarters[prevIdx].ttmNp, 1 / years) - 1) * 100;
+        cagrLabel = lbl;
+        return true;
+      }
+      return false;
+    };
+    if (!tryHorizon(12, 3, "3年净利CAGR")) {
+      if (!tryHorizon(8, 2, "2年净利CAGR")) {
+        tryHorizon(4, 1, "1年净利YoY");
+      }
+    }
+
+    const peTtm = (impliedMktCap && qNow?.ttmNp > 0) ? impliedMktCap / qNow.ttmNp : null;
+    const pb = (impliedMktCap && qNow?.equity > 0) ? impliedMktCap / qNow.equity : null;
+    const psTtm = (impliedMktCap && qNow?.ttmRev > 0) ? impliedMktCap / qNow.ttmRev : null;
+    const fcfYieldPct = (impliedMktCap && qNow?.ttmFcf !== null) ? (qNow.ttmFcf / impliedMktCap) * 100 : null;
+    const pFcf = (impliedMktCap && qNow?.ttmFcf > 0) ? impliedMktCap / qNow.ttmFcf : null;
+    const approxDivYieldPct = (impliedMktCap && qNow?.ttmDiv !== null) ? (qNow.ttmDiv / impliedMktCap) * 100 : null;
+    const approxPayoutPct = (qNow?.ttmNp > 0 && qNow?.ttmDiv !== null) ? clamp((qNow.ttmDiv / qNow.ttmNp) * 100, 0, 120) : null;
+    const peg = (peTtm > 0 && cagrNp > 0) ? peTtm / cagrNp : null;
+
+    // DuPont & quality
+    const netMargin = (qNow?.ttmRev > 0 && qNow?.ttmNp !== null) ? (qNow.ttmNp / qNow.ttmRev) * 100 : null;
+    const assetTurnover = (qNow?.assets > 0 && qNow?.ttmRev !== null) ? qNow.ttmRev / qNow.assets : null;
+    const equityMultiplier = (qNow?.equity > 0 && qNow?.assets !== null) ? qNow.assets / qNow.equity : null;
+    const roeTtm = (qNow?.equity > 0 && qNow?.ttmNp !== null) ? (qNow.ttmNp / qNow.equity) * 100 : null;
+    const accrualRatio = (qNow?.assets > 0 && qNow?.ttmNp !== null && qNow?.ttmOcf !== null)
+      ? ((qNow.ttmNp - qNow.ttmOcf) / qNow.assets) * 100
+      : null;
+    const netCashToMktCap = (impliedMktCap && qNow?.cash !== null && qNow?.debt !== null)
+      ? ((qNow.cash - qNow.debt) / impliedMktCap) * 100
+      : null;
+
+    // Historical bands
+    const barsAll = kHist?.items || [];
+    const barsWin = barsAll.slice(-Math.min(barsAll.length, STATE.stock.valWindow));
+    const bands = {
+      pe: computeHistoricalSeriesStats(barsWin, quarters, "pe"),
+      pb: computeHistoricalSeriesStats(barsWin, quarters, "pb"),
+      ps: computeHistoricalSeriesStats(barsWin, quarters, "ps"),
+      fcf: computeHistoricalSeriesStats(barsWin, quarters, "fcf")
+    };
+
+    const epsTtm = (shares > 0 && qNow?.ttmNp !== null) ? qNow.ttmNp / shares : null;
+    const bvps = (shares > 0 && qNow?.equity !== null) ? qNow.equity / shares : null;
+
+    return {
+      priceDate,
+      unadjPrice,
+      shares,
+      sharesSrc: qNow?.sharesSrc || "--",
+      isExactShares: Boolean(qNow?.isExactShares),
+      impliedMktCap,
+      qNow,
+      quarters,
+      fcf3yAvg,
+      cagrNp,
+      cagrLabel,
+      peTtm,
+      pb,
+      psTtm,
+      fcfYieldPct,
+      pFcf,
+      approxDivYieldPct,
+      approxPayoutPct,
+      peg,
+      epsTtm,
+      bvps,
+      netMargin,
+      assetTurnover,
+      equityMultiplier,
+      roeTtm,
+      accrualRatio,
+      netCashToMktCap,
+      bands
+    };
+  }
+
+  function autoFitDcfDefaults(snap) {
+    const code = STATE.stock.code;
+    if (STATE.stock.dcfAutoFittedCode === code) return;
+    STATE.stock.dcfAutoFittedCode = code;
+
+    const rawG = snap.cagrNp !== null ? snap.cagrNp : 8;
+    const fittedG1 = Math.round(clamp(rawG, 3, 18) * 2) / 2;
+    STATE.stock.dcfG1 = fittedG1;
+    STATE.stock.dcfG2 = 2.5;
+    STATE.stock.dcfR = 9.0;
+    STATE.stock.dcfMos = 20;
+
+    if ((snap.qNow?.ttmFcf || 0) <= 0 && (snap.qNow?.ttmNp || 0) > 0) {
+      STATE.stock.dcfBase = (snap.fcf3yAvg || 0) > 0 ? "fcf_3y" : "np_ttm";
+    } else {
+      STATE.stock.dcfBase = "fcf_ttm";
+    }
+
+    document.querySelectorAll(".val-preset").forEach(b => b.classList.toggle("active", b.dataset.preset === "neutral"));
+    syncValuationControls();
+  }
+
+  function syncValuationControls() {
+    document.getElementById("rng-dcf-g1").value = STATE.stock.dcfG1;
+    document.getElementById("rng-dcf-g2").value = STATE.stock.dcfG2;
+    document.getElementById("rng-dcf-r").value = STATE.stock.dcfR;
+    document.getElementById("rng-dcf-mos").value = STATE.stock.dcfMos;
+
+    document.getElementById("lbl-dcf-g1").textContent = `${STATE.stock.dcfG1.toFixed(1)}%`;
+    document.getElementById("lbl-dcf-g2").textContent = `${STATE.stock.dcfG2.toFixed(1)}%`;
+    document.getElementById("lbl-dcf-r").textContent = `${STATE.stock.dcfR.toFixed(2)}%`;
+    document.getElementById("lbl-dcf-mos").textContent = `${STATE.stock.dcfMos}%`;
+
+    document.querySelectorAll("#seg-dcf-base button").forEach(b => b.classList.toggle("active", b.dataset.val === STATE.stock.dcfBase));
+    document.querySelectorAll("#seg-val-metric button").forEach(b => b.classList.toggle("active", b.dataset.val === STATE.stock.valMetric));
+    document.querySelectorAll("#seg-val-window button").forEach(b => b.classList.toggle("active", Number(b.dataset.val) === STATE.stock.valWindow));
+  }
+
+  function calcTwoStageDCF(baseCF, shares, g1Pct, g2Pct, rPct) {
+    const g1 = g1Pct / 100;
+    const g2 = g2Pct / 100;
+    const r = rPct / 100;
+    if (!(baseCF > 0) || !(shares > 0) || !(r > g2 + 0.005)) return null;
+
+    let pvStage1 = 0;
+    let cf = baseCF;
+    for (let t = 1; t <= 5; t++) {
+      cf *= (1 + g1);
+      pvStage1 += cf / Math.pow(1 + r, t);
+    }
+    const tv = (cf * (1 + g2)) / (r - g2);
+    const pvTerminal = tv / Math.pow(1 + r, 5);
+    return {
+      valuePerShare: (pvStage1 + pvTerminal) / shares,
+      pvStage1: pvStage1 / shares,
+      pvTerminal: pvTerminal / shares
+    };
+  }
+
+  function calcRIM(bvps, roePct, payoutPct, g2Pct, rPct) {
+    const r = rPct / 100;
+    const g2 = g2Pct / 100;
+    if (!(bvps > 0) || !(r > g2 + 0.005)) return null;
+
+    const roe0 = clamp((roePct ?? 10) / 100, -0.25, 0.45);
+    const targetRoe = clamp(Math.max(r, roe0 * 0.72), 0.04, 0.30);
+    const retention = clamp(1 - (payoutPct != null ? payoutPct / 100 : 0.30), 0.15, 0.90);
+
+    let bv = bvps;
+    let pvRI = 0;
+    for (let t = 1; t <= 5; t++) {
+      const roeT = roe0 + ((targetRoe - roe0) * (t - 1)) / 5;
+      const ri = (roeT - r) * bv;
+      pvRI += ri / Math.pow(1 + r, t);
+      bv *= (1 + Math.max(-0.15, roeT * retention));
+    }
+    const termRI = ((targetRoe - r) * bv) / (r - g2);
+    const pvTerm = termRI / Math.pow(1 + r, 5);
+    const rawVal = bvps + pvRI + pvTerm;
+    return clamp(rawVal, bvps * 0.4, bvps * 12);
+  }
+
+  function getActiveBaseCashFlow(snap) {
+    if (STATE.stock.dcfBase === "fcf_3y") return snap.fcf3yAvg;
+    if (STATE.stock.dcfBase === "np_ttm") return snap.qNow?.ttmNp ?? null;
+    return snap.qNow?.ttmFcf ?? null;
+  }
+
+  function renderValuationKPIs(snap) {
+    document.getElementById("val-unadj-price").textContent = snap.unadjPrice !== null ? `¥${fmtNum(snap.unadjPrice)}` : "--";
+    document.getElementById("val-implied-shares").textContent = snap.shares !== null ? `${(snap.shares / 1e8).toFixed(2)}亿股` : "--";
+    document.getElementById("val-implied-mktcap").textContent = snap.impliedMktCap !== null ? `${(snap.impliedMktCap / 1e8).toFixed(1)}亿元` : "--";
+    document.getElementById("val-shares-src").textContent = `股本估算期: ${snap.sharesSrc}${snap.isExactShares ? "" : " (顺延)"}`;
+
+    const setCard = (id, mainText, pillText, pillCls, barPct, barColor, metaText) => {
+      document.getElementById(id).textContent = mainText;
+      const pEl = document.getElementById(`${id}-pill`);
+      pEl.className = `status-pill ${pillCls}`;
+      pEl.textContent = pillText;
+      const bEl = document.getElementById(`${id}-bar`);
+      bEl.style.width = `${clamp(barPct, 0, 100)}%`;
+      if (barColor) bEl.style.background = barColor;
+      document.getElementById(`${id}-meta`).textContent = metaText;
+    };
+
+    const pePct = snap.bands.pe.pct;
+    setCard(
+      "val-kpi-pe",
+      snap.peTtm !== null ? `${fmtNum(snap.peTtm, 1)}x` : "亏损/无",
+      pePct !== null ? `${pePct.toFixed(0)}% 分位` : "--",
+      pePct !== null ? (pePct <= 25 ? "pill-pass" : (pePct >= 75 ? "pill-hot" : "pill-mid")) : "pill-fail",
+      pePct ?? 0,
+      pePct !== null && pePct <= 25 ? "var(--emerald)" : (pePct >= 75 ? "var(--crimson)" : "var(--ochre)"),
+      snap.bands.pe.p50 !== null
+        ? `P20 ${fmtNum(snap.bands.pe.p20, 1)}x · 中位 ${fmtNum(snap.bands.pe.p50, 1)}x · P80 ${fmtNum(snap.bands.pe.p80, 1)}x`
+        : "盈利收益率 EY: " + (snap.peTtm > 0 ? `${(100 / snap.peTtm).toFixed(2)}%` : "--")
+    );
+
+    const pbPct = snap.bands.pb.pct;
+    setCard(
+      "val-kpi-pb",
+      snap.pb !== null ? `${fmtNum(snap.pb, 2)}x` : "--",
+      pbPct !== null ? `${pbPct.toFixed(0)}% 分位` : "--",
+      pbPct !== null ? (pbPct <= 25 ? "pill-pass" : (pbPct >= 75 ? "pill-hot" : "pill-mid")) : "pill-fail",
+      pbPct ?? 0,
+      "var(--indigo)",
+      snap.bvps !== null
+        ? `每股净资产 ¥${fmtNum(snap.bvps)} · 中位 ${snap.bands.pb.p50 !== null ? fmtNum(snap.bands.pb.p50, 2) + "x" : "--"}`
+        : "缺少净资产数据"
+    );
+
+    const psPct = snap.bands.ps.pct;
+    setCard(
+      "val-kpi-ps",
+      snap.psTtm !== null ? `${fmtNum(snap.psTtm, 2)}x` : "--",
+      psPct !== null ? `${psPct.toFixed(0)}% 分位` : "--",
+      psPct !== null ? (psPct <= 25 ? "pill-pass" : (psPct >= 75 ? "pill-hot" : "pill-mid")) : "pill-fail",
+      psPct ?? 0,
+      "var(--ochre)",
+      `TTM营收 ${fmtMoneyShort(snap.qNow?.ttmRev)} · 中位 ${snap.bands.ps.p50 !== null ? fmtNum(snap.bands.ps.p50, 2) + "x" : "--"}`
+    );
+
+    const fcfY = snap.fcfYieldPct;
+    const fcfPct = snap.bands.fcf.pct;
+    setCard(
+      "val-kpi-fcf",
+      fcfY !== null ? fmtPct(fcfY, 2, false) : "--",
+      fcfY !== null ? (fcfY >= 5 ? "高现金回报" : (fcfY >= 2 ? "中性" : (fcfY >= 0 ? "偏低" : "负FCF"))) : "--",
+      fcfY !== null ? (fcfY >= 5 ? "pill-pass" : (fcfY >= 0 ? "pill-mid" : "pill-hot")) : "pill-fail",
+      fcfPct ?? clamp((fcfY || 0) * 10, 0, 100),
+      fcfY !== null && fcfY >= 0 ? "var(--emerald)" : "var(--crimson)",
+      `TTM FCF ${fmtMoneyShort(snap.qNow?.ttmFcf)} · P/FCF ${snap.pFcf !== null ? fmtNum(snap.pFcf, 1) + "x" : "--"}`
+    );
+
+    const divY = snap.approxDivYieldPct;
+    setCard(
+      "val-kpi-div",
+      divY !== null ? fmtPct(divY, 2, false) : "--",
+      divY !== null ? (divY >= 3.0 ? "高股息" : (divY >= 1.5 ? "稳健" : "低派息")) : "--",
+      divY !== null ? (divY >= 3.0 ? "pill-pass" : "pill-mid") : "pill-fail",
+      clamp((divY || 0) * 18, 0, 100),
+      "var(--emerald)",
+      `近似TTM分红 ${fmtMoneyShort(snap.qNow?.ttmDiv)} · 派息率 ${snap.approxPayoutPct !== null ? snap.approxPayoutPct.toFixed(0) + "%" : "--"}`
+    );
+
+    const peg = snap.peg;
+    setCard(
+      "val-kpi-peg",
+      peg !== null ? fmtNum(peg, 2) : "--",
+      peg !== null ? (peg <= 1.0 ? "PEG ≤ 1 占优" : (peg <= 1.8 ? "合理成长" : "成长溢价偏高")) : "不适用",
+      peg !== null ? (peg <= 1.0 ? "pill-pass" : (peg <= 1.8 ? "pill-mid" : "pill-hot")) : "pill-fail",
+      peg !== null ? clamp((peg / 2.5) * 100, 5, 100) : 0,
+      "var(--indigo)",
+      `${snap.cagrLabel}: ${snap.cagrNp !== null ? fmtPct(snap.cagrNp, 1, true) : "--"}`
+    );
+
+    // Overall valuation summary badge
+    const overallPill = document.getElementById("val-overall-pill");
+    const scores = [];
+    if (pePct !== null) scores.push(pePct <= 25 ? 1 : (pePct >= 75 ? -1 : 0));
+    if (pbPct !== null) scores.push(pbPct <= 25 ? 1 : (pbPct >= 75 ? -1 : 0));
+    if (fcfY !== null) scores.push(fcfY >= 5 ? 1 : (fcfY < 1 ? -1 : 0));
+    const netScore = scores.reduce((a, b) => a + b, 0);
+    if (!scores.length) {
+      overallPill.className = "status-pill pill-fail";
+      overallPill.textContent = "部分指标缺失";
+    } else if (netScore >= 2) {
+      overallPill.className = "status-pill pill-pass";
+      overallPill.textContent = "综合估值偏低 · 具备安全边际";
+    } else if (netScore <= -2) {
+      overallPill.className = "status-pill pill-hot";
+      overallPill.textContent = "综合估值偏高 · 注意回撤风险";
+    } else {
+      overallPill.className = "status-pill pill-mid";
+      overallPill.textContent = "综合估值中性 · 结合成长与DCF交叉验证";
+    }
+  }
+
+  function renderValuationBandChart(snap) {
+    destroyChart("stkValBand");
+    const box = document.getElementById("chart-stk-valband");
+    const statsEl = document.getElementById("val-band-stats");
+    const metric = STATE.stock.valMetric;
+    const band = snap?.bands?.[metric];
+
+    const metaMap = {
+      pe: { name: "PE_TTM (倍)", suffix: "x", lowerIsCheap: true },
+      pb: { name: "市净率 PB (倍)", suffix: "x", lowerIsCheap: true },
+      ps: { name: "市销率 PS_TTM (倍)", suffix: "x", lowerIsCheap: true },
+      fcf: { name: "自由现金流收益率 FCF Yield (%)", suffix: "%", lowerIsCheap: false }
+    };
+    const cfg = metaMap[metric];
+
+    if (!band || !band.validCount || typeof uPlot === "undefined") {
+      statsEl.textContent = "有效历史样本不足";
+      box.innerHTML = `<div class="chart-empty">当前窗口暂无有效的 ${esc(cfg.name)} 历史数据（可能存在亏损或数据缺失）</div>`;
+      return;
+    }
+
+    statsEl.textContent =
+      `有效交易日 ${band.validCount} 天 · 当前 ${fmtNum(band.latestVal)}${cfg.suffix} (${band.pct !== null ? band.pct.toFixed(1) + "%" : "--"} 分位) · P20=${fmtNum(band.p20)}${cfg.suffix} · P50=${fmtNum(band.p50)}${cfg.suffix} · P80=${fmtNum(band.p80)}${cfg.suffix}`;
+
+    const n = band.dates.length;
+    const xIdx = band.dates.map((_, i) => i);
+    const shell = createChartShell("chart-stk-valband", [
+      { color: "#111827", label: cfg.name, thick: true },
+      { color: "#0F766E", label: cfg.lowerIsCheap ? "P20 低估线" : "P80 高回报线" },
+      { color: "#6B7280", label: "P50 历史中位" },
+      { color: "#B91C1C", label: cfg.lowerIsCheap ? "P80 高估线" : "P20 低回报线" }
+    ], "拖拽水平放大 · 双击复位");
+
+    const onCursor = attachBarTooltip(shell.stage, shell.tooltip, band.dates, (idx) => {
+      const v = band.values[idx];
+      return {
+        rows: [
+          { name: cfg.name, color: "#111827", val: v !== null ? `${fmtNum(v)}${cfg.suffix}` : "--" },
+          { name: "不复权价", color: "#6B7280", val: band.prices[idx] !== null ? `¥${fmtNum(band.prices[idx])}` : "--" },
+          { name: "财报期", color: "#3730A3", val: band.qLabels[idx] || "--" }
+        ]
+      };
+    });
+
+    const plot = new uPlot({
+      width: shell.width,
+      height: shell.height,
+      padding: [8, 12, 0, 0],
+      legend: { show: false },
+      cursor: { drag: { x: true, y: false }, points: { size: 5, width: 1.5 } },
+      scales: {
+        x: {
+          time: false,
+          range: (u, min, max) => (min == null || max == null || (min === 0 && max === n - 1))
+            ? [-0.6, Math.max(0.6, n - 0.4)]
+            : [min, max]
+        },
+        y: {
+          range: (u) => {
+            const xMin = Number.isFinite(u.scales.x.min) ? u.scales.x.min : 0;
+            const xMax = Number.isFinite(u.scales.x.max) ? u.scales.x.max : (n - 1);
+            const i0 = Math.max(0, Math.floor(xMin));
+            const i1 = Math.min(n - 1, Math.ceil(xMax));
+            let lo = Infinity;
+            let hi = -Infinity;
+            for (let i = i0; i <= i1; i++) {
+              const v = band.values[i];
+              if (v !== null) {
+                if (v < lo) lo = v;
+                if (v > hi) hi = v;
+              }
+            }
+            if (band.p20 !== null) { lo = Math.min(lo, band.p20); hi = Math.max(hi, band.p20); }
+            if (band.p80 !== null) { lo = Math.min(lo, band.p80); hi = Math.max(hi, band.p80); }
+            if (!Number.isFinite(lo) || !Number.isFinite(hi)) return [0, 10];
+            const pad = (hi - lo) * 0.10 || Math.abs(hi) * 0.1 || 1;
+            return [metric === "fcf" ? lo - pad : Math.max(0, lo - pad), hi + pad];
+          }
+        }
+      },
+      axes: [
+        {
+          stroke: "#6B7280",
+          font: '11px "Noto Sans SC", sans-serif',
+          grid: { show: true, stroke: "#F3F4F6", width: 1 },
+          ticks: { show: true, stroke: "#E5E7EB", width: 1, size: 4 },
+          space: 75,
+          incrs: [1, 2, 5, 10, 20, 30, 60, 120, 250, 500],
+          values: (u, splits) => splits.map(v => {
+            if (Math.abs(v - Math.round(v)) > 1e-6) return "";
+            const i = Math.round(v);
+            return (i >= 0 && i < n) ? band.dates[i].slice(0, 7) : "";
+          })
+        },
+        {
+          stroke: "#6B7280",
+          font: '11px "Noto Sans SC", sans-serif',
+          size: 54,
+          gap: 6,
+          grid: { show: true, stroke: "#F3F4F6", width: 1 },
+          ticks: { show: false },
+          values: (u, splits) => splits.map(v => v == null ? "" : `${Number(v).toFixed(1)}${cfg.suffix}`)
+        }
+      ],
+      series: [
+        {},
+        { label: cfg.name, stroke: "#111827", width: 1.8, points: { show: false } }
+      ],
+      hooks: {
+        setCursor: [onCursor],
+        drawClear: [(u) => {
+          if (!u.bbox || u.bbox.width <= 0 || u.bbox.height <= 0) return;
+          if (band.p20 === null || band.p50 === null || band.p80 === null) return;
+          const ctx = u.ctx;
+          const dpr = window.devicePixelRatio || 1;
+          const yMin = u.scales.y.min;
+          const yMax = u.scales.y.max;
+          if (!Number.isFinite(yMin) || !Number.isFinite(yMax)) return;
+
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(u.bbox.left, u.bbox.top, u.bbox.width, u.bbox.height);
+          ctx.clip();
+
+          // Shade undervalued and overvalued zones
+          const yP20 = u.valToPos(band.p20, "y", true);
+          const yP80 = u.valToPos(band.p80, "y", true);
+          const yBot = u.bbox.top + u.bbox.height;
+          const yTop = u.bbox.top;
+
+          if (cfg.lowerIsCheap) {
+            ctx.fillStyle = "rgba(15, 118, 110, 0.08)";
+            ctx.fillRect(u.bbox.left, yP20, u.bbox.width, Math.max(0, yBot - yP20));
+            ctx.fillStyle = "rgba(185, 28, 28, 0.07)";
+            ctx.fillRect(u.bbox.left, yTop, u.bbox.width, Math.max(0, yP80 - yTop));
+          } else {
+            ctx.fillStyle = "rgba(15, 118, 110, 0.08)";
+            ctx.fillRect(u.bbox.left, yTop, u.bbox.width, Math.max(0, yP80 - yTop));
+            ctx.fillStyle = "rgba(185, 28, 28, 0.07)";
+            ctx.fillRect(u.bbox.left, yP20, u.bbox.width, Math.max(0, yBot - yP20));
+          }
+
+          const drawBandLine = (val, color, dash) => {
+            if (val < yMin || val > yMax) return;
+            const py = u.valToPos(val, "y", true);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1.2 * dpr;
+            ctx.setLineDash(dash.map(x => x * dpr));
+            ctx.beginPath();
+            ctx.moveTo(u.bbox.left, py);
+            ctx.lineTo(u.bbox.left + u.bbox.width, py);
+            ctx.stroke();
+          };
+          drawBandLine(band.p20, cfg.lowerIsCheap ? "#0F766E" : "#B91C1C", [5, 4]);
+          drawBandLine(band.p50, "#6B7280", [3, 3]);
+          drawBandLine(band.p80, cfg.lowerIsCheap ? "#B91C1C" : "#0F766E", [5, 4]);
+
+          ctx.restore();
+        }]
+      }
+    }, [xIdx, band.values], shell.stage);
+
+    shell.stage.addEventListener("mouseleave", () => { shell.tooltip.style.display = "none"; });
+    CHARTS.stkValBand = { plot, containerId: "chart-stk-valband" };
+  }
+
+  function renderFootballField(snap) {
+    const container = document.getElementById("val-football");
+    const sumEl = document.getElementById("val-dcf-summary");
+    const curPrice = snap.unadjPrice;
+    const shares = snap.shares;
+    const baseCF = getActiveBaseCashFlow(snap);
+    const { dcfG1, dcfG2, dcfR, dcfMos } = STATE.stock;
+
+    const dcfMidObj = calcTwoStageDCF(baseCF, shares, dcfG1, dcfG2, dcfR);
+    const dcfLowObj = calcTwoStageDCF(baseCF, shares, dcfG1, dcfG2, Math.min(18, dcfR + 1.0));
+    const dcfHighObj = calcTwoStageDCF(baseCF, shares, dcfG1, dcfG2, Math.max(dcfG2 + 1.0, dcfR - 1.0));
+
+    const dcfMid = dcfMidObj?.valuePerShare ?? null;
+    const dcfTarget = dcfMid !== null ? dcfMid * (1 - dcfMos / 100) : null;
+    if (dcfMid !== null && curPrice > 0) {
+      const upPct = ((dcfMid / curPrice - 1) * 100);
+      sumEl.textContent = `DCF 中枢 ¥${fmtNum(dcfMid)} (${fmtPct(upPct, 1, true)}) · 安全边际买点 ¥${fmtNum(dcfTarget)}`;
+    } else {
+      sumEl.textContent = baseCF <= 0 ? "所选基期现金流 ≤ 0，可切换至“TTM 归母净利”" : "参数无效 (须满足 r > g₂ + 0.5%)";
+    }
+
+    const rimMid = calcRIM(snap.bvps, snap.roeTtm, snap.approxPayoutPct, dcfG2, dcfR);
+    const rimLow = calcRIM(snap.bvps, snap.roeTtm, snap.approxPayoutPct, dcfG2, Math.min(18, dcfR + 1.0));
+    const rimHigh = calcRIM(snap.bvps, snap.roeTtm, snap.approxPayoutPct, dcfG2, Math.max(dcfG2 + 1.0, dcfR - 1.0));
+
+    const peBand = snap.bands.pe;
+    const peLow = (snap.epsTtm > 0 && peBand.p20 !== null) ? snap.epsTtm * peBand.p20 : null;
+    const peMid = (snap.epsTtm > 0 && peBand.p50 !== null) ? snap.epsTtm * peBand.p50 : null;
+    const peHigh = (snap.epsTtm > 0 && peBand.p80 !== null) ? snap.epsTtm * peBand.p80 : null;
+
+    const pbBand = snap.bands.pb;
+    const pbLow = (snap.bvps > 0 && pbBand.p20 !== null) ? snap.bvps * pbBand.p20 : null;
+    const pbMid = (snap.bvps > 0 && pbBand.p50 !== null) ? snap.bvps * pbBand.p50 : null;
+    const pbHigh = (snap.bvps > 0 && pbBand.p80 !== null) ? snap.bvps * pbBand.p80 : null;
+
+    const models = [
+      { name: "两阶段 DCF", sub: `r=${dcfR.toFixed(1)}%±1% | MOS ${dcfMos}%`, low: dcfLowObj?.valuePerShare, mid: dcfMid, high: dcfHighObj?.valuePerShare, target: dcfTarget, color: "" },
+      { name: "剩余收益 RIM", sub: `PB-ROE 5年渐近`, low: rimLow, mid: rimMid, high: rimHigh, color: "indigo" },
+      { name: "历史 PE_TTM 锚", sub: `P20 ~ P50 ~ P80`, low: peLow, mid: peMid, high: peHigh, color: "ochre" },
+      { name: "历史 PB 锚", sub: `P20 ~ P50 ~ P80`, low: pbLow, mid: pbMid, high: pbHigh, color: "ochre" }
+    ];
+
+    const allNums = [];
+    if (curPrice > 0) allNums.push(curPrice);
+    for (const m of models) {
+      if (m.low > 0) allNums.push(m.low);
+      if (m.mid > 0) allNums.push(m.mid);
+      if (m.high > 0) allNums.push(m.high);
+      if (m.target > 0) allNums.push(m.target);
+    }
+
+    if (allNums.length < 2) {
+      container.innerHTML = `<div class="flat" style="text-align:center;padding:30px 0;">当前标的可计算模型较少（可能存在亏损或样本不足）</div>`;
+      return;
+    }
+
+    const rawMin = Math.min(...allNums);
+    const rawMax = Math.max(...allNums);
+    const axisMin = Math.max(0, rawMin * 0.85);
+    const axisMax = Math.max(axisMin + 1, rawMax * 1.10);
+    const toPct = (v) => clamp(((v - axisMin) / (axisMax - axisMin)) * 100, 0, 100);
+    const curPct = curPrice > 0 ? toPct(curPrice) : null;
+
+    container.innerHTML = models.map((m, idx) => {
+      const hasRange = m.low > 0 && m.high > 0 && m.mid > 0;
+      const lo = hasRange ? Math.min(m.low, m.high) : null;
+      const hi = hasRange ? Math.max(m.low, m.high) : null;
+      const leftPct = lo !== null ? toPct(lo) : 0;
+      const widthPct = (lo !== null && hi !== null) ? Math.max(2, toPct(hi) - leftPct) : 0;
+      const midPct = m.mid > 0 ? toPct(m.mid) : null;
+      const mosPct = m.target > 0 ? toPct(m.target) : null;
+      const upside = (m.mid > 0 && curPrice > 0) ? ((m.mid / curPrice - 1) * 100) : null;
+
+      return `
+        <div class="fb-row">
+          <div class="fb-name">${esc(m.name)}<small>${esc(m.sub)}</small></div>
+          <div class="fb-track">
+            ${hasRange ? `<div class="fb-band ${m.color}" style="left:${leftPct.toFixed(2)}%;width:${widthPct.toFixed(2)}%;"></div>` : ""}
+            ${mosPct !== null ? `<div class="fb-mos-tick" style="left:${mosPct.toFixed(2)}%;" title="安全边际买点 ¥${fmtNum(m.target)}"></div>` : ""}
+            ${midPct !== null ? `<div class="fb-mid-dot" style="left:${midPct.toFixed(2)}%;" title="中枢 ¥${fmtNum(m.mid)}"></div>` : ""}
+            ${curPct !== null ? `<div class="fb-cur-line" style="left:${curPct.toFixed(2)}%;">${idx === 0 ? `<span class="fb-cur-label">现价 ¥${fmtNum(curPrice)}</span>` : ""}</div>` : ""}
+          </div>
+          <div class="fb-vals">
+            ${hasRange
+              ? `<strong>¥${fmtNum(m.mid)}</strong><small class="${upside !== null ? (upside >= 0 ? "down" : "up") : "flat"}" style="color:${upside >= 0 ? "var(--emerald)" : "var(--crimson)"};">${upside !== null ? fmtPct(upside, 1, true) : "--"} (${fmtNum(lo, 0)}~${fmtNum(hi, 0)})</small>`
+              : `<span class="flat">不适用</span>`}
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  function renderDcfSensitivity(snap) {
+    const wrap = document.getElementById("val-sens-wrap");
+    const baseCF = getActiveBaseCashFlow(snap);
+    const shares = snap.shares;
+    const curPrice = snap.unadjPrice;
+    const { dcfG1, dcfG2, dcfR } = STATE.stock;
+
+    if (!(baseCF > 0) || !(shares > 0)) {
+      wrap.innerHTML = `<div class="flat" style="text-align:center;padding:30px 0;">当前基期现金流 ≤ 0，无法生成 DCF 敏感性矩阵（请切换为“TTM 归母净利”或检查现金流）</div>`;
+      return;
+    }
+
+    const rSteps = [-1.0, -0.5, 0, 0.5, 1.0].map(d => +(clamp(dcfR + d, Math.max(dcfG2 + 1.0, 5.0), 16.0)).toFixed(2));
+    const gSteps = [-4, -2, 0, 2, 4].map(d => +(dcfG1 + d).toFixed(1));
+
+    let html = `<table class="sens-table"><thead><tr><th class="left">r \\ g₁</th>${gSteps.map(g => `<th>${g.toFixed(1)}%</th>`).join("")}</tr></thead><tbody>`;
+    for (let ri = 0; ri < rSteps.length; ri++) {
+      const rVal = rSteps[ri];
+      html += `<tr><td class="left"><strong>${rVal.toFixed(2)}%</strong></td>`;
+      for (let gi = 0; gi < gSteps.length; gi++) {
+        const gVal = gSteps[gi];
+        const res = calcTwoStageDCF(baseCF, shares, gVal, dcfG2, rVal);
+        const val = res?.valuePerShare ?? null;
+        const isCenter = ri === 2 && gi === 2;
+        if (val === null) {
+          html += `<td class="flat">--</td>`;
+          continue;
+        }
+        const diff = curPrice > 0 ? ((val / curPrice - 1) * 100) : null;
+        let cls = "hm-fair";
+        if (diff !== null) {
+          if (diff >= 15) cls = "hm-cheap";
+          else if (diff <= -10) cls = "hm-rich";
+        }
+        if (isCenter) cls += " hm-center";
+        html += `<td class="${cls}">¥${fmtNum(val, val >= 100 ? 0 : 1)}<span class="sens-sub">${diff !== null ? fmtPct(diff, 0, true) : ""}</span></td>`;
+      }
+      html += `</tr>`;
+    }
+    html += `</tbody></table>`;
+    wrap.innerHTML = html;
+  }
+
+  function renderDuPont(snap) {
+    const grid = document.getElementById("val-dupont-grid");
+    const acc = snap.accrualRatio;
+    const netCash = snap.netCashToMktCap;
+    const cards = [
+      {
+        lbl: "TTM ROE (估算)",
+        val: snap.roeTtm !== null ? fmtPct(snap.roeTtm, 2, false) : "--",
+        sub: "净利率 × 周转率 × 权益乘数"
+      },
+      {
+        lbl: "销售净利率 (TTM)",
+        val: snap.netMargin !== null ? fmtPct(snap.netMargin, 2, false) : "--",
+        sub: "盈利护城河厚度"
+      },
+      {
+        lbl: "总资产周转率 (TTM)",
+        val: snap.assetTurnover !== null ? `${fmtNum(snap.assetTurnover, 2)}x` : "--",
+        sub: "TTM营收 / 资产总计"
+      },
+      {
+        lbl: "权益乘数",
+        val: snap.equityMultiplier !== null ? `${fmtNum(snap.equityMultiplier, 2)}x` : "--",
+        sub: "资产总计 / 股东权益"
+      },
+      {
+        lbl: "应计比率 / 净现金比",
+        val: `${acc !== null ? fmtPct(acc, 1, true) : "--"} / ${netCash !== null ? fmtPct(netCash, 1, true) : "--"}`,
+        sub: acc !== null && acc <= 0 ? "应计 ≤ 0（盈利含金量高）" : "净现金=(现金-总负债)/市值"
+      }
+    ];
+    grid.innerHTML = cards.map(c => `
+      <div class="dp-card">
+        <div class="dp-lbl">${esc(c.lbl)}</div>
+        <div class="dp-val">${esc(c.val)}</div>
+        <div class="dp-sub">${esc(c.sub)}</div>
+      </div>
+    `).join("");
+  }
+
+  function renderValuationModels() {
+    const snap = STATE.stock.valSnap;
+    if (!snap) return;
+    syncValuationControls();
+    renderFootballField(snap);
+    renderDcfSensitivity(snap);
+  }
+
+  function renderStockValuation() {
+    const snap = computeValuationSnapshot();
+    STATE.stock.valSnap = snap;
+    autoFitDcfDefaults(snap);
+    renderValuationKPIs(snap);
+    if (STATE.activeTab === "stock") {
+      renderValuationBandChart(snap);
+    }
+    renderValuationModels();
+    renderDuPont(snap);
+  }
+
   function renderAllStockCharts() {
     if (STATE.activeTab !== "stock") return;
     renderStockKlineCharts();
+    if (STATE.stock.valSnap) {
+      renderValuationBandChart(STATE.stock.valSnap);
+    }
     renderStockFinCharts();
   }
 
   function resizeStockCharts() {
     if (STATE.activeTab !== "stock") return;
-    for (const entry of [CHARTS.stkPrice, CHARTS.stkVol, CHARTS.stkProfit, CHARTS.stkCash]) {
+    for (const entry of [CHARTS.stkPrice, CHARTS.stkVol, CHARTS.stkValBand, CHARTS.stkProfit, CHARTS.stkCash]) {
       if (!entry || !entry.plot || !entry.containerId) continue;
       const container = document.getElementById(entry.containerId);
       if (!container) continue;
@@ -3455,6 +4832,10 @@
       });
       clearGlobalAlert();
       STATE.stock.klineData = kData;
+      if (STATE.stock.adjust === "forward" && STATE.stock.klineLimit >= 1250) {
+        STATE.stock.valKlineData = kData;
+        renderStockValuation();
+      }
       renderStockKPIs();
       renderStockKlineCharts();
     } catch (err) {
@@ -3471,6 +4852,10 @@
       });
       clearGlobalAlert();
       STATE.stock.finData = finData;
+      if (STATE.stock.stmtLimit >= 40) {
+        STATE.stock.valFinData = finData;
+        renderStockValuation();
+      }
       renderStockKPIs();
       renderStockFinCharts();
       renderStatementTable();
@@ -3483,31 +4868,57 @@
     const clean = (code || STATE.stock.code || "600519.SH").trim().toUpperCase();
     STATE.stock.code = clean;
     STATE.stock.loadedCode = clean;
+    STATE.stock.dcfAutoFittedCode = "";
     document.querySelectorAll(".stk-chip").forEach(b => b.classList.toggle("active", b.dataset.code === clean));
 
     document.getElementById("chart-stk-price").innerHTML = `<div class="chart-empty">正在载入 ${esc(clean)} 行情…</div>`;
     document.getElementById("chart-stk-vol").innerHTML = `<div class="chart-empty">载入中…</div>`;
+    document.getElementById("chart-stk-valband").innerHTML = `<div class="chart-empty">计算历史估值分位带中…</div>`;
     document.getElementById("chart-stk-profit").innerHTML = `<div class="chart-empty">正在载入财报…</div>`;
     document.getElementById("chart-stk-cash").innerHTML = `<div class="chart-empty">载入中…</div>`;
 
     try {
-      const [kData, finData] = await Promise.all([
+      const needExtraValKline = !(STATE.stock.adjust === "forward" && STATE.stock.klineLimit >= 1250);
+      const valFinLimit = Math.max(40, STATE.stock.stmtLimit);
+      const reqs = [
         quantFetch(`/api/stocks/${encodeURIComponent(clean)}/kline`, {
           adjust: STATE.stock.adjust,
           limit: STATE.stock.klineLimit
         }),
         quantFetch(`/api/stocks/${encodeURIComponent(clean)}/financials`, {
-          limit: STATE.stock.stmtLimit
+          limit: valFinLimit
         })
-      ]);
+      ];
+      if (needExtraValKline) {
+        reqs.push(quantFetch(`/api/stocks/${encodeURIComponent(clean)}/kline`, {
+          adjust: "forward",
+          limit: 1250
+        }));
+      }
+
+      const [kData, finData, valKData] = await Promise.all(reqs);
       clearGlobalAlert();
       STATE.stock.klineData = kData;
-      STATE.stock.finData = finData;
+      STATE.stock.valKlineData = needExtraValKline ? valKData : kData;
+      STATE.stock.valFinData = finData;
+      if (STATE.stock.stmtLimit < valFinLimit) {
+        STATE.stock.finData = {
+          symbol: finData.symbol,
+          income_statements: (finData.income_statements || []).slice(0, STATE.stock.stmtLimit),
+          balance_sheets: (finData.balance_sheets || []).slice(0, STATE.stock.stmtLimit),
+          cash_flow_statements: (finData.cash_flow_statements || []).slice(0, STATE.stock.stmtLimit)
+        };
+      } else {
+        STATE.stock.finData = finData;
+      }
+
       renderStockKPIs();
+      renderStockValuation();
       renderAllStockCharts();
       renderStatementTable();
     } catch (err) {
       document.getElementById("chart-stk-price").innerHTML = `<div class="chart-empty">标的数据加载失败：${esc(err.message)}</div>`;
+      document.getElementById("chart-stk-valband").innerHTML = `<div class="chart-empty">--</div>`;
       document.getElementById("chart-stk-profit").innerHTML = `<div class="chart-empty">--</div>`;
       document.getElementById("chart-stk-cash").innerHTML = `<div class="chart-empty">--</div>`;
       showGlobalAlert(err);
@@ -3701,6 +5112,68 @@
       document.getElementById(id).addEventListener("change", (e) => {
         STATE.stock[id.replace("chk-", "")] = e.target.checked;
         renderStockKlineCharts();
+      });
+    });
+
+    // Valuation controls
+    document.querySelectorAll("#seg-val-metric button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll("#seg-val-metric button").forEach(b => b.classList.toggle("active", b === btn));
+        STATE.stock.valMetric = btn.dataset.val;
+        if (STATE.stock.valSnap) renderValuationBandChart(STATE.stock.valSnap);
+      });
+    });
+    document.querySelectorAll("#seg-val-window button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll("#seg-val-window button").forEach(b => b.classList.toggle("active", b === btn));
+        STATE.stock.valWindow = Number(btn.dataset.val) || 1250;
+        if (STATE.stock.valFinData || STATE.stock.finData) renderStockValuation();
+      });
+    });
+    document.querySelectorAll("#seg-dcf-base button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll("#seg-dcf-base button").forEach(b => b.classList.toggle("active", b === btn));
+        STATE.stock.dcfBase = btn.dataset.val;
+        renderValuationModels();
+      });
+    });
+    document.querySelectorAll(".val-preset").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".val-preset").forEach(b => b.classList.toggle("active", b === btn));
+        const snap = STATE.stock.valSnap;
+        const baseG = snap?.cagrNp !== null && snap?.cagrNp !== undefined
+          ? Math.round(clamp(snap.cagrNp, 3, 18) * 2) / 2
+          : 8.0;
+        const mode = btn.dataset.preset;
+        if (mode === "conservative") {
+          STATE.stock.dcfG1 = Math.max(-2, +(baseG - 4).toFixed(1));
+          STATE.stock.dcfG2 = 2.0;
+          STATE.stock.dcfR = 10.5;
+          STATE.stock.dcfMos = 25;
+        } else if (mode === "optimistic") {
+          STATE.stock.dcfG1 = Math.min(28, +(baseG + 4).toFixed(1));
+          STATE.stock.dcfG2 = 3.0;
+          STATE.stock.dcfR = 8.0;
+          STATE.stock.dcfMos = 15;
+        } else {
+          STATE.stock.dcfG1 = baseG;
+          STATE.stock.dcfG2 = 2.5;
+          STATE.stock.dcfR = 9.0;
+          STATE.stock.dcfMos = 20;
+        }
+        renderValuationModels();
+      });
+    });
+    [
+      ["rng-dcf-g1", "dcfG1"],
+      ["rng-dcf-g2", "dcfG2"],
+      ["rng-dcf-r", "dcfR"],
+      ["rng-dcf-mos", "dcfMos"]
+    ].forEach(([id, key]) => {
+      document.getElementById(id).addEventListener("input", (e) => {
+        STATE.stock[key] = Number(e.target.value);
+        document.querySelectorAll(".val-preset").forEach(b => b.classList.remove("active"));
+        renderValuationModels();
       });
     });
 
