@@ -1927,8 +1927,8 @@
               <span class="slider-name">股权折现率 r (WACC)</span>
               <span id="lbl-dcf-r" class="slider-val">9.00%</span>
             </div>
-            <input id="rng-dcf-r" type="range" min="6.0" max="14.0" step="0.25" value="9.0" />
-            <div class="slider-hint">要求回报率，越高代表要求越严苛安全边际</div>
+            <input id="rng-dcf-r" type="range" min="5.0" max="15.0" step="0.25" value="9.0" />
+            <div id="hint-dcf-r" class="slider-hint">基于股息+增速与波动率拟合</div>
           </div>
 
           <div class="slider-box">
@@ -4123,6 +4123,123 @@
     };
   }
 
+  function buildDcfScenarioModel(quarters, kAdj, kUnadj, cagrNp, approxDivYieldPct, impliedMktCap, isFinancial, qNow) {
+    const roundHalf = (v) => Math.round(v * 2) / 2;
+    const roundQtr = (v) => Math.round(v * 4) / 4;
+
+    // 5-year rolling annual TTM net profit YoY growth series
+    const yoySamples = [];
+    for (let k = 0; k < 5; k++) {
+      const iC = quarters.length - 1 - 4 * k;
+      const iP = quarters.length - 1 - 4 * (k + 1);
+      if (iP >= 0 && quarters[iC]?.ttmNp > 0 && quarters[iP]?.ttmNp > 0) {
+        const yoy = (quarters[iC].ttmNp / quarters[iP].ttmNp - 1) * 100;
+        if (Number.isFinite(yoy)) {
+          yoySamples.push({ label: quarters[iC].label, yoy });
+        }
+      }
+    }
+
+    const n = yoySamples.length;
+    const rawMeanUnclipped = n ? yoySamples.reduce((s, x) => s + x.yoy, 0) / n : null;
+    const winMean = yoySamples.map(x => clamp(x.yoy, -20, 30));
+    const winVol = yoySamples.map(x => clamp(x.yoy, -40, 60));
+
+    const mean5Y = n ? (winMean.reduce((a, b) => a + b, 0) / n) : (cagrNp ?? 6.0);
+    const meanVol = n ? (winVol.reduce((a, b) => a + b, 0) / n) : 0;
+    const std5Y = n > 1
+      ? Math.sqrt(winVol.reduce((a, b) => a + (b - meanVol) ** 2, 0) / (n - 1))
+      : 4.0;
+
+    const baseG1 = roundHalf(clamp(mean5Y, 1.0, 18.0));
+    const deltaG1 = roundHalf(clamp(std5Y * 0.35, 1.0, Math.min(3.5, Math.max(1.5, baseG1 * 0.5))));
+    const baseG2 = baseG1 <= 4.0 ? 2.0 : 2.5;
+
+    // 1Y realized annualized volatility from up to 250 daily bars
+    const volBars = (kAdj?.items?.length >= 20 ? kAdj.items : kUnadj?.items) || [];
+    const volSlice = volBars.slice(-250);
+    const rets = [];
+    for (let i = 1; i < volSlice.length; i++) {
+      const p0 = Number(volSlice[i - 1].close);
+      const p1 = Number(volSlice[i].close);
+      if (p0 > 0 && p1 > 0) rets.push(Math.log(p1 / p0));
+    }
+    let vol1Y = 24.0;
+    if (rets.length >= 20) {
+      const rMean = rets.reduce((a, b) => a + b, 0) / rets.length;
+      const rVar = rets.reduce((a, b) => a + (b - rMean) ** 2, 0) / Math.max(1, rets.length - 1);
+      vol1Y = Math.sqrt(rVar * 242) * 100;
+    }
+
+    // Stock-specific cost of equity blending Gordon implied return and volatility-based CAPM
+    const rf = 2.0;
+    const erp = 5.5;
+    const betaVol = clamp(vol1Y / 20.0, 0.72, 1.65);
+    const sizeAdj = impliedMktCap >= 3000e8 ? -0.25 : (impliedMktCap > 0 && impliedMktCap < 300e8 ? 0.50 : 0);
+    const debtRatio = (qNow?.assets > 0 && qNow?.debt != null) ? (qNow.debt / qNow.assets) * 100 : 0;
+    const levAdj = (!isFinancial && debtRatio > 70) ? 0.35 : 0;
+    const rCapm = clamp(rf + erp * betaVol + sizeAdj + levAdj, 6.25, 11.75);
+
+    let rGordon = null;
+    let rTarget = rCapm;
+    if (approxDivYieldPct !== null && approxDivYieldPct >= 1.5) {
+      const gEff = Math.min(baseG1, baseG2 + (baseG1 - baseG2) * 0.40);
+      rGordon = clamp(approxDivYieldPct * (1 + gEff / 100) + gEff, 6.25, 11.50);
+      rTarget = 0.55 * rGordon + 0.45 * rCapm;
+    }
+    const baseR = roundQtr(clamp(rTarget, Math.max(6.25, baseG2 + 2.5), 12.0));
+    const deltaR = vol1Y >= 32 ? 0.75 : 0.50;
+
+    const consG2 = Math.max(1.0, +(baseG2 - 0.5).toFixed(1));
+    const optG2 = Math.min(3.5, +(baseG2 + 0.5).toFixed(1));
+    const presets = {
+      conservative: {
+        g1: +(baseG1 - deltaG1).toFixed(1),
+        g2: consG2,
+        r: Math.min(15.0, +(baseR + deltaR).toFixed(2)),
+        mos: 25
+      },
+      neutral: {
+        g1: baseG1,
+        g2: baseG2,
+        r: baseR,
+        mos: 20
+      },
+      optimistic: {
+        g1: Math.min(28.0, +(baseG1 + deltaG1).toFixed(1)),
+        g2: optG2,
+        r: Math.max(optG2 + 1.5, +(baseR - deltaR).toFixed(2)),
+        mos: 15
+      }
+    };
+
+    const g1Hint = n >= 2
+      ? `近${n}年净利YoY均值 ${rawMeanUnclipped.toFixed(1)}% · 波动带 ±${deltaG1.toFixed(1)}%`
+      : "历史年数不足，按可用净利增速拟合";
+    const g1Title = n >= 2
+      ? `近${n}年年度净利YoY: ${yoySamples.map(x => `${x.label} ${fmtPct(x.yoy, 1, true)}`).join(", ")}`
+      : "";
+    const rHint = rGordon !== null
+      ? `股息+增速(${rGordon.toFixed(1)}%)与波动率(${vol1Y.toFixed(0)}%)拟合 · 情景±${deltaR.toFixed(2)}%`
+      : `无风险利率+波动率(${vol1Y.toFixed(0)}%)CAPM拟合 · 情景±${deltaR.toFixed(2)}%`;
+
+    return {
+      mean5Y,
+      rawMeanUnclipped,
+      std5Y,
+      vol1Y,
+      rCapm,
+      rGordon,
+      deltaG1,
+      deltaR,
+      yoySamples,
+      presets,
+      g1Hint,
+      g1Title,
+      rHint
+    };
+  }
+
   function computeValuationSnapshot() {
     const finData = STATE.stock.valFinData || STATE.stock.finData;
     const kMain = STATE.stock.klineData;
@@ -4200,6 +4317,17 @@
       ttmDivActual = qNow?.ttmDiv ?? null;
     }
 
+    const dcfModel = buildDcfScenarioModel(
+      quarters,
+      kAdj,
+      kUnadj,
+      cagrNp,
+      approxDivYieldPct,
+      impliedMktCap,
+      Boolean(qNow?.isFinancial),
+      qNow
+    );
+
     const peg = (peTtm > 0 && cagrNp > 0) ? peTtm / cagrNp : null;
 
     // DuPont & quality
@@ -4240,6 +4368,7 @@
       fcf3yAvg,
       cagrNp,
       cagrLabel,
+      dcfModel,
       peTtm,
       pb,
       psTtm,
@@ -4268,12 +4397,11 @@
     if (STATE.stock.dcfAutoFittedCode === code) return;
     STATE.stock.dcfAutoFittedCode = code;
 
-    const rawG = snap.cagrNp !== null ? snap.cagrNp : 8;
-    const fittedG1 = Math.round(clamp(rawG, 3, 18) * 2) / 2;
-    STATE.stock.dcfG1 = fittedG1;
-    STATE.stock.dcfG2 = 2.5;
-    STATE.stock.dcfR = 9.0;
-    STATE.stock.dcfMos = 20;
+    const neut = snap?.dcfModel?.presets?.neutral;
+    STATE.stock.dcfG1 = neut ? neut.g1 : 7.0;
+    STATE.stock.dcfG2 = neut ? neut.g2 : 2.5;
+    STATE.stock.dcfR = neut ? neut.r : 9.0;
+    STATE.stock.dcfMos = neut ? neut.mos : 20;
 
     const ttmFcf = snap.qNow?.ttmFcf ?? 0;
     const ttmNp = snap.qNow?.ttmNp ?? 0;
@@ -4310,6 +4438,17 @@
     document.getElementById("lbl-dcf-r").textContent = `${STATE.stock.dcfR.toFixed(2)}%`;
     document.getElementById("lbl-dcf-mos").textContent = `${STATE.stock.dcfMos}%`;
 
+    const model = STATE.stock.valSnap?.dcfModel;
+    const g1HintEl = document.getElementById("hint-dcf-g1");
+    if (g1HintEl && model) {
+      g1HintEl.textContent = model.g1Hint;
+      g1HintEl.title = model.g1Title || "";
+    }
+    const rHintEl = document.getElementById("hint-dcf-r");
+    if (rHintEl && model) {
+      rHintEl.textContent = model.rHint;
+    }
+
     document.querySelectorAll("#seg-dcf-base button").forEach(b => b.classList.toggle("active", b.dataset.val === STATE.stock.dcfBase));
     document.querySelectorAll("#seg-val-metric button").forEach(b => b.classList.toggle("active", b.dataset.val === STATE.stock.valMetric));
     document.querySelectorAll("#seg-val-window button").forEach(b => b.classList.toggle("active", String(b.dataset.val) === String(STATE.stock.valWindow)));
@@ -4334,6 +4473,27 @@
       pvStage1: pvStage1 / shares,
       pvTerminal: pvTerminal / shares
     };
+  }
+
+  function solveImpliedReturn(baseCF, shares, g1Pct, g2Pct, curPrice) {
+    if (!(baseCF > 0) || !(shares > 0) || !(curPrice > 0)) return null;
+    const rLoInit = g2Pct + 0.55;
+    const rHiInit = 45.0;
+    const vAtLo = calcTwoStageDCF(baseCF, shares, g1Pct, g2Pct, rLoInit)?.valuePerShare;
+    const vAtHi = calcTwoStageDCF(baseCF, shares, g1Pct, g2Pct, rHiInit)?.valuePerShare;
+    if (!(vAtLo > 0) || !(vAtHi > 0)) return null;
+    if (curPrice >= vAtLo || curPrice <= vAtHi) return null;
+
+    let lo = rLoInit;
+    let hi = rHiInit;
+    for (let iter = 0; iter < 28; iter++) {
+      const mid = (lo + hi) / 2;
+      const vMid = calcTwoStageDCF(baseCF, shares, g1Pct, g2Pct, mid)?.valuePerShare;
+      if (!(vMid > 0)) return null;
+      if (vMid > curPrice) lo = mid;
+      else hi = mid;
+    }
+    return (lo + hi) / 2;
   }
 
   function calcRIM(bvps, roePct, payoutPct, g2Pct, rPct) {
@@ -4686,9 +4846,11 @@
 
     const dcfMid = dcfMidObj?.valuePerShare ?? null;
     const dcfTarget = dcfMid !== null ? dcfMid * (1 - dcfMos / 100) : null;
+    const impliedR = solveImpliedReturn(baseCF, shares, dcfG1, dcfG2, curPrice);
     if (dcfMid !== null && curPrice > 0) {
       const upPct = ((dcfMid / curPrice - 1) * 100);
-      sumEl.textContent = `${dcfTag} ¥${fmtNum(dcfMid)} (${fmtPct(upPct, 1, true)}) · 安全边际买点 ¥${fmtNum(dcfTarget)}`;
+      const irrTxt = impliedR !== null ? ` · 现价隐含回报 ${impliedR.toFixed(2)}%` : "";
+      sumEl.textContent = `${dcfTag} ¥${fmtNum(dcfMid)} (${fmtPct(upPct, 1, true)}) · 安全边际买点 ¥${fmtNum(dcfTarget)}${irrTxt}`;
     } else {
       sumEl.textContent = baseCF <= 0 ? "所选基期现金流 ≤ 0，可切换至“TTM 归母净利”" : "参数无效 (须满足 r > g₂ + 0.5%)";
     }
@@ -5520,25 +5682,30 @@
       btn.addEventListener("click", () => {
         document.querySelectorAll(".val-preset").forEach(b => b.classList.toggle("active", b === btn));
         const snap = STATE.stock.valSnap;
-        const baseG = snap?.cagrNp !== null && snap?.cagrNp !== undefined
-          ? Math.round(clamp(snap.cagrNp, 3, 18) * 2) / 2
-          : 8.0;
         const mode = btn.dataset.preset;
-        if (mode === "conservative") {
-          STATE.stock.dcfG1 = Math.max(-2, +(baseG - 4).toFixed(1));
-          STATE.stock.dcfG2 = 2.0;
-          STATE.stock.dcfR = 10.5;
-          STATE.stock.dcfMos = 25;
-        } else if (mode === "optimistic") {
-          STATE.stock.dcfG1 = Math.min(28, +(baseG + 4).toFixed(1));
-          STATE.stock.dcfG2 = 3.0;
-          STATE.stock.dcfR = 8.0;
-          STATE.stock.dcfMos = 15;
+        const p = snap?.dcfModel?.presets?.[mode];
+        if (p) {
+          STATE.stock.dcfG1 = p.g1;
+          STATE.stock.dcfG2 = p.g2;
+          STATE.stock.dcfR = p.r;
+          STATE.stock.dcfMos = p.mos;
         } else {
-          STATE.stock.dcfG1 = baseG;
-          STATE.stock.dcfG2 = 2.5;
-          STATE.stock.dcfR = 9.0;
-          STATE.stock.dcfMos = 20;
+          if (mode === "conservative") {
+            STATE.stock.dcfG1 = 4.0;
+            STATE.stock.dcfG2 = 2.0;
+            STATE.stock.dcfR = 9.5;
+            STATE.stock.dcfMos = 25;
+          } else if (mode === "optimistic") {
+            STATE.stock.dcfG1 = 10.0;
+            STATE.stock.dcfG2 = 3.0;
+            STATE.stock.dcfR = 8.5;
+            STATE.stock.dcfMos = 15;
+          } else {
+            STATE.stock.dcfG1 = 7.0;
+            STATE.stock.dcfG2 = 2.5;
+            STATE.stock.dcfR = 9.0;
+            STATE.stock.dcfMos = 20;
+          }
         }
         renderValuationModels();
       });
