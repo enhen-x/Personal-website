@@ -1838,7 +1838,7 @@
 
         <div class="kpi-card">
           <div class="kpi-head">
-            <span class="kpi-title">近似股息率</span>
+            <span class="kpi-title">股息率 (TTM)</span>
             <span id="val-kpi-div-pill" class="status-pill pill-mid">--</span>
           </div>
           <div id="val-kpi-div" class="kpi-num">--</div>
@@ -1898,7 +1898,7 @@
               <button type="button" data-val="fcf_ttm" class="active">TTM FCF</button>
               <button type="button" data-val="fcf_3y">3年均值FCF</button>
               <button type="button" data-val="np_ttm">TTM 归母净利</button>
-              <button type="button" data-val="div_ttm">近似分红(DDM)</button>
+              <button type="button" data-val="div_ttm">TTM 分红(DDM)</button>
             </div>
           </div>
         </div>
@@ -2051,7 +2051,7 @@
       <li><strong>服务端透明代理</strong>：前端所有请求均经由同源路由 <code>/api/quant</code> 转发至 Quant Data FastAPI，不在浏览器中存储或暴露 <code>QUANT_API_TOKEN</code>，打开页面即可使用。</li>
       <li><strong>选股快照与 TTM 口径</strong>：多维筛选读取服务端预计算快照 <code>screener_latest_cn.parquet</code>（日线或财报同步完成后自动刷新）；<code>roe_ttm_pct</code>、<code>ocf_to_np_ratio</code> 基于过去 4 季滚动 TTM 计算，<code>gross_margin_pct</code> / <code>net_margin_pct</code> / <code>rd_ratio_pct</code> 为最新报告期 YTD 口径。</li>
       <li><strong>A 股颜色约定与复权口径</strong>：个股涨跌幅与 K 线采用 <code>红涨绿跌</code>；历史 K 线默认读取 <code>forward</code>（前复权）口径，可切换后复权与不复权以核对除权除息跳空与复权因子 <code>factor</code>。</li>
-      <li><strong>多维估值估算口径</strong>：由最新有效盈利期反推 <code>隐含股本 = 归母净利润 / basic_eps</code>，直接读取不复权收盘价 (<code>adjust=none</code>) 估算隐含市值、<code>PE_TTM</code>、<code>PB</code>、<code>PS_TTM</code>、<code>TTM FCF = TTM_OCF - TTM_CapEx</code> 及 <code>近似分红 = pay_dividends_profits_interest_cash - interest_expenses</code>；亏损或刚发生大额股本变动的公司请以公告股本为准。</li>
+      <li><strong>多维估值估算口径</strong>：由最新有效盈利期反推 <code>隐含股本 = 归母净利润 / basic_eps</code>，直接读取不复权收盘价 (<code>adjust=none</code>) 估算隐含市值、<code>PE_TTM</code>、<code>PB</code>、<code>PS_TTM</code> 与 <code>TTM FCF = TTM_OCF - TTM_CapEx</code>；<code>股息率 (TTM)</code> 与派息率优先由复权因子 <code>factor</code> 跳变与除息前不复权收盘价精确反推近 12 个月每股现金分红 DPS（自动识别送转拆股并去重跨期重复除息），缺失复权因子时回退至现金流量表近似口径；亏损或刚发生大额股本变动的公司请以公告股本为准。</li>
     </ul>
   </section>
 </div>
@@ -2373,6 +2373,8 @@
       stmtLimit: 40,
       klineData: null,
       valKlineData: null,
+      valFwdKlineData: null,
+      valFwdLoadedCode: "",
       finData: null,
       valFinData: null,
       valAllLoadedCode: "",
@@ -4023,10 +4025,112 @@
     };
   }
 
+  function daysBetweenDates(d1, d2) {
+    return Math.round((new Date(d2 + "T00:00:00Z") - new Date(d1 + "T00:00:00Z")) / 86400000);
+  }
+
+  function extractExDividendTTM(noneItems, adjItems, cfsUpperBound, shares) {
+    if (!noneItems?.length || !adjItems?.length || adjItems.length < 2) return null;
+    const noneByDate = new Map(noneItems.map(b => [b.date, b]));
+    const raw = [];
+
+    for (let i = 1; i < adjItems.length; i++) {
+      const f0 = Number(adjItems[i - 1].factor);
+      const f1 = Number(adjItems[i].factor);
+      if (!(f0 > 0) || !(f1 > 0)) continue;
+      const ratio = f1 / f0;
+      if (ratio <= 1.00015) continue;
+
+      const prevBar = noneByDate.get(adjItems[i - 1].date);
+      if (!prevBar || !(prevBar.close > 0)) continue;
+      const prevC = Number(prevBar.close);
+      const naiveDiv = prevC * (1 - 1 / ratio);
+
+      let splitK = 1;
+      let dpsOld = naiveDiv;
+      const naiveTotalCash = shares > 0 ? naiveDiv * shares : null;
+      const isLikelySplit =
+        ratio > 1.18 ||
+        (ratio > 1.095 && cfsUpperBound > 0 && naiveTotalCash !== null && naiveTotalCash > cfsUpperBound * 1.45) ||
+        (ratio > 1.08 && cfsUpperBound === 0);
+
+      if (isLikelySplit) {
+        const kGuess = Math.floor((ratio + 1e-5) * 20) / 20;
+        if (kGuess >= 1.05) {
+          splitK = kGuess;
+          dpsOld = Math.max(0, prevC * (1 - kGuess / ratio));
+          if (cfsUpperBound > 0 && shares > 0 && (dpsOld / splitK) * shares > cfsUpperBound * 1.45) {
+            const kFine = Math.floor((ratio + 1e-5) * 100) / 100;
+            if (kFine >= 1.05) {
+              splitK = kFine;
+              dpsOld = Math.max(0, prevC * (1 - kFine / ratio));
+            }
+          }
+        } else {
+          dpsOld = 0;
+        }
+      }
+
+      raw.push({
+        date: adjItems[i].date,
+        ratio,
+        splitK,
+        dpsOld
+      });
+    }
+
+    // Normalize historical pre-split per-share dividends onto current share basis
+    let cumSplitAfter = 1;
+    for (let i = raw.length - 1; i >= 0; i--) {
+      raw[i].dps = raw[i].dpsOld / (cumSplitAfter * raw[i].splitK);
+      cumSplitAfter *= raw[i].splitK;
+    }
+
+    const lastDate = adjItems[adjItems.length - 1].date;
+    const in365 = raw.filter(e => daysBetweenDates(e.date, lastDate) <= 365 && e.dps > 0.0005);
+    let chosen = in365;
+    let note = "近12月除息";
+
+    if (chosen.length === 2 && daysBetweenDates(chosen[0].date, chosen[1].date) >= 280) {
+      chosen = chosen.slice(-1);
+      note = "近12月除息(去重跨期年报)";
+    } else if (
+      chosen.length === 3 &&
+      daysBetweenDates(chosen[0].date, chosen[1].date) >= 125 &&
+      daysBetweenDates(chosen[1].date, chosen[2].date) >= 125
+    ) {
+      chosen = chosen.slice(-2);
+      note = "近12月除息(去重跨期中期)";
+    } else if (chosen.length === 0) {
+      const near = raw.filter(e => {
+        const d = daysBetweenDates(e.date, lastDate);
+        return d > 365 && d <= 395 && e.dps > 0.0005;
+      });
+      if (near.length === 1) {
+        chosen = near;
+        note = "近13月除息(跨期顺延)";
+      }
+    }
+
+    const dpsTtm = chosen.reduce((s, e) => s + e.dps, 0);
+    return {
+      dpsTtm,
+      count: chosen.length,
+      events: chosen,
+      hasSplit: chosen.some(e => e.splitK > 1),
+      source: "exdiv",
+      note
+    };
+  }
+
   function computeValuationSnapshot() {
     const finData = STATE.stock.valFinData || STATE.stock.finData;
     const kMain = STATE.stock.klineData;
     const kUnadj = STATE.stock.valKlineData || (kMain?.adjust === "none" ? kMain : null);
+    const curCode = STATE.stock.code;
+    const kAdj = (STATE.stock.valFwdKlineData && STATE.stock.valFwdLoadedCode === curCode && STATE.stock.valFwdKlineData.items?.length >= 2)
+      ? STATE.stock.valFwdKlineData
+      : ((kMain && kMain.adjust !== "none" && kMain.items?.length >= 2) ? kMain : null);
     const symbolName = kMain?.symbol?.name || kUnadj?.symbol?.name || finData?.symbol?.name || "";
     const quarters = buildQuarterlyValuationSeries(finData, symbolName);
     const qNow = quarters[quarters.length - 1] || null;
@@ -4068,13 +4172,34 @@
       }
     }
 
+    const epsTtm = (shares > 0 && qNow?.ttmNp !== null) ? qNow.ttmNp / shares : null;
+    const bvps = (shares > 0 && qNow?.equity !== null) ? qNow.equity / shares : null;
+
     const peTtm = (impliedMktCap && qNow?.ttmNp > 0) ? impliedMktCap / qNow.ttmNp : null;
     const pb = (impliedMktCap && qNow?.equity > 0) ? impliedMktCap / qNow.equity : null;
     const psTtm = (impliedMktCap && qNow?.ttmRev > 0) ? impliedMktCap / qNow.ttmRev : null;
     const fcfYieldPct = (impliedMktCap && qNow?.ttmFcf !== null) ? (qNow.ttmFcf / impliedMktCap) * 100 : null;
     const pFcf = (impliedMktCap && qNow?.ttmFcf > 0) ? impliedMktCap / qNow.ttmFcf : null;
-    const approxDivYieldPct = (impliedMktCap && qNow?.ttmDiv !== null) ? (qNow.ttmDiv / impliedMktCap) * 100 : null;
-    const approxPayoutPct = (qNow?.ttmNp > 0 && qNow?.ttmDiv !== null) ? clamp((qNow.ttmDiv / qNow.ttmNp) * 100, 0, 120) : null;
+
+    const exDiv = (kUnadj?.items?.length >= 2 && kAdj?.items?.length >= 2)
+      ? extractExDividendTTM(kUnadj.items, kAdj.items, qNow?.ttmDivGross ?? 0, shares)
+      : null;
+
+    let dpsTtm = null;
+    let ttmDivActual = null;
+    let approxDivYieldPct = null;
+    let approxPayoutPct = null;
+    if (exDiv !== null) {
+      dpsTtm = exDiv.dpsTtm;
+      approxDivYieldPct = (unadjPrice > 0) ? (dpsTtm / unadjPrice) * 100 : null;
+      approxPayoutPct = (epsTtm > 0) ? (dpsTtm / epsTtm) * 100 : null;
+      ttmDivActual = (shares > 0) ? dpsTtm * shares : (qNow?.ttmDiv ?? null);
+    } else {
+      approxDivYieldPct = (impliedMktCap && qNow?.ttmDiv !== null) ? (qNow.ttmDiv / impliedMktCap) * 100 : null;
+      approxPayoutPct = (qNow?.ttmNp > 0 && qNow?.ttmDiv !== null) ? (qNow.ttmDiv / qNow.ttmNp) * 100 : null;
+      ttmDivActual = qNow?.ttmDiv ?? null;
+    }
+
     const peg = (peTtm > 0 && cagrNp > 0) ? peTtm / cagrNp : null;
 
     // DuPont & quality
@@ -4101,9 +4226,6 @@
       fcf: computeHistoricalSeriesStats(barsWin, quarters, "fcf")
     };
 
-    const epsTtm = (shares > 0 && qNow?.ttmNp !== null) ? qNow.ttmNp / shares : null;
-    const bvps = (shares > 0 && qNow?.equity !== null) ? qNow.equity / shares : null;
-
     return {
       priceDate,
       unadjPrice,
@@ -4123,6 +4245,9 @@
       psTtm,
       fcfYieldPct,
       pFcf,
+      dpsTtm,
+      exDiv,
+      ttmDivActual,
       approxDivYieldPct,
       approxPayoutPct,
       peg,
@@ -4157,14 +4282,14 @@
     const fcf3yDistorted = ttmNp > 0 && fcf3y > ttmNp * 1.8;
 
     if (snap.isFinancial) {
-      STATE.stock.dcfBase = ttmNp > 0 ? "np_ttm" : ((snap.qNow?.ttmDiv || 0) > 0 ? "div_ttm" : "fcf_3y");
+      STATE.stock.dcfBase = ttmNp > 0 ? "np_ttm" : (((snap.ttmDivActual ?? snap.qNow?.ttmDiv) || 0) > 0 ? "div_ttm" : "fcf_3y");
     } else if (ttmFcf <= 0 || ttmDistorted) {
       if (fcf3y > 0 && !fcf3yDistorted) {
         STATE.stock.dcfBase = "fcf_3y";
       } else if (ttmNp > 0) {
         STATE.stock.dcfBase = "np_ttm";
       } else {
-        STATE.stock.dcfBase = (snap.qNow?.ttmDiv || 0) > 0 ? "div_ttm" : "fcf_ttm";
+        STATE.stock.dcfBase = ((snap.ttmDivActual ?? snap.qNow?.ttmDiv) || 0) > 0 ? "div_ttm" : "fcf_ttm";
       }
     } else {
       STATE.stock.dcfBase = "fcf_ttm";
@@ -4237,7 +4362,7 @@
   function getActiveBaseCashFlow(snap) {
     if (STATE.stock.dcfBase === "fcf_3y") return snap.fcf3yAvg;
     if (STATE.stock.dcfBase === "np_ttm") return snap.qNow?.ttmNp ?? null;
-    if (STATE.stock.dcfBase === "div_ttm") return snap.qNow?.ttmDiv ?? null;
+    if (STATE.stock.dcfBase === "div_ttm") return snap.ttmDivActual ?? snap.qNow?.ttmDiv ?? null;
     return snap.qNow?.ttmFcf ?? null;
   }
 
@@ -4308,9 +4433,20 @@
     );
 
     const divY = snap.approxDivYieldPct;
-    const divMeta = snap.qNow?.divIncludesBondInterest
-      ? `含债券/优先股付息(金融口径) · TTM流出 ${fmtMoneyShort(snap.qNow?.ttmDiv)}`
-      : `近似TTM分红 ${fmtMoneyShort(snap.qNow?.ttmDiv)} · 派息率 ${snap.approxPayoutPct !== null ? snap.approxPayoutPct.toFixed(0) + "%" : "--"}`;
+    let divMeta = "";
+    if (snap.exDiv) {
+      if (snap.exDiv.count > 0) {
+        const dpsStr = fmtNum(snap.dpsTtm, snap.dpsTtm >= 10 ? 2 : 3);
+        const payStr = snap.approxPayoutPct !== null ? `${snap.approxPayoutPct.toFixed(0)}%` : "--";
+        divMeta = `近12月除息${snap.exDiv.count}次 · ¥${dpsStr}/股 · 派息率 ${payStr}${snap.exDiv.hasSplit ? " (含送转折算)" : ""}`;
+      } else {
+        divMeta = "近12月无现金除息记录";
+      }
+    } else {
+      divMeta = snap.qNow?.divIncludesBondInterest
+        ? `含债券/优先股付息(金融口径) · TTM流出 ${fmtMoneyShort(snap.qNow?.ttmDiv)}`
+        : `近似TTM分红 ${fmtMoneyShort(snap.qNow?.ttmDiv)} · 派息率 ${snap.approxPayoutPct !== null ? snap.approxPayoutPct.toFixed(0) + "%" : "--"}`;
+    }
     setCard(
       "val-kpi-div",
       divY !== null ? fmtPct(divY, 2, false) : "--",
@@ -4320,6 +4456,12 @@
       "var(--emerald)",
       divMeta
     );
+    const divMetaEl = document.getElementById("val-kpi-div-meta");
+    if (divMetaEl) {
+      divMetaEl.title = (snap.exDiv && snap.exDiv.events.length)
+        ? snap.exDiv.events.map(e => `${e.date}: ¥${e.dps.toFixed(3)}/股`).join(" | ")
+        : "";
+    }
 
     const peg = snap.peg;
     setCard(
@@ -4723,7 +4865,7 @@
     const ttmNp = snap.qNow?.ttmNp ?? 0;
 
     if (snap.isFinancial && (base === "fcf_ttm" || base === "fcf_3y")) {
-      warnEl.innerHTML = `<div class="alert-title">金融标的 FCF 口径失真提示</div><div class="alert-desc">银行/保险/券商的经营现金流含客户存贷款、保费准备金及同业资金变动（当前基期 ${fmtMoneyShort(baseCF)}），直接套用 FCF 会显著高估 DCF。建议切换为上方「TTM 归母净利」或「近似分红(DDM)」口径。</div>`;
+      warnEl.innerHTML = `<div class="alert-title">金融标的 FCF 口径失真提示</div><div class="alert-desc">银行/保险/券商的经营现金流含客户存贷款、保费准备金及同业资金变动（当前基期 ${fmtMoneyShort(baseCF)}），直接套用 FCF 会显著高估 DCF。建议切换为上方「TTM 归母净利」或「TTM 分红(DDM)」口径。</div>`;
       warnEl.classList.remove("hidden");
     } else if (!snap.isFinancial && base !== "np_ttm" && baseCF > 0 && ttmNp > 0 && baseCF > ttmNp * 1.8) {
       warnEl.innerHTML = `<div class="alert-title">基期现金流显著高于净利提示</div><div class="alert-desc">所选基期现金流 (${fmtMoneyShort(baseCF)}) 达 TTM 归母净利 (${fmtMoneyShort(ttmNp)}) 的 ${(baseCF / ttmNp).toFixed(1)} 倍，DCF 结果可能受营运资金波动放大，建议切换「3年均值FCF」或「TTM 归母净利」交叉核对。</div>`;
@@ -4998,8 +5140,17 @@
       });
       clearGlobalAlert();
       STATE.stock.klineData = kData;
+      let shouldReval = false;
       if (STATE.stock.adjust === "none" && STATE.stock.klineLimit >= 1250 && STATE.stock.valAllLoadedCode !== code) {
         STATE.stock.valKlineData = kData;
+        shouldReval = true;
+      }
+      if (STATE.stock.adjust !== "none" && STATE.stock.klineLimit >= 250) {
+        STATE.stock.valFwdKlineData = kData;
+        STATE.stock.valFwdLoadedCode = code;
+        shouldReval = true;
+      }
+      if (shouldReval) {
         renderStockValuation();
       }
       renderStockKPIs();
@@ -5070,6 +5221,8 @@
     STATE.stock.loadedCode = clean;
     STATE.stock.dcfAutoFittedCode = "";
     STATE.stock.valAllLoadedCode = "";
+    STATE.stock.valFwdKlineData = null;
+    STATE.stock.valFwdLoadedCode = "";
     document.querySelectorAll(".stk-chip").forEach(b => b.classList.toggle("active", b.dataset.code === clean));
 
     document.getElementById("chart-stk-price").innerHTML = `<div class="chart-empty">正在载入 ${esc(clean)} 行情…</div>`;
@@ -5082,6 +5235,7 @@
       const wantAll = STATE.stock.valWindow === "all";
       const valKlineLimit = wantAll ? 6000 : 1250;
       const needExtraValKline = !(STATE.stock.adjust === "none" && STATE.stock.klineLimit >= valKlineLimit);
+      const hasFwdInMain = STATE.stock.adjust !== "none" && STATE.stock.klineLimit >= 250;
       const valFinLimit = wantAll ? 160 : Math.max(40, STATE.stock.stmtLimit);
       const reqs = [
         quantFetch(`/api/stocks/${encodeURIComponent(clean)}/kline`, {
@@ -5092,17 +5246,34 @@
           limit: valFinLimit
         })
       ];
+      let valKIdx = -1;
       if (needExtraValKline) {
+        valKIdx = reqs.length;
         reqs.push(quantFetch(`/api/stocks/${encodeURIComponent(clean)}/kline`, {
           adjust: "none",
           limit: valKlineLimit
         }));
       }
+      let fwdKIdx = -1;
+      if (!hasFwdInMain) {
+        fwdKIdx = reqs.length;
+        reqs.push(quantFetch(`/api/stocks/${encodeURIComponent(clean)}/kline`, {
+          adjust: "forward",
+          limit: 260
+        }));
+      }
 
-      const [kData, finData, valKData] = await Promise.all(reqs);
+      const results = await Promise.all(reqs);
+      const kData = results[0];
+      const finData = results[1];
+      const valKData = valKIdx >= 0 ? results[valKIdx] : kData;
+      const fwdKData = fwdKIdx >= 0 ? results[fwdKIdx] : kData;
+
       clearGlobalAlert();
       STATE.stock.klineData = kData;
-      STATE.stock.valKlineData = needExtraValKline ? valKData : kData;
+      STATE.stock.valKlineData = valKData;
+      STATE.stock.valFwdKlineData = fwdKData;
+      STATE.stock.valFwdLoadedCode = clean;
       STATE.stock.valFinData = finData;
       STATE.stock.valAllLoadedCode = wantAll ? clean : "";
       if (STATE.stock.stmtLimit < valFinLimit) {
