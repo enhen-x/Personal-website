@@ -2524,17 +2524,6 @@
       { kind: "swatch", color: "#0F766E", label: "阴量" }
     ], "与主图同步缩放");
 
-    let syncingScale = false;
-    function syncXScale(sourcePlot, targetPlot) {
-      if (syncingScale || !targetPlot) return;
-      syncingScale = true;
-      try {
-        targetPlot.setScale("x", { min: sourcePlot.scales.x.min, max: sourcePlot.scales.x.max });
-      } finally {
-        syncingScale = false;
-      }
-    }
-
     const xAxisConfig = {
       stroke: "#6B7280",
       font: '11px "Noto Sans SC", sans-serif',
@@ -2588,18 +2577,22 @@
       legend: { show: false },
       cursor: {
         drag: { x: true, y: false },
-        sync: { key: "stkKlineSync" },
+        sync: { key: "stkKlineSync", scales: ["x", null] },
         points: { size: 5, width: 1.5 }
       },
       scales: {
         x: {
           time: false,
-          range: (u, min, max) => (min == null || max == null ? [-0.6, Math.max(0.6, n - 0.4)] : [min - 0.6, max + 0.6])
+          range: (u, min, max) => (min == null || max == null || (min === 0 && max === n - 1))
+            ? [-0.6, Math.max(0.6, n - 0.4)]
+            : [min, max]
         },
         y: {
           range: (u) => {
-            const i0 = Math.max(0, Math.floor(u.scales.x.min ?? 0));
-            const i1 = Math.min(n - 1, Math.ceil(u.scales.x.max ?? (n - 1)));
+            const xMin = Number.isFinite(u.scales.x.min) ? u.scales.x.min : 0;
+            const xMax = Number.isFinite(u.scales.x.max) ? u.scales.x.max : (n - 1);
+            const i0 = Math.max(0, Math.floor(xMin));
+            const i1 = Math.min(n - 1, Math.ceil(xMax));
             let lo = Infinity;
             let hi = -Infinity;
             for (let i = i0; i <= i1; i++) {
@@ -2643,18 +2636,16 @@
       ],
       hooks: {
         setCursor: [onPriceCursor],
-        setScale: [(u, key) => {
-          if (key === "x" && CHARTS.stkVol?.plot) {
-            syncXScale(u, CHARTS.stkVol.plot);
-          }
-        }],
         draw: [(u) => {
-          if (!isCandle) return;
+          if (!isCandle || !u.bbox || u.bbox.width <= 0 || u.bbox.height <= 0) return;
           const ctx = u.ctx;
           const dpr = window.devicePixelRatio || 1;
-          const i0 = Math.max(0, Math.floor(u.scales.x.min ?? 0));
-          const i1 = Math.min(n - 1, Math.ceil(u.scales.x.max ?? (n - 1)));
-          const span = Math.max(1, (u.scales.x.max ?? n) - (u.scales.x.min ?? 0));
+          const xMin = Number.isFinite(u.scales.x.min) ? u.scales.x.min : 0;
+          const xMax = Number.isFinite(u.scales.x.max) ? u.scales.x.max : (n - 1);
+          const i0 = Math.max(0, Math.floor(xMin));
+          const i1 = Math.min(n - 1, Math.ceil(xMax));
+          if (i1 < i0) return;
+          const span = Math.max(1, i1 - i0 + 1);
           const bodyW = Math.max(1.5 * dpr, Math.min(12 * dpr, (u.bbox.width / span) * 0.62));
 
           ctx.save();
@@ -2700,18 +2691,22 @@
       legend: { show: false },
       cursor: {
         drag: { x: true, y: false },
-        sync: { key: "stkKlineSync" },
+        sync: { key: "stkKlineSync", scales: ["x", null] },
         points: { show: false }
       },
       scales: {
         x: {
           time: false,
-          range: (u, min, max) => (min == null || max == null ? [-0.6, Math.max(0.6, n - 0.4)] : [min - 0.6, max + 0.6])
+          range: (u, min, max) => (min == null || max == null || (min === 0 && max === n - 1))
+            ? [-0.6, Math.max(0.6, n - 0.4)]
+            : [min, max]
         },
         y: {
           range: (u) => {
-            const i0 = Math.max(0, Math.floor(u.scales.x.min ?? 0));
-            const i1 = Math.min(n - 1, Math.ceil(u.scales.x.max ?? (n - 1)));
+            const xMin = Number.isFinite(u.scales.x.min) ? u.scales.x.min : 0;
+            const xMax = Number.isFinite(u.scales.x.max) ? u.scales.x.max : (n - 1);
+            const i0 = Math.max(0, Math.floor(xMin));
+            const i1 = Math.min(n - 1, Math.ceil(xMax));
             let mx = 0;
             for (let i = i0; i <= i1; i++) {
               if (vols[i] != null && vols[i] > mx) mx = vols[i];
@@ -2743,17 +2738,16 @@
       ],
       hooks: {
         setCursor: [onVolCursor],
-        setScale: [(u, key) => {
-          if (key === "x" && CHARTS.stkPrice?.plot) {
-            syncXScale(u, CHARTS.stkPrice.plot);
-          }
-        }],
         draw: [(u) => {
+          if (!u.bbox || u.bbox.width <= 0 || u.bbox.height <= 0) return;
           const ctx = u.ctx;
           const dpr = window.devicePixelRatio || 1;
-          const i0 = Math.max(0, Math.floor(u.scales.x.min ?? 0));
-          const i1 = Math.min(n - 1, Math.ceil(u.scales.x.max ?? (n - 1)));
-          const span = Math.max(1, (u.scales.x.max ?? n) - (u.scales.x.min ?? 0));
+          const xMin = Number.isFinite(u.scales.x.min) ? u.scales.x.min : 0;
+          const xMax = Number.isFinite(u.scales.x.max) ? u.scales.x.max : (n - 1);
+          const i0 = Math.max(0, Math.floor(xMin));
+          const i1 = Math.min(n - 1, Math.ceil(xMax));
+          if (i1 < i0) return;
+          const span = Math.max(1, i1 - i0 + 1);
           const barW = Math.max(1.2 * dpr, Math.min(11 * dpr, (u.bbox.width / span) * 0.62));
           const y0 = u.valToPos(0, "y", true);
 
@@ -2847,7 +2841,9 @@
       scales: {
         x: {
           time: false,
-          range: (u, min, max) => (min == null || max == null ? [-0.6, Math.max(0.6, labels.length - 0.4)] : [min - 0.6, max + 0.6])
+          range: (u, min, max) => (min == null || max == null || (min === 0 && max === labels.length - 1))
+            ? [-0.6, Math.max(0.6, labels.length - 0.4)]
+            : [min, max]
         },
         y: {
           range: (u) => {
@@ -2894,11 +2890,15 @@
       hooks: {
         setCursor: [onProfitCursor],
         draw: [(u) => {
+          if (!u.bbox || u.bbox.width <= 0 || u.bbox.height <= 0) return;
           const ctx = u.ctx;
           const dpr = window.devicePixelRatio || 1;
-          const i0 = Math.max(0, Math.floor(u.scales.x.min ?? 0));
-          const i1 = Math.min(labels.length - 1, Math.ceil(u.scales.x.max ?? (labels.length - 1)));
-          const span = Math.max(1, (u.scales.x.max ?? labels.length) - (u.scales.x.min ?? 0));
+          const xMin = Number.isFinite(u.scales.x.min) ? u.scales.x.min : 0;
+          const xMax = Number.isFinite(u.scales.x.max) ? u.scales.x.max : (labels.length - 1);
+          const i0 = Math.max(0, Math.floor(xMin));
+          const i1 = Math.min(labels.length - 1, Math.ceil(xMax));
+          if (i1 < i0) return;
+          const span = Math.max(1, i1 - i0 + 1);
           const groupW = Math.min(24 * dpr, (u.bbox.width / span) * 0.72);
           const barW = Math.max(1.5 * dpr, groupW * 0.44);
           const yZero = u.valToPos(0, "y", true);
@@ -2969,7 +2969,9 @@
       scales: {
         x: {
           time: false,
-          range: (u, min, max) => (min == null || max == null ? [-0.6, Math.max(0.6, labels.length - 0.4)] : [min - 0.6, max + 0.6])
+          range: (u, min, max) => (min == null || max == null || (min === 0 && max === labels.length - 1))
+            ? [-0.6, Math.max(0.6, labels.length - 0.4)]
+            : [min, max]
         },
         y: {
           range: (u) => {
@@ -3034,11 +3036,15 @@
       hooks: {
         setCursor: [onCashCursor],
         drawClear: [(u) => {
+          if (!u.bbox || u.bbox.width <= 0 || u.bbox.height <= 0) return;
           const ctx = u.ctx;
           const dpr = window.devicePixelRatio || 1;
-          const i0 = Math.max(0, Math.floor(u.scales.x.min ?? 0));
-          const i1 = Math.min(labels.length - 1, Math.ceil(u.scales.x.max ?? (labels.length - 1)));
-          const span = Math.max(1, (u.scales.x.max ?? labels.length) - (u.scales.x.min ?? 0));
+          const xMin = Number.isFinite(u.scales.x.min) ? u.scales.x.min : 0;
+          const xMax = Number.isFinite(u.scales.x.max) ? u.scales.x.max : (labels.length - 1);
+          const i0 = Math.max(0, Math.floor(xMin));
+          const i1 = Math.min(labels.length - 1, Math.ceil(xMax));
+          if (i1 < i0) return;
+          const span = Math.max(1, i1 - i0 + 1);
           const groupW = Math.min(24 * dpr, (u.bbox.width / span) * 0.72);
           const barW = Math.max(1.5 * dpr, groupW * 0.44);
           const yZero = u.valToPos(0, "y", true);
@@ -3080,6 +3086,22 @@
     if (STATE.activeTab !== "stock") return;
     renderStockKlineCharts();
     renderStockFinCharts();
+  }
+
+  function resizeStockCharts() {
+    if (STATE.activeTab !== "stock") return;
+    for (const entry of [CHARTS.stkPrice, CHARTS.stkVol, CHARTS.stkProfit, CHARTS.stkCash]) {
+      if (!entry || !entry.plot || !entry.containerId) continue;
+      const container = document.getElementById(entry.containerId);
+      if (!container) continue;
+      const stage = container.querySelector(".chart-stage");
+      const legendBar = container.querySelector(".chart-legend-bar");
+      const width = Math.max(280, (stage && stage.clientWidth) || container.clientWidth || 640);
+      const height = Math.max(120, (container.clientHeight || 280) - ((legendBar && legendBar.offsetHeight) || 22) - 4);
+      if (width > 0 && height > 0) {
+        entry.plot.setSize({ width, height });
+      }
+    }
   }
 
   function renderStockKPIs() {
@@ -3583,13 +3605,15 @@
       setTab(parsed.tab, { updateHash: false, stockCode: parsed.code });
     });
 
+    let lastViewportWidth = window.innerWidth;
     let resizeTimer = 0;
     window.addEventListener("resize", () => {
+      const curWidth = window.innerWidth;
+      if (Math.abs(curWidth - lastViewportWidth) < 2) return;
+      lastViewportWidth = curWidth;
       if (resizeTimer) clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => {
-        if (STATE.activeTab === "stock") {
-          renderAllStockCharts();
-        }
+        resizeStockCharts();
       }, 120);
     });
   }
