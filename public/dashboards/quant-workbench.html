@@ -1936,8 +1936,8 @@
               <span class="slider-name">安全边际折扣 MOS</span>
               <span id="lbl-dcf-mos" class="slider-val">20%</span>
             </div>
-            <input id="rng-dcf-mos" type="range" min="0" max="40" step="5" value="20" />
-            <div class="slider-hint">目标买入价 = 公允价值 × (1 − 安全边际)</div>
+            <input id="rng-dcf-mos" type="range" min="0" max="45" step="5" value="20" />
+            <div id="hint-dcf-mos" class="slider-hint">目标买入价 = 公允价值 × (1 − 安全边际)</div>
           </div>
         </div>
 
@@ -4190,6 +4190,11 @@
     const baseR = roundQtr(clamp(rTarget, Math.max(6.25, baseG2 + 2.5), 12.0));
     const deltaR = vol1Y >= 32 ? 0.75 : 0.50;
 
+    const roundFive = (v) => Math.round(v / 5) * 5;
+    const baseMos = roundFive(clamp(8 + baseG1 * 1.5, 10, 35));
+    const consMos = Math.min(45, baseMos + 5);
+    const optMos = Math.max(5, baseMos - 5);
+
     const consG2 = Math.max(1.0, +(baseG2 - 0.5).toFixed(1));
     const optG2 = Math.min(3.5, +(baseG2 + 0.5).toFixed(1));
     const presets = {
@@ -4197,19 +4202,19 @@
         g1: +(baseG1 - deltaG1).toFixed(1),
         g2: consG2,
         r: Math.min(15.0, +(baseR + deltaR).toFixed(2)),
-        mos: 25
+        mos: consMos
       },
       neutral: {
         g1: baseG1,
         g2: baseG2,
         r: baseR,
-        mos: 20
+        mos: baseMos
       },
       optimistic: {
         g1: Math.min(28.0, +(baseG1 + deltaG1).toFixed(1)),
         g2: optG2,
         r: Math.max(optG2 + 1.5, +(baseR - deltaR).toFixed(2)),
-        mos: 15
+        mos: optMos
       }
     };
 
@@ -4222,6 +4227,7 @@
     const rHint = rGordon !== null
       ? `股息+增速(${rGordon.toFixed(1)}%)与波动率(${vol1Y.toFixed(0)}%)拟合 · 情景±${deltaR.toFixed(2)}%`
       : `无风险利率+波动率(${vol1Y.toFixed(0)}%)CAPM拟合 · 情景±${deltaR.toFixed(2)}%`;
+    const mosHint = `按中性g₁(${baseG1.toFixed(1)}%)匹配基准 ${baseMos}% · 买入价=公允×(1−MOS)`;
 
     return {
       mean5Y,
@@ -4232,11 +4238,13 @@
       rGordon,
       deltaG1,
       deltaR,
+      baseMos,
       yoySamples,
       presets,
       g1Hint,
       g1Title,
-      rHint
+      rHint,
+      mosHint
     };
   }
 
@@ -4447,6 +4455,10 @@
     const rHintEl = document.getElementById("hint-dcf-r");
     if (rHintEl && model) {
       rHintEl.textContent = model.rHint;
+    }
+    const mosHintEl = document.getElementById("hint-dcf-mos");
+    if (mosHintEl && model) {
+      mosHintEl.textContent = model.mosHint;
     }
 
     document.querySelectorAll("#seg-dcf-base button").forEach(b => b.classList.toggle("active", b.dataset.val === STATE.stock.dcfBase));
