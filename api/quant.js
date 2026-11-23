@@ -108,7 +108,7 @@ export async function GET(request) {
   const isFresh = reqUrl.searchParams.get('fresh') === '1';
 
   for (const [key, value] of reqUrl.searchParams.entries()) {
-    if (key !== 'endpoint' && key !== 'fresh' && value !== '') {
+    if (key !== 'endpoint' && key !== 'fresh' && key !== 'v' && value !== '') {
       upstreamUrl.searchParams.append(key, value);
     }
   }
