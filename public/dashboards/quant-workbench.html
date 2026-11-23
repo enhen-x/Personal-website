@@ -38,7 +38,7 @@
     var code = h.indexOf('stock/') === 0 ? decodeURIComponent(h.slice(6)).trim().toUpperCase() : '600519.SH';
     if (!code) code = '600519.SH';
     kick('/api/stocks/' + encodeURIComponent(code) + '/kline', { adjust: 'forward', limit: 250 });
-    kick('/api/stocks/' + encodeURIComponent(code) + '/kline', { adjust: 'forward', limit: 1250 });
+    kick('/api/stocks/' + encodeURIComponent(code) + '/kline', { adjust: 'none', limit: 1250 });
     kick('/api/stocks/' + encodeURIComponent(code) + '/financials', { limit: 40 });
   }
 })();
@@ -2047,7 +2047,7 @@
       <li><strong>服务端透明代理</strong>：前端所有请求均经由同源路由 <code>/api/quant</code> 转发至 Quant Data FastAPI，不在浏览器中存储或暴露 <code>QUANT_API_TOKEN</code>，打开页面即可使用。</li>
       <li><strong>选股快照与 TTM 口径</strong>：多维筛选读取服务端预计算快照 <code>screener_latest_cn.parquet</code>（日线或财报同步完成后自动刷新）；<code>roe_ttm_pct</code>、<code>ocf_to_np_ratio</code> 基于过去 4 季滚动 TTM 计算，<code>gross_margin_pct</code> / <code>net_margin_pct</code> / <code>rd_ratio_pct</code> 为最新报告期 YTD 口径。</li>
       <li><strong>A 股颜色约定与复权口径</strong>：个股涨跌幅与 K 线采用 <code>红涨绿跌</code>；历史 K 线默认读取 <code>forward</code>（前复权）口径，可切换后复权与不复权以核对除权除息跳空与复权因子 <code>factor</code>。</li>
-      <li><strong>多维估值估算口径</strong>：由最新有效盈利期反推 <code>隐含股本 = 归母净利润 / basic_eps</code>，结合不复权价 <code>unadjusted_close = close / factor</code> 估算隐含市值、<code>PE_TTM</code>、<code>PB</code>、<code>PS_TTM</code>、<code>TTM FCF = TTM_OCF - TTM_CapEx</code> 及 <code>近似分红 = pay_dividends_profits_interest_cash - interest_expenses</code>；亏损或刚发生大额股本变动的公司请以公告股本为准。</li>
+      <li><strong>多维估值估算口径</strong>：由最新有效盈利期反推 <code>隐含股本 = 归母净利润 / basic_eps</code>，直接读取不复权收盘价 (<code>adjust=none</code>) 估算隐含市值、<code>PE_TTM</code>、<code>PB</code>、<code>PS_TTM</code>、<code>TTM FCF = TTM_OCF - TTM_CapEx</code> 及 <code>近似分红 = pay_dividends_profits_interest_cash - interest_expenses</code>；亏损或刚发生大额股本变动的公司请以公告股本为准。</li>
     </ul>
   </section>
 </div>
@@ -3878,8 +3878,7 @@
     for (let i = 0; i < n; i++) {
       const bar = bars[i];
       dates[i] = bar.date;
-      const factor = Number(bar.factor) || 1;
-      const unadj = factor > 0 ? Number(bar.close) / factor : Number(bar.close);
+      const unadj = Number(bar.close);
       prices[i] = unadj;
 
       while (qPtr + 1 < quarters.length && quarters[qPtr + 1].period_end <= bar.date) {
@@ -3923,22 +3922,16 @@
   function computeValuationSnapshot() {
     const finData = STATE.stock.valFinData || STATE.stock.finData;
     const kMain = STATE.stock.klineData;
-    const kHist = STATE.stock.valKlineData || (STATE.stock.adjust === "forward" ? kMain : null);
+    const kUnadj = STATE.stock.valKlineData || (kMain?.adjust === "none" ? kMain : null);
     const quarters = buildQuarterlyValuationSeries(finData);
     const qNow = quarters[quarters.length - 1] || null;
 
-    // Latest unadjusted close: prefer forward kline (close / factor) or non-adjusted kline directly
+    // Strictly use direct unadjusted close (adjust=none)
     let unadjPrice = null;
     let priceDate = "--";
-    if (kHist?.items?.length) {
-      const lb = kHist.items[kHist.items.length - 1];
-      const fac = Number(lb.factor) || 1;
-      unadjPrice = fac > 0 ? Number(lb.close) / fac : Number(lb.close);
-      priceDate = lb.date;
-    } else if (kMain?.items?.length) {
-      const lb = kMain.items[kMain.items.length - 1];
-      const fac = Number(lb.factor) || 1;
-      unadjPrice = STATE.stock.adjust === "none" ? Number(lb.close) : (fac > 0 ? Number(lb.close) / fac : Number(lb.close));
+    if (kUnadj?.items?.length) {
+      const lb = kUnadj.items[kUnadj.items.length - 1];
+      unadjPrice = Number(lb.close);
       priceDate = lb.date;
     }
 
@@ -3992,7 +3985,7 @@
       : null;
 
     // Historical bands
-    const barsAll = kHist?.items || [];
+    const barsAll = kUnadj?.items || [];
     const barsWin = barsAll.slice(-Math.min(barsAll.length, STATE.stock.valWindow));
     const bands = {
       pe: computeHistoricalSeriesStats(barsWin, quarters, "pe"),
@@ -4624,25 +4617,18 @@
     const kData = STATE.stock.klineData;
     const fin = STATE.stock.finData;
     const items = kData?.items || [];
-    const sym = kData?.symbol || fin?.symbol || { thscode: STATE.stock.code, name: "" };
+    const unadjItems = STATE.stock.valKlineData?.items || (kData?.adjust === "none" ? items : []);
+    const sym = kData?.symbol || STATE.stock.valKlineData?.symbol || fin?.symbol || { thscode: STATE.stock.code, name: "" };
 
     document.getElementById("stk-current-title").textContent = `${sym.thscode || STATE.stock.code} ${sym.name || ""}`;
     const badge = document.getElementById("stk-current-badge");
     badge.className = "status-pill pill-pass";
     badge.textContent = `${sym.exchange || "--"} · ${sym.currency || "CNY"}`;
 
-    if (items.length) {
-      const last = items[items.length - 1];
-      const prev = items.length > 1 ? items[items.length - 2] : last;
-      const first = items[0];
+    if (unadjItems.length) {
+      const last = unadjItems[unadjItems.length - 1];
+      const prev = unadjItems.length > 1 ? unadjItems[unadjItems.length - 2] : last;
       const dayPct = prev.close > 0 ? ((last.close / prev.close - 1) * 100) : 0;
-      const periodPct = first.close > 0 ? ((last.close / first.close - 1) * 100) : 0;
-      let hi = -Infinity;
-      let lo = Infinity;
-      for (const it of items) {
-        if (it.high != null && it.high > hi) hi = it.high;
-        if (it.low != null && it.low < lo) lo = it.low;
-      }
 
       document.getElementById("stk-kpi1-val").textContent = `¥${fmtNum(last.close)}`;
       const p1 = document.getElementById("stk-kpi1-pill");
@@ -4650,7 +4636,22 @@
       p1.textContent = fmtPct(dayPct, 2, true);
       document.getElementById("stk-kpi1-bar").style.width = `${clamp(50 + dayPct * 5, 5, 100)}%`;
       document.getElementById("stk-kpi1-bar").style.background = dayPct >= 0 ? "var(--crimson)" : "var(--emerald)";
-      document.getElementById("stk-kpi1-meta").textContent = `交易日 ${last.date} · 成交额 ${fmtMoneyShort(last.turnover)} · 因子 ${fmtNum(last.factor, 4)}`;
+      document.getElementById("stk-kpi1-meta").textContent = `交易日 ${last.date} · 不复权口径 · 成交额 ${fmtMoneyShort(last.turnover)}`;
+    } else {
+      document.getElementById("stk-kpi1-val").textContent = "--";
+      document.getElementById("stk-kpi1-meta").textContent = "暂无不复权行情数据";
+    }
+
+    if (items.length) {
+      const last = items[items.length - 1];
+      const first = items[0];
+      const periodPct = first.close > 0 ? ((last.close / first.close - 1) * 100) : 0;
+      let hi = -Infinity;
+      let lo = Infinity;
+      for (const it of items) {
+        if (it.high != null && it.high > hi) hi = it.high;
+        if (it.low != null && it.low < lo) lo = it.low;
+      }
 
       document.getElementById("stk-kpi2-val").textContent = fmtPct(periodPct, 2, true);
       const p2 = document.getElementById("stk-kpi2-pill");
@@ -4660,8 +4661,6 @@
       document.getElementById("stk-kpi2-bar").style.width = `${clamp(posInRange, 0, 100)}%`;
       document.getElementById("stk-kpi2-meta").textContent = `区间低 ${fmtNum(lo)} / 高 ${fmtNum(hi)} · 当前位于区间 ${posInRange.toFixed(0)}% 分位`;
     } else {
-      document.getElementById("stk-kpi1-val").textContent = "--";
-      document.getElementById("stk-kpi1-meta").textContent = "暂无行情数据";
       document.getElementById("stk-kpi2-val").textContent = "--";
       document.getElementById("stk-kpi2-meta").textContent = "暂无区间数据";
     }
@@ -4832,7 +4831,7 @@
       });
       clearGlobalAlert();
       STATE.stock.klineData = kData;
-      if (STATE.stock.adjust === "forward" && STATE.stock.klineLimit >= 1250) {
+      if (STATE.stock.adjust === "none" && STATE.stock.klineLimit >= 1250) {
         STATE.stock.valKlineData = kData;
         renderStockValuation();
       }
@@ -4878,7 +4877,7 @@
     document.getElementById("chart-stk-cash").innerHTML = `<div class="chart-empty">载入中…</div>`;
 
     try {
-      const needExtraValKline = !(STATE.stock.adjust === "forward" && STATE.stock.klineLimit >= 1250);
+      const needExtraValKline = !(STATE.stock.adjust === "none" && STATE.stock.klineLimit >= 1250);
       const valFinLimit = Math.max(40, STATE.stock.stmtLimit);
       const reqs = [
         quantFetch(`/api/stocks/${encodeURIComponent(clean)}/kline`, {
@@ -4891,7 +4890,7 @@
       ];
       if (needExtraValKline) {
         reqs.push(quantFetch(`/api/stocks/${encodeURIComponent(clean)}/kline`, {
-          adjust: "forward",
+          adjust: "none",
           limit: 1250
         }));
       }
