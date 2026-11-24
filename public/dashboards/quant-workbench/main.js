@@ -847,14 +847,36 @@ function bindEvents() {
       renderCompareResults();
     });
   });
+  document.getElementById("btn-cmp-arrows").addEventListener("click", () => {
+    STATE.compare.showGrowthArrows = !STATE.compare.showGrowthArrows;
+    renderCompareResults();
+  });
+  document.getElementById("btn-cmp-risk-rings").addEventListener("click", () => {
+    STATE.compare.showRiskRings = !STATE.compare.showRiskRings;
+    renderCompareResults();
+  });
   document.getElementById("btn-cmp-csv").addEventListener("click", () => {
     const rows = getCompareRows();
     if (!rows.length) return;
-    const headers = ["code", "name", "mkt_cap", "unadj_close", "pe_ttm", "pe_pct_5y", "pb", "pb_pct_5y", "div_yield_ttm", "payout_pct", "roe_ttm", "g1_base", "dcf_base", "dcf_mid", "dcf_upside_pct", "rim_mid", "rim_upside_pct", "implied_irr", "r_used", "net_cash_per_share"];
+    const headers = [
+      "code", "name", "mkt_cap", "unadj_close", "pe_ttm", "pe_pct_5y", "pb", "pb_pct_5y",
+      "shareholder_yield_pct", "div_yield_ttm", "buyback_yield_pct", "payout_pct",
+      "fcf_yield_pct", "cash_conv_5y", "roe_ttm", "roic_5y_mean", "roe_vol_5y",
+      "g1_base", "np_yoy_1y", "dcf_base", "dcf_mid", "dcf_upside_pct",
+      "rim_mid", "rim_upside_pct", "implied_irr", "r_used", "net_cash_per_share",
+      "debt_ratio_pct", "net_cash_to_mktcap", "vol_3y", "max_dd_3y", "risk_flag"
+    ];
     downloadCsv(
       `peer_compare_${new Date().toISOString().slice(0, 10)}.csv`,
       headers,
-      rows.map(r => [r.code, r.name, r.mktCap, r.unadjPrice, r.peTtm, r.pePct5y, r.pb, r.pbPct5y, r.divYieldPct, r.payoutPct, r.roeTtm, r.g1Base, r.dcfBase, r.dcfMid, r.dcfUpsidePct, r.rimMid, r.rimUpsidePct, r.impliedIrr, r.rUsed, r.netCashPerShare])
+      rows.map(r => [
+        r.code, r.name, r.mktCap, r.unadjPrice, r.peTtm, r.pePct5y, r.pb, r.pbPct5y,
+        r.shareholderYieldPct, r.divYieldPct, r.buybackYieldPct, r.payoutPct,
+        r.fcfYieldPct, r.cashConv5y, r.roeTtm, r.roic5yMean, r.roeVol5y,
+        r.g1Base, r.npYoy1yRaw, r.dcfBase, r.dcfMid, r.dcfUpsidePct,
+        r.rimMid, r.rimUpsidePct, r.impliedIrr, r.rUsed, r.netCashPerShare,
+        r.debtRatioPct, r.netCashToMktCap, r.vol3y, r.maxDd3y, r.riskFlag
+      ])
     );
   });
 

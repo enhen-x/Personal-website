@@ -296,6 +296,20 @@ export function buildQuarterlyValuationSeries(finData, symbolName = "") {
     const assets = b.assets_total != null ? Number(b.assets_total) : null;
     const cash = b.cash != null ? Number(b.cash) : null;
     const debt = b.total_debt != null ? Number(b.total_debt) : null;
+    const tsRaw = b.treasury_stock ?? b.less_treasury_stock ?? null;
+    const treasuryStock = tsRaw != null && Number.isFinite(Number(tsRaw)) ? Math.max(0, Number(tsRaw)) : null;
+    const scRaw = b.paid_in_capital ?? b.share_capital ?? null;
+    const shareCapital = scRaw != null && Number.isFinite(Number(scRaw)) ? Math.max(0, Number(scRaw)) : null;
+    const ibKeys = ["short_term_loan", "non_current_liab_due_1y", "long_term_loan", "bonds_payable", "lease_liab"];
+    let ibDebtSum = 0;
+    let hasIbDebt = false;
+    for (const k of ibKeys) {
+      if (b[k] != null && Number.isFinite(Number(b[k]))) {
+        ibDebtSum += Math.max(0, Number(b[k]));
+        hasIbDebt = true;
+      }
+    }
+    const ibDebt = hasIbDebt ? ibDebtSum : null;
 
     const erd = resolveEffectiveReportDate(r);
     const sharesBasisDate = String(r.report_date || erd || r.period_end || `${r.fiscal_year}-12-31`).slice(0, 10);
@@ -323,7 +337,10 @@ export function buildQuarterlyValuationSeries(finData, symbolName = "") {
       equity,
       assets,
       cash,
-      debt
+      debt,
+      treasuryStock,
+      shareCapital,
+      ibDebt
     });
   }
 
@@ -943,7 +960,8 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, va
 
   const peg = (peTtm > 0 && cagrNp > 0) ? peTtm / cagrNp : null;
 
-  // DuPont & quality
+  // DuPont, quality & P2-4 peer upgrade metrics
+  const isFinCompany = Boolean(qNow?.isFinancial);
   const netMargin = (qNow?.ttmRev > 0 && qNow?.ttmNp !== null) ? (qNow.ttmNp / qNow.ttmRev) * 100 : null;
   const assetTurnover = (qNow?.assets > 0 && qNow?.ttmRev !== null) ? qNow.ttmRev / qNow.assets : null;
   const equityMultiplier = (qNow?.equity > 0 && qNow?.assets !== null) ? qNow.assets / qNow.equity : null;
@@ -954,6 +972,123 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, va
   const netCashToMktCap = (impliedMktCap && qNow?.cash !== null && qNow?.debt !== null)
     ? ((qNow.cash - qNow.debt) / impliedMktCap) * 100
     : null;
+
+  // Buyback & Shareholder Yield (treasury stock delta + split-adjusted share cancellation)
+  const qPrev4 = quarters.length >= 5 ? quarters[quarters.length - 5] : null;
+  let buybackRaw = 0;
+  if (impliedMktCap > 0 && qNow?.treasuryStock != null && qPrev4?.treasuryStock != null) {
+    const deltaTs = qNow.treasuryStock - qPrev4.treasuryStock;
+    if (deltaTs > impliedMktCap * 0.0005) {
+      buybackRaw += (deltaTs / impliedMktCap) * 100;
+    }
+  }
+  if (qNow?.shareCapital > 0 && qPrev4?.shareCapital > 0) {
+    const mPrev4 = splitHelper.getMultAt(qPrev4.period_end) || 1;
+    const mNowSc = splitHelper.getMultAt(qNow.period_end) || 1;
+    const adjPrevSc = qPrev4.shareCapital * (mNowSc / mPrev4);
+    const shrinkRatio = adjPrevSc > 0 ? (adjPrevSc - qNow.shareCapital) / adjPrevSc : 0;
+    if (shrinkRatio >= 0.001 && shrinkRatio <= 0.15) {
+      buybackRaw += shrinkRatio * 100;
+    }
+  }
+  const hasEstimatedBuyback = buybackRaw >= 0.05;
+  const buybackYieldPct = hasEstimatedBuyback ? clamp(buybackRaw, 0, 15) : 0;
+  const buybackSource = hasEstimatedBuyback ? "库存股/注销估算" : "仅现金分红";
+  const shareholderYieldPct = approxDivYieldPct !== null
+    ? (approxDivYieldPct + buybackYieldPct)
+    : (buybackYieldPct > 0 ? buybackYieldPct : null);
+
+  // 5Y Cash Conversion, 5Y ROIC Mean, and 5Y ROE Volatility
+  let sumOcf5y = 0;
+  let sumNp5y = 0;
+  let cfPairs5y = 0;
+  const roeSamples5y = [];
+  const roicSamples5y = [];
+  for (let k = 0; k < 5; k++) {
+    const idx = quarters.length - 1 - 4 * k;
+    if (idx < 0) break;
+    const q = quarters[idx];
+    if (q?.ttmOcf !== null && q?.ttmNp !== null && Number.isFinite(q.ttmOcf) && Number.isFinite(q.ttmNp)) {
+      sumOcf5y += q.ttmOcf;
+      sumNp5y += q.ttmNp;
+      cfPairs5y++;
+    }
+    if (q?.equity > 0 && q?.ttmNp !== null && Number.isFinite(q.ttmNp)) {
+      const roeVal = clamp((q.ttmNp / q.equity) * 100, -60, 80);
+      roeSamples5y.push(roeVal);
+      if (!isFinCompany) {
+        const nopat = q.ttmNp + (q.ttmIntExp > 0 ? q.ttmIntExp * 0.75 : 0);
+        const nonCashDebt = q.ibDebt != null ? q.ibDebt : Math.max(0, (q.debt || 0) - (q.cash || 0));
+        const ic = Math.max(q.equity * 0.6, q.equity + nonCashDebt);
+        if (ic > 0) {
+          roicSamples5y.push(clamp((nopat / ic) * 100, -50, 80));
+        }
+      }
+    }
+  }
+  const cashConv5y = (cfPairs5y >= 1 && sumNp5y > 0) ? clamp(sumOcf5y / sumNp5y, -5, 10) : null;
+  const roeMean5y = roeSamples5y.length ? (roeSamples5y.reduce((a, b) => a + b, 0) / roeSamples5y.length) : null;
+  let roeVol5y = dcfModel?.std5Y ?? null;
+  if (roeSamples5y.length >= 2) {
+    const varRoe = roeSamples5y.reduce((s, x) => s + (x - roeMean5y) ** 2, 0) / (roeSamples5y.length - 1);
+    roeVol5y = Math.sqrt(varRoe);
+  }
+  const roicIsRoeProxy = isFinCompany;
+  const roic5yMean = isFinCompany
+    ? (roeMean5y !== null ? roeMean5y : roeTtm)
+    : (roicSamples5y.length ? (roicSamples5y.reduce((a, b) => a + b, 0) / roicSamples5y.length) : null);
+
+  // Marginal 1Y TTM Net Profit YoY
+  let npYoy1yRaw = null;
+  let npYoy1y = null;
+  if (qNow?.ttmNp !== null && qPrev4?.ttmNp > 0) {
+    npYoy1yRaw = ((qNow.ttmNp / qPrev4.ttmNp) - 1) * 100;
+    if (Number.isFinite(npYoy1yRaw)) {
+      npYoy1y = clamp(npYoy1yRaw, -40, 60);
+    } else {
+      npYoy1yRaw = null;
+    }
+  }
+
+  // 3Y Realized Volatility & Max Drawdown from trailing 750 total-return bars
+  const riskBarsRaw = (kAdj?.items?.length >= 45 ? kAdj.items : kUnadj?.items) || [];
+  const riskBars = riskBarsRaw.slice(-750);
+  const rets3y = [];
+  let peak3y = -Infinity;
+  let minDd3y = 0;
+  let validDdPts = 0;
+  for (let i = 0; i < riskBars.length; i++) {
+    const p = Number(riskBars[i].close);
+    if (!(p > 0)) continue;
+    validDdPts++;
+    if (p > peak3y) peak3y = p;
+    if (peak3y > 0) {
+      const dd = ((p / peak3y) - 1) * 100;
+      if (dd < minDd3y) minDd3y = dd;
+    }
+    if (i > 0) {
+      const pPrev = Number(riskBars[i - 1].close);
+      if (pPrev > 0) rets3y.push(Math.log(p / pPrev));
+    }
+  }
+  let vol3y = null;
+  if (rets3y.length >= 40) {
+    const rMean = rets3y.reduce((a, b) => a + b, 0) / rets3y.length;
+    const rVar = rets3y.reduce((s, x) => s + (x - rMean) ** 2, 0) / (rets3y.length - 1);
+    vol3y = Math.sqrt(rVar * 242) * 100;
+  }
+  const maxDd3y = validDdPts >= 20 ? minDd3y : null;
+
+  const debtRatioPct = (qNow?.assets > 0 && qNow?.debt != null) ? (qNow.debt / qNow.assets) * 100 : null;
+  const ibDebtRatioPct = (qNow?.assets > 0 && qNow?.ibDebt != null) ? (qNow.ibDebt / qNow.assets) * 100 : null;
+  const isHighRiskFlag = (!isFinCompany && debtRatioPct !== null && debtRatioPct > 70)
+    || (maxDd3y !== null && maxDd3y < -45)
+    || (vol3y !== null && vol3y > 42);
+  const isLowVolFlag = !isHighRiskFlag
+    && vol3y !== null && vol3y <= 24
+    && maxDd3y !== null && maxDd3y >= -25
+    && (isFinCompany || debtRatioPct === null || debtRatioPct <= 60);
+  const riskFlag = isHighRiskFlag ? "high_risk" : (isLowVolFlag ? "low_vol" : "normal");
 
   // Historical bands (PIT vs period_end + split-adjusted share restoration)
   const barsAll = kUnadj?.items || [];
@@ -1002,6 +1137,20 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, va
     ttmDivActual,
     approxDivYieldPct,
     approxPayoutPct,
+    buybackYieldPct,
+    buybackSource,
+    shareholderYieldPct,
+    cashConv5y,
+    roic5yMean,
+    roicIsRoeProxy,
+    roeVol5y,
+    npYoy1y,
+    npYoy1yRaw,
+    vol3y,
+    maxDd3y,
+    debtRatioPct,
+    ibDebtRatioPct,
+    riskFlag,
     peg,
     epsTtm,
     bvps,
@@ -1052,6 +1201,7 @@ export function computePeerMetrics(snap, opts = {}) {
   const rimUpsidePct = (rimMid > 0 && curPrice > 0) ? ((rimMid / curPrice - 1) * 100) : null;
   const opCur = (curPrice > 0 && curPrice - ncAdj > 0) ? (curPrice - ncAdj) : null;
   const impliedIrr = (scen && opCur != null) ? solveImpliedReturn(baseCF, snap.shares, scen.g1, scen.g2, opCur) : null;
+  const roicSpread = (snap.roic5yMean != null && scen?.r != null) ? (snap.roic5yMean - scen.r) : null;
 
   return {
     code: snap.code,
@@ -1065,9 +1215,26 @@ export function computePeerMetrics(snap, opts = {}) {
     pbPct5y: snap.bands?.pb?.pct ?? null,
     psTtm: snap.psTtm,
     divYieldPct: snap.approxDivYieldPct,
+    buybackYieldPct: snap.buybackYieldPct ?? 0,
+    buybackSource: snap.buybackSource || "仅现金分红",
+    shareholderYieldPct: snap.shareholderYieldPct ?? snap.approxDivYieldPct ?? null,
     payoutPct: snap.approxPayoutPct,
+    fcfYieldPct: snap.fcfYieldPct ?? null,
+    cashConv5y: snap.cashConv5y ?? null,
     roeTtm: snap.roeTtm,
+    roic5yMean: snap.roic5yMean ?? null,
+    roicIsRoeProxy: Boolean(snap.roicIsRoeProxy),
+    roicSpread,
+    roeVol5y: snap.roeVol5y ?? null,
     g1Base: scen?.g1 ?? null,
+    npYoy1y: snap.npYoy1y ?? null,
+    npYoy1yRaw: snap.npYoy1yRaw ?? null,
+    vol3y: snap.vol3y ?? null,
+    maxDd3y: snap.maxDd3y ?? null,
+    debtRatioPct: snap.debtRatioPct ?? null,
+    ibDebtRatioPct: snap.ibDebtRatioPct ?? null,
+    netCashToMktCap: snap.netCashToMktCap ?? null,
+    riskFlag: snap.riskFlag || "normal",
     dcfBase,
     dcfBaseLabel: dcfBaseLabelMap[dcfBase] || "DCF",
     dcfMid,

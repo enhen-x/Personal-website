@@ -1074,8 +1074,10 @@
         <div class="seg" id="seg-cmp-scatter">
           <button type="button" data-val="pb_roe" class="active">PB-ROE 性价比</button>
           <button type="button" data-val="irr_upside">IRR vs 估值空间</button>
-          <button type="button" data-val="div_growth">股息率 vs 5Y增速</button>
+          <button type="button" data-val="div_growth">股东回报 vs 增速</button>
           <button type="button" data-val="pe_pct">PE vs 5Y分位</button>
+          <button type="button" data-val="cf_return">现金流 vs 股东回报</button>
+          <button type="button" data-val="roic_stability">资本效率 vs 稳定性</button>
         </div>
       </div>
 
@@ -1084,9 +1086,15 @@
           <span class="legend-item"><span class="legend-swatch" style="background:#0F766E;"></span><span>低估空间 ≥ +15%</span></span>
           <span class="legend-item"><span class="legend-swatch" style="background:#374151;"></span><span>估值合理 (-10% ~ +15%)</span></span>
           <span class="legend-item"><span class="legend-swatch" style="background:#B91C1C;"></span><span>偏贵 ≤ -10%</span></span>
-          <span class="legend-item" style="color:var(--ink-faint);">· 气泡面积 ~ 总市值 · 虚线为同业均值/均衡线</span>
+          <span class="legend-item"><span class="legend-ring-swatch low-vol"></span><span>低波稳健</span></span>
+          <span class="legend-item"><span class="legend-ring-swatch high-risk"></span><span>高负债/高回撤预警</span></span>
+          <span class="legend-item" style="color:var(--ink-faint);">· 面积 ~ 总市值</span>
         </div>
-        <span class="chart-hint">悬停查看明细 · 点击气泡跳转个股看板</span>
+        <div class="inline-group">
+          <button id="btn-cmp-arrows" class="preset-btn active" type="button" aria-pressed="true" title="在「股东回报 vs 增速」视图下显示 5Y→1Y 净利边际增速拖尾箭头">增速拖尾箭头: 开</button>
+          <button id="btn-cmp-risk-rings" class="preset-btn active" type="button" aria-pressed="true" title="按 3 年波动率、最大回撤与资产负债率叠加气泡风控外环">风控外环: 开</button>
+          <span class="chart-hint">悬停明细 · 点击跳转个股看板</span>
+        </div>
       </div>
 
       <div id="cmp-scatter-wrap" class="scatter-wrap">

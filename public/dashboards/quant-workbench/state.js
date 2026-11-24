@@ -59,6 +59,8 @@ export const STATE = {
     cache: {},
     errors: {},
     scatterMode: "pb_roe",
+    showGrowthArrows: true,
+    showRiskRings: true,
     rMode: "capm",
     scenario: "neutral",
     netCashAdj: false,

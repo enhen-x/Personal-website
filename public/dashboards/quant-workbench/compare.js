@@ -432,6 +432,18 @@ export function syncCompareControls() {
     rimBtn.setAttribute("aria-pressed", String(cmp.rimAllowBelowBook));
     rimBtn.textContent = cmp.rimAllowBelowBook ? "RIM允许破净: 开" : "RIM允许破净: 关";
   }
+  const arrowBtn = document.getElementById("btn-cmp-arrows");
+  if (arrowBtn) {
+    arrowBtn.classList.toggle("active", Boolean(cmp.showGrowthArrows));
+    arrowBtn.setAttribute("aria-pressed", String(Boolean(cmp.showGrowthArrows)));
+    arrowBtn.textContent = cmp.showGrowthArrows ? "增速拖尾箭头: 开" : "增速拖尾箭头: 关";
+  }
+  const riskBtn = document.getElementById("btn-cmp-risk-rings");
+  if (riskBtn) {
+    riskBtn.classList.toggle("active", Boolean(cmp.showRiskRings));
+    riskBtn.setAttribute("aria-pressed", String(Boolean(cmp.showRiskRings)));
+    riskBtn.textContent = cmp.showRiskRings ? "风控外环: 开" : "风控外环: 关";
+  }
 }
 
 export async function fetchOneComparePeer(code, forceFresh = false) {
@@ -439,7 +451,7 @@ export async function fetchOneComparePeer(code, forceFresh = false) {
   const [fin, kNone, kFwd] = await Promise.all([
     forceFresh ? quantFetch(`/api/stocks/${enc}/financials`, { limit: 40 }, { fresh: true }) : fetchFinancialsChecked(code, 40),
     quantFetch(`/api/stocks/${enc}/kline`, { adjust: "none", limit: 1250 }, forceFresh ? { fresh: true } : undefined),
-    quantFetch(`/api/stocks/${enc}/kline`, { adjust: "forward", limit: 260 }, forceFresh ? { fresh: true } : undefined)
+    quantFetch(`/api/stocks/${enc}/kline`, { adjust: "forward", limit: 750 }, forceFresh ? { fresh: true } : undefined)
   ]);
   const snap = evaluateStockValuation({
     finData: fin,
@@ -574,6 +586,7 @@ export function renderCompareScatter(rows) {
   if (tt) tt.style.display = "none";
 
   const mode = STATE.compare.scatterMode || "pb_roe";
+  const allFin = rows.length > 0 && rows.every(r => r.isFinancial);
   const configs = {
     pb_roe: {
       xLabel: "TTM ROE (%)",
@@ -602,17 +615,18 @@ export function renderCompareScatter(rows) {
       getY: r => r.dcfUpsidePct ?? r.rimUpsidePct
     },
     div_growth: {
-      xLabel: "5年净利增速均值 g₁ (%)",
-      yLabel: "股息率 TTM (%)",
-      subtitle: "横轴 5 年净利增速基准 g₁ · 纵轴近 12 月股息率 · 斜虚线为「股息率 + g₁ = 10%」等总回报线",
-      badge: "占优区：高股息 · 高成长",
+      xLabel: "5年净利增速 g₁ → 近1Y边际增速 (%)",
+      yLabel: "股东总回报率 (%)",
+      subtitle: "横轴 5Y 增速基准 g₁（拖尾箭头指向近1Y增速） · 纵轴股东总回报率(股息+净回购) · 斜虚线为 10% 等回报线",
+      badge: "占优区：高股东回报 · 高成长 / 向右加速",
       badgePos: "tr",
       forceZeroX: false,
       forceZeroY: true,
       xFmt: v => `${v.toFixed(1)}%`,
       yFmt: v => `${v.toFixed(2)}%`,
       getX: r => r.g1Base,
-      getY: r => r.divYieldPct
+      getX2: r => r.npYoy1y,
+      getY: r => r.shareholderYieldPct
     },
     pe_pct: {
       xLabel: "近5年 PE 历史分位 (%)",
@@ -626,6 +640,32 @@ export function renderCompareScatter(rows) {
       yFmt: v => `${v.toFixed(1)}x`,
       getX: r => r.pePct5y,
       getY: r => r.peTtm
+    },
+    cf_return: {
+      xLabel: "FCF 收益率 (%)",
+      yLabel: "股东总回报率 (%)",
+      subtitle: "横轴 TTM FCF/市值 · 纵轴股东总回报率(股息+净回购) · 斜线为「股东回报 = FCF (100% 覆盖线)」，右下为有余粮真现金牛",
+      badge: "占优区：高FCF · 股东回报全覆盖",
+      badgePos: "br",
+      forceZeroX: false,
+      forceZeroY: true,
+      xFmt: v => `${v.toFixed(1)}%`,
+      yFmt: v => `${v.toFixed(2)}%`,
+      getX: r => r.fcfYieldPct,
+      getY: r => r.shareholderYieldPct
+    },
+    roic_stability: {
+      xLabel: allFin ? "5年 ROE 均值 (% · 金融)" : "5年 ROIC 均值 (% · 剔除杠杆)",
+      yLabel: "5年 ROE 波动率 (% · 越低越稳)",
+      subtitle: "横轴 5 年平均资本回报 ROIC（金融股自动标注 ROE 代理） · 纵轴 5 年 ROE 波动率 · 右下象限为高效率低波动真龙头",
+      badge: "占优区：高ROIC · 低盈利波动",
+      badgePos: "br",
+      forceZeroX: false,
+      forceZeroY: true,
+      xFmt: v => `${v.toFixed(1)}%`,
+      yFmt: v => `${v.toFixed(1)}%`,
+      getX: r => r.roic5yMean,
+      getY: r => r.roeVol5y
     }
   };
   const cfg = configs[mode] || configs.pb_roe;
@@ -633,7 +673,12 @@ export function renderCompareScatter(rows) {
   if (subEl) subEl.textContent = cfg.subtitle;
 
   const pts = rows
-    .map(r => ({ row: r, x: cfg.getX(r), y: cfg.getY(r) }))
+    .map(r => ({
+      row: r,
+      x: cfg.getX(r),
+      x2: typeof cfg.getX2 === "function" ? cfg.getX2(r) : null,
+      y: cfg.getY(r)
+    }))
     .filter(p => p.x !== null && p.y !== null && Number.isFinite(p.x) && Number.isFinite(p.y));
 
   const w = Math.max(290, wrap.clientWidth || 720);
@@ -642,7 +687,11 @@ export function renderCompareScatter(rows) {
   svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
 
   if (!pts.length) {
-    svg.innerHTML = `<text x="${w / 2}" y="${h / 2}" text-anchor="middle" fill="#6B7280" font-size="13" font-family="Noto Sans SC, sans-serif">${STATE.compare.loading ? "正在加载同业标的并测算…" : "当前篮子暂无足够的有效散点数据（请添加或切换指标模式）"}</text>`;
+    if (isNarrow && !STATE.compare.loading) {
+      svg.innerHTML = `<text x="${w / 2}" y="${h / 2 - 8}" text-anchor="middle" fill="#6B7280" font-size="12" font-family="Noto Sans SC, sans-serif"><tspan x="${w / 2}" dy="0">当前篮子暂无足够有效散点数据</tspan><tspan x="${w / 2}" dy="18">请添加标的或切换上方对比模式</tspan></text>`;
+    } else {
+      svg.innerHTML = `<text x="${w / 2}" y="${h / 2}" text-anchor="middle" fill="#6B7280" font-size="${isNarrow ? 12 : 13}" font-family="Noto Sans SC, sans-serif">${STATE.compare.loading ? "正在加载同业标的并测算…" : "当前篮子暂无足够的有效散点数据（请添加或切换指标模式）"}</text>`;
+    }
     return;
   }
 
@@ -650,7 +699,17 @@ export function renderCompareScatter(rows) {
   const plotW = Math.max(120, w - pad.l - pad.r);
   const plotH = Math.max(120, h - pad.t - pad.b);
 
-  const [xLo, xHi] = niceAxisRange(pts.map(p => p.x), cfg.forceZeroX, cfg.clampX || null);
+  const showArrows = mode === "div_growth" && Boolean(STATE.compare.showGrowthArrows);
+  const showRings = Boolean(STATE.compare.showRiskRings);
+  const xValsForRange = [];
+  for (const p of pts) {
+    xValsForRange.push(p.x);
+    if (showArrows && p.x2 != null && Number.isFinite(p.x2)) {
+      xValsForRange.push(p.x2);
+    }
+  }
+
+  const [xLo, xHi] = niceAxisRange(xValsForRange, cfg.forceZeroX, cfg.clampX || null);
   const [yLo, yHi] = niceAxisRange(pts.map(p => p.y), cfg.forceZeroY, null);
   const toPxX = (v) => pad.l + ((v - xLo) / (xHi - xLo)) * plotW;
   const toPxY = (v) => pad.t + plotH - ((v - yLo) / (yHi - yLo)) * plotH;
@@ -659,7 +718,13 @@ export function renderCompareScatter(rows) {
   const yTicks = makeTicks(yLo, yHi, 5);
 
   const parts = [];
-  parts.push(`<defs><clipPath id="cmp-plot-clip"><rect x="${pad.l}" y="${pad.t}" width="${plotW}" height="${plotH}" /></clipPath></defs>`);
+  parts.push(
+    `<defs>` +
+      `<clipPath id="cmp-plot-clip"><rect x="${pad.l}" y="${pad.t}" width="${plotW}" height="${plotH}" /></clipPath>` +
+      `<marker id="cmp-arrow-up" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0.5 L5.5,3 L0,5.5 z" fill="#0F766E" /></marker>` +
+      `<marker id="cmp-arrow-down" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0.5 L5.5,3 L0,5.5 z" fill="#DC2626" /></marker>` +
+    `</defs>`
+  );
   parts.push(`<rect x="${pad.l}" y="${pad.t}" width="${plotW}" height="${plotH}" fill="#FFFFFF" stroke="#E5E7EB" stroke-width="1" />`);
 
   // Quadrant / Reference lines inside clipPath
@@ -690,6 +755,30 @@ export function renderCompareScatter(rows) {
     const rx = toPxX(50);
     const ry = medY != null ? toPxY(medY) : pad.t + plotH * 0.5;
     refParts.push(`<rect x="${pad.l}" y="${Math.max(pad.t, ry)}" width="${Math.max(0, Math.min(pad.l + plotW, rx) - pad.l)}" height="${Math.max(0, pad.t + plotH - Math.max(pad.t, ry))}" fill="rgba(15,118,110,0.05)" />`);
+    refParts.push(`<line x1="${rx}" y1="${pad.t}" x2="${rx}" y2="${pad.t + plotH}" stroke="#6B7280" stroke-width="1" stroke-dasharray="4 4" />`);
+    refParts.push(`<line x1="${pad.l}" y1="${ry}" x2="${pad.l + plotW}" y2="${ry}" stroke="#6B7280" stroke-width="1" stroke-dasharray="4 4" />`);
+  } else if (mode === "cf_return") {
+    const loB = Math.min(xLo, yLo) - 50;
+    const hiB = Math.max(xHi, yHi) + 50;
+    const abovePts = `${toPxX(loB)},${toPxY(loB)} ${toPxX(loB)},${toPxY(hiB)} ${toPxX(hiB)},${toPxY(hiB)}`;
+    const belowPts = `${toPxX(0)},${toPxY(0)} ${toPxX(0)},${toPxY(loB)} ${toPxX(hiB)},${toPxY(loB)} ${toPxX(hiB)},${toPxY(hiB)}`;
+    refParts.push(`<polygon points="${abovePts}" fill="rgba(185,28,28,0.04)" />`);
+    refParts.push(`<polygon points="${belowPts}" fill="rgba(15,118,110,0.05)" />`);
+    if (xLo < 0 && xHi > 0) {
+      const xZeroPx = toPxX(0);
+      refParts.push(`<line x1="${xZeroPx}" y1="${pad.t}" x2="${xZeroPx}" y2="${pad.t + plotH}" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="3 3" />`);
+    }
+    refParts.push(`<line x1="${toPxX(loB)}" y1="${toPxY(loB)}" x2="${toPxX(hiB)}" y2="${toPxY(hiB)}" stroke="#0F766E" stroke-width="1.4" stroke-dasharray="5 4" />`);
+    const tAnchor = Math.max(xLo + 0.5, Math.min(xHi, yHi) - (xHi - xLo) * 0.05);
+    const lblY = clamp(toPxY(tAnchor) - 7, pad.t + 14, pad.t + plotH - 18);
+    const lblX = clamp(toPxX(tAnchor), pad.l + 110, pad.l + plotW - 8);
+    refParts.push(`<text x="${lblX.toFixed(1)}" y="${lblY.toFixed(1)}" text-anchor="end" font-size="10" font-weight="600" fill="#0F766E" font-family="Noto Sans SC, sans-serif">股东回报 = FCF (100% 覆盖线)</text>`);
+  } else if (mode === "roic_stability") {
+    const medX = median(pts.map(p => p.x));
+    const medY = median(pts.map(p => p.y));
+    const rx = medX != null ? toPxX(medX) : (pad.l + plotW * 0.5);
+    const ry = medY != null ? toPxY(medY) : (pad.t + plotH * 0.5);
+    refParts.push(`<rect x="${Math.max(pad.l, rx)}" y="${Math.max(pad.t, ry)}" width="${Math.max(0, pad.l + plotW - Math.max(pad.l, rx))}" height="${Math.max(0, pad.t + plotH - Math.max(pad.t, ry))}" fill="rgba(15,118,110,0.05)" />`);
     refParts.push(`<line x1="${rx}" y1="${pad.t}" x2="${rx}" y2="${pad.t + plotH}" stroke="#6B7280" stroke-width="1" stroke-dasharray="4 4" />`);
     refParts.push(`<line x1="${pad.l}" y1="${ry}" x2="${pad.l + plotW}" y2="${ry}" stroke="#6B7280" stroke-width="1" stroke-dasharray="4 4" />`);
   }
@@ -736,6 +825,33 @@ export function renderCompareScatter(rows) {
     };
   }).sort((a, b) => b.r - a.r);
 
+  // Growth tail arrows layer (5Y -> 1Y)
+  const arrowElems = [];
+  if (showArrows) {
+    for (const b of bubbles) {
+      if (b.x2 == null || !Number.isFinite(b.x2) || Math.abs(b.x2 - b.x) < 0.8) continue;
+      const isAccel = b.x2 > b.x;
+      const sx = b.cx + (isAccel ? b.r * 0.72 : -b.r * 0.72);
+      const tx = toPxX(b.x2);
+      if (Math.abs(tx - sx) < 4) continue;
+      const strokeColor = isAccel ? "#0F766E" : "#DC2626";
+      const markerId = isAccel ? "cmp-arrow-up" : "cmp-arrow-down";
+      arrowElems.push(`<line x1="${sx.toFixed(1)}" y1="${b.cy.toFixed(1)}" x2="${tx.toFixed(1)}" y2="${b.cy.toFixed(1)}" stroke="${strokeColor}" stroke-width="1.65" stroke-opacity="0.72" marker-end="url(#${markerId})" style="pointer-events:none;" />`);
+    }
+  }
+
+  // Risk-control outer rings
+  const ringElems = [];
+  if (showRings) {
+    for (const b of bubbles) {
+      if (b.row.riskFlag === "high_risk") {
+        ringElems.push(`<circle cx="${b.cx.toFixed(1)}" cy="${b.cy.toFixed(1)}" r="${(b.r + 3.8).toFixed(1)}" fill="none" stroke="#DC2626" stroke-width="1.6" stroke-dasharray="3.5 2.5" stroke-opacity="0.92" style="pointer-events:none;" />`);
+      } else if (b.row.riskFlag === "low_vol") {
+        ringElems.push(`<circle cx="${b.cx.toFixed(1)}" cy="${b.cy.toFixed(1)}" r="${(b.r + 3.5).toFixed(1)}" fill="none" stroke="#0F766E" stroke-width="1.7" stroke-opacity="0.75" style="pointer-events:none;" />`);
+      }
+    }
+  }
+
   // Collision-avoiding label placement
   const placedBoxes = [];
   const overlapArea = (a, b) => {
@@ -781,6 +897,12 @@ export function renderCompareScatter(rows) {
     `<circle class="scatter-dot" data-cmp-dot="${esc(b.row.code)}" cx="${b.cx.toFixed(1)}" cy="${b.cy.toFixed(1)}" r="${b.r.toFixed(1)}" fill="${b.fill}" fill-opacity="0.72" stroke="#FFFFFF" stroke-width="1.8" />`
   );
 
+  if (arrowElems.length) {
+    parts.push(`<g clip-path="url(#cmp-plot-clip)">${arrowElems.join("")}</g>`);
+  }
+  if (ringElems.length) {
+    parts.push(`<g>${ringElems.join("")}</g>`);
+  }
   parts.push(`<g>${dotElems.join("")}</g>`);
   parts.push(`<g>${labelElems.join("")}</g>`);
   svg.innerHTML = parts.join("");
@@ -795,21 +917,47 @@ export function renderCompareScatter(rows) {
       const r = b.row;
       const dcfUp = r.dcfUpsidePct != null ? fmtPct(r.dcfUpsidePct, 1, true) : "--";
       const rimUp = r.rimUpsidePct != null ? fmtPct(r.rimUpsidePct, 1, true) : "--";
+      const shTotal = r.shareholderYieldPct != null ? `${r.shareholderYieldPct.toFixed(2)}%` : "--";
+      const divPart = r.divYieldPct != null ? `${r.divYieldPct.toFixed(2)}%` : "--";
+      const bbPart = (r.buybackYieldPct || 0) > 0 ? `+回购${r.buybackYieldPct.toFixed(2)}%` : "";
+      const fcfPart = r.fcfYieldPct != null ? `${r.fcfYieldPct.toFixed(1)}%` : "--";
+      const ccPart = r.cashConv5y != null ? `${r.cashConv5y.toFixed(2)}x` : "--";
+      const roicTag = r.roicIsRoeProxy ? "ROE" : "ROIC";
+      const roicVal = r.roic5yMean != null ? `${r.roic5yMean.toFixed(1)}%` : "--";
+      const roeVolVal = r.roeVol5y != null ? `${r.roeVol5y.toFixed(1)}%` : "--";
+      const g5Val = r.g1Base != null ? fmtPct(r.g1Base, 1, true) : "--";
+      const g1Val = r.npYoy1yRaw != null ? fmtPct(r.npYoy1yRaw, 1, true) : "--";
+      const gDir = (r.npYoy1yRaw != null && r.g1Base != null)
+        ? (r.npYoy1yRaw > r.g1Base + 0.8 ? " 加速↑" : (r.npYoy1yRaw < r.g1Base - 0.8 ? " 放缓↓" : " 持平"))
+        : "";
+      const debtStr = r.debtRatioPct != null ? `${r.debtRatioPct.toFixed(0)}%` : "--";
+      const ncStr = r.netCashToMktCap != null ? fmtPct(r.netCashToMktCap, 0, true) : "--";
+      const vol3Str = r.vol3y != null ? `${r.vol3y.toFixed(0)}%` : "--";
+      const dd3Str = r.maxDd3y != null ? `${r.maxDd3y.toFixed(0)}%` : "--";
+      const riskBadge = r.riskFlag === "low_vol"
+        ? ` <span style="color:#6EE7B7;">[低波稳健]</span>`
+        : (r.riskFlag === "high_risk" ? ` <span style="color:#FCA5A5;">[高负债/回撤预警]</span>` : "");
+
       tt.innerHTML = `
-        <div class="tt-date">${esc(r.name)} <span style="opacity:.7;font-weight:400;">(${esc(r.code)})</span></div>
+        <div class="tt-date">${esc(r.name)} <span style="opacity:.7;font-weight:400;">(${esc(r.code)})</span>${riskBadge}</div>
         <div class="tt-row"><span class="tt-lbl">${esc(cfg.xLabel)}</span><span class="tt-val">${esc(cfg.xFmt(b.x))}</span></div>
         <div class="tt-row"><span class="tt-lbl">${esc(cfg.yLabel)}</span><span class="tt-val">${esc(cfg.yFmt(b.y))}</span></div>
         <div class="tt-row"><span class="tt-lbl">不复权价 / 市值</span><span class="tt-val">¥${fmtNum(r.unadjPrice)} / ${fmtMoneyShort(r.mktCap)}</span></div>
         <div class="tt-row"><span class="tt-lbl">隐含回报 IRR</span><span class="tt-val" style="color:${(r.impliedIrr ?? 0) >= 8 ? "#6EE7B7" : "#FCA5A5"};">${r.impliedIrr != null ? r.impliedIrr.toFixed(2) + "%" : "--"}</span></div>
-        <div class="tt-row"><span class="tt-lbl">${esc(r.dcfBaseLabel)} 估值</span><span class="tt-val">¥${fmtNum(r.dcfMid)} (${esc(dcfUp)})</span></div>
-        <div class="tt-row"><span class="tt-lbl">RIM 估值</span><span class="tt-val">¥${fmtNum(r.rimMid)} (${esc(rimUp)})</span></div>
-        <div class="tt-row"><span class="tt-lbl">PE(分位) / 股息</span><span class="tt-val">${r.peTtm != null ? fmtNum(r.peTtm, 1) + "x" : "--"}(${r.pePct5y != null ? r.pePct5y.toFixed(0) + "%" : "--"}) / ${r.divYieldPct != null ? r.divYieldPct.toFixed(2) + "%" : "--"}</span></div>
+        <div class="tt-row"><span class="tt-lbl">${esc(r.dcfBaseLabel)} / RIM</span><span class="tt-val">¥${fmtNum(r.dcfMid)}(${esc(dcfUp)}) / ¥${fmtNum(r.rimMid)}(${esc(rimUp)})</span></div>
+        <div class="tt-row"><span class="tt-lbl">股东回报 (股息${bbPart ? "+回购" : ""})</span><span class="tt-val">${esc(shTotal)} (${esc(divPart)}${esc(bbPart)})</span></div>
+        <div class="tt-row"><span class="tt-lbl">FCF收益 / 5Y净现比</span><span class="tt-val">${esc(fcfPart)} / ${esc(ccPart)}</span></div>
+        <div class="tt-row"><span class="tt-lbl">5Y ${esc(roicTag)} / ROE波动</span><span class="tt-val">${esc(roicVal)} / ${esc(roeVolVal)}</span></div>
+        <div class="tt-row"><span class="tt-lbl">增速 (5Y→1Y)</span><span class="tt-val">${esc(g5Val)} → ${esc(g1Val)}${esc(gDir)}</span></div>
+        <div class="tt-row"><span class="tt-lbl">负债率 / 净现金比</span><span class="tt-val">${esc(debtStr)} / ${esc(ncStr)}</span></div>
+        <div class="tt-row"><span class="tt-lbl">3Y波动 / 最大回撤</span><span class="tt-val">${esc(vol3Str)} / ${esc(dd3Str)}</span></div>
         <div style="margin-top:4px;font-size:10px;opacity:0.75;">点击气泡进入个股深度看板 →</div>
       `;
       tt.style.display = "block";
-      const tw = tt.offsetWidth || 220;
-      const th = tt.offsetHeight || 160;
-      const tx = b.cx + b.r + 14 + tw > w ? Math.max(6, b.cx - b.r - tw - 14) : (b.cx + b.r + 14);
+      const tw = Math.min(tt.offsetWidth || 250, w - 12);
+      const th = tt.offsetHeight || 220;
+      const rawTx = b.cx + b.r + 14 + tw > w ? (b.cx - b.r - tw - 14) : (b.cx + b.r + 14);
+      const tx = clamp(rawTx, 6, Math.max(6, w - tw - 6));
       const ty = clamp(b.cy - th / 2, 6, Math.max(6, h - th - 6));
       tt.style.left = `${tx}px`;
       tt.style.top = `${ty}px`;
@@ -838,12 +986,15 @@ export function renderCompareTable(rows) {
     { key: "unadjPrice", label: "不复权价", align: "", sortable: true },
     { key: "peTtm", label: "PE_TTM (5Y分位)", align: "", sortable: true },
     { key: "pb", label: "PB (5Y分位)", align: "", sortable: true },
-    { key: "divYieldPct", label: "股息率 (派息率)", align: "", sortable: true },
-    { key: "roeTtm", label: "TTM ROE", align: "", sortable: true },
-    { key: "g1Base", label: "5Y净利增速", align: "", sortable: true },
+    { key: "shareholderYieldPct", label: "股东回报 (股息/回购)", align: "", sortable: true },
+    { key: "fcfYieldPct", label: "FCF收益 (5Y净现比)", align: "", sortable: true },
+    { key: "roic5yMean", label: "5Y ROIC (ROE波动)", align: "", sortable: true },
+    { key: "g1Base", label: "5Y→1Y净利增速", align: "", sortable: true },
     { key: "dcfUpsidePct", label: "绝对估值 (口径/空间)", align: "", sortable: true },
     { key: "rimUpsidePct", label: "RIM估值 (空间)", align: "", sortable: true },
     { key: "impliedIrr", label: "隐含回报 IRR", align: "", sortable: true },
+    { key: "debtRatioPct", label: "负债 / 净现金比", align: "", sortable: true },
+    { key: "vol3y", label: "3Y波动 / 回撤", align: "", sortable: true },
     { key: "actions", label: "操作", align: "center", sortable: false }
   ];
 
@@ -861,14 +1012,14 @@ export function renderCompareTable(rows) {
         STATE.compare.sortDir = STATE.compare.sortDir === "desc" ? "asc" : "desc";
       } else {
         STATE.compare.sortBy = k;
-        STATE.compare.sortDir = (k === "peTtm" || k === "pb" || k === "code") ? "asc" : "desc";
+        STATE.compare.sortDir = (k === "peTtm" || k === "pb" || k === "code" || k === "vol3y" || k === "debtRatioPct") ? "asc" : "desc";
       }
       renderCompareResults();
     });
   });
 
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="13" class="center flat" style="padding:28px;">${STATE.compare.loading ? "正在并发拉取并计算同业数据…" : "暂无可展示的对比数据"}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="${cols.length}" class="center flat" style="padding:28px;">${STATE.compare.loading ? "正在并发拉取并计算同业数据…" : "暂无可展示的对比数据"}</td></tr>`;
     return;
   }
 
@@ -895,8 +1046,19 @@ export function renderCompareTable(rows) {
   tbody.innerHTML = sorted.map(r => {
     const peSub = r.pePct5y != null ? `${r.pePct5y.toFixed(0)}% 分位` : "--";
     const pbSub = r.pbPct5y != null ? `${r.pbPct5y.toFixed(0)}% 分位` : "--";
-    const paySub = r.payoutPct != null ? `派息 ${r.payoutPct.toFixed(0)}%` : "--";
+    const divTxt = r.divYieldPct != null ? `股息${r.divYieldPct.toFixed(1)}%` : "股息--";
+    const bbTxt = (r.buybackYieldPct || 0) > 0 ? `+回购${r.buybackYieldPct.toFixed(1)}%` : (r.payoutPct != null ? `·派息${r.payoutPct.toFixed(0)}%` : "");
+    const fcfSub = r.cashConv5y != null ? `5Y净现 ${r.cashConv5y.toFixed(2)}x` : "5Y净现 --";
+    const roicSub = `${r.roicIsRoeProxy ? "ROE口径" : "剔杠杆"} · 波动${r.roeVol5y != null ? r.roeVol5y.toFixed(1) + "%" : "--"}`;
+    const g1Sub = r.npYoy1yRaw != null ? `1Y ${fmtPct(r.npYoy1yRaw, 1, true)}` : "1Y --";
     const irrColor = r.impliedIrr == null ? "var(--ink-faint)" : (r.impliedIrr >= (r.rUsed || 8) ? "var(--emerald)" : "var(--crimson)");
+    const debtTxt = r.debtRatioPct != null ? `${r.debtRatioPct.toFixed(0)}%` : "--";
+    const ncSub = r.netCashToMktCap != null ? `净现 ${fmtPct(r.netCashToMktCap, 0, true)}` : "净现 --";
+    const volTxt = r.vol3y != null ? `${r.vol3y.toFixed(1)}%` : "--";
+    const ddSub = r.maxDd3y != null ? `回撤 ${r.maxDd3y.toFixed(0)}%` : "--";
+    const riskMark = r.riskFlag === "low_vol"
+      ? `<span style="color:var(--emerald);font-weight:600;">[低波] </span>`
+      : (r.riskFlag === "high_risk" ? `<span style="color:var(--crimson);font-weight:600;">[预警] </span>` : "");
     return `
       <tr data-cmp-row="${esc(r.code)}">
         <td class="left mono"><strong>${esc(r.code)}</strong></td>
@@ -905,12 +1067,15 @@ export function renderCompareTable(rows) {
         <td class="mono">¥${fmtNum(r.unadjPrice)}</td>
         <td>${r.peTtm != null ? `<strong>${fmtNum(r.peTtm, 1)}x</strong><br><small class="flat" style="font-size:10.5px;">${peSub}</small>` : `<span class="flat">亏损/无</span>`}</td>
         <td>${r.pb != null ? `<strong>${fmtNum(r.pb, 2)}x</strong><br><small class="flat" style="font-size:10.5px;">${pbSub}</small>` : `--`}</td>
-        <td>${r.divYieldPct != null ? `<strong>${r.divYieldPct.toFixed(2)}%</strong><br><small class="flat" style="font-size:10.5px;">${paySub}</small>` : `--`}</td>
-        <td class="mono">${r.roeTtm != null ? `${r.roeTtm.toFixed(1)}%` : "--"}</td>
-        <td class="mono ${clsSign(r.g1Base)}">${r.g1Base != null ? fmtPct(r.g1Base, 1, true) : "--"}</td>
+        <td>${r.shareholderYieldPct != null ? `<strong>${r.shareholderYieldPct.toFixed(2)}%</strong><br><small class="flat" style="font-size:10.5px;">${esc(divTxt + bbTxt)}</small>` : `--`}</td>
+        <td>${r.fcfYieldPct != null ? `<strong>${r.fcfYieldPct.toFixed(1)}%</strong><br><small class="flat" style="font-size:10.5px;">${esc(fcfSub)}</small>` : `<span class="flat">--</span><br><small class="flat" style="font-size:10.5px;">${esc(fcfSub)}</small>`}</td>
+        <td>${r.roic5yMean != null ? `<strong>${r.roic5yMean.toFixed(1)}%</strong><br><small class="flat" style="font-size:10.5px;">${esc(roicSub)}</small>` : `--`}</td>
+        <td class="mono ${clsSign(r.g1Base)}"><strong>${r.g1Base != null ? fmtPct(r.g1Base, 1, true) : "--"}</strong><br><small class="flat" style="font-size:10.5px;">${esc(g1Sub)}</small></td>
         <td>${fmtUpsideCell(r.dcfMid, r.dcfUpsidePct, r.dcfBaseLabel)}</td>
         <td>${fmtUpsideCell(r.rimMid, r.rimUpsidePct)}</td>
         <td class="mono" style="font-weight:700;color:${irrColor};">${r.impliedIrr != null ? r.impliedIrr.toFixed(2) + "%" : "--"}<br><small class="flat" style="font-weight:400;font-size:10px;">r=${r.rUsed != null ? r.rUsed.toFixed(2) + "%" : "--"}</small></td>
+        <td class="mono">${esc(debtTxt)}<br><small class="flat" style="font-size:10.5px;">${esc(ncSub)}</small></td>
+        <td class="mono">${riskMark}${esc(volTxt)}<br><small class="flat" style="font-size:10.5px;">${esc(ddSub)}</small></td>
         <td class="center">
           <button type="button" class="btn-mini" data-cmp-open="${esc(r.code)}">看板→</button>
           <button type="button" class="btn-mini" data-cmp-rm="${esc(r.code)}" style="margin-left:3px;">移除</button>

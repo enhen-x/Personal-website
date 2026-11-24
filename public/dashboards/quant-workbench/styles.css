@@ -1418,8 +1418,24 @@ pre.json-pre {
   fill-opacity: 0.96 !important;
 }
 .scatter-tooltip {
-  max-width: 260px;
+  max-width: 290px;
   z-index: 20;
+}
+.legend-ring-swatch {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: transparent;
+}
+.legend-ring-swatch.low-vol {
+  border: 2px solid #0F766E;
+}
+.legend-ring-swatch.high-risk {
+  border: 2px dashed #DC2626;
+}
+.cmp-table th {
+  white-space: nowrap;
 }
 .cmp-table tbody tr.is-hover {
   background: rgba(15, 118, 110, 0.07) !important;
