@@ -64,6 +64,7 @@ export const STATE = {
     showRiskRings: true,
     rMode: "capm",
     scenario: "neutral",
+    horizon: "ttm",
     netCashAdj: false,
     rimAllowBelowBook: false,
     sortBy: "impliedIrr",

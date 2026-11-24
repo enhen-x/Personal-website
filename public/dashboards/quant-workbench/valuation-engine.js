@@ -1328,45 +1328,81 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
     ? (approxDivYieldPct + buybackYieldPct)
     : (Math.abs(buybackYieldPct) >= 0.05 ? buybackYieldPct : null);
 
-  // 5Y Cash Conversion, 5Y ROIC Mean, and 5Y ROE Volatility
+  // 3Y & 5Y Normalized Cash Conversion, ROIC Mean, ROE Mean/Vol/Min, and Earnings/FCF Averages
+  let sumOcf3y = 0;
+  let sumNp3y = 0;
+  let cfPairs3y = 0;
   let sumOcf5y = 0;
   let sumNp5y = 0;
   let cfPairs5y = 0;
+  const roeSamples3y = [];
   const roeSamples5y = [];
+  const roicSamples3y = [];
   const roicSamples5y = [];
+  const npSamples3y = [];
+  const npSamples5y = [];
+  const fcfSamples5y = [];
   for (let k = 0; k < 5; k++) {
     const idx = quarters.length - 1 - 4 * k;
     if (idx < 0) break;
     const q = quarters[idx];
+    if (q?.ttmNp !== null && Number.isFinite(q.ttmNp)) {
+      if (k < 3) npSamples3y.push(q.ttmNp);
+      npSamples5y.push(q.ttmNp);
+    }
+    if (q?.ttmFcf !== null && Number.isFinite(q.ttmFcf)) {
+      fcfSamples5y.push(q.ttmFcf);
+    }
     if (q?.ttmOcf !== null && q?.ttmNp !== null && Number.isFinite(q.ttmOcf) && Number.isFinite(q.ttmNp)) {
+      if (k < 3) {
+        sumOcf3y += q.ttmOcf;
+        sumNp3y += q.ttmNp;
+        cfPairs3y++;
+      }
       sumOcf5y += q.ttmOcf;
       sumNp5y += q.ttmNp;
       cfPairs5y++;
     }
     if (q?.equity > 0 && q?.ttmNp !== null && Number.isFinite(q.ttmNp)) {
       const roeVal = clamp((q.ttmNp / q.equity) * 100, -60, 80);
+      if (k < 3) roeSamples3y.push(roeVal);
       roeSamples5y.push(roeVal);
       if (!isFinCompany) {
         const nopat = q.ttmNp + (q.ttmIntExp > 0 ? q.ttmIntExp * 0.75 : 0);
         const nonCashDebt = q.ibDebt != null ? q.ibDebt : Math.max(0, (q.debt || 0) - (q.cash || 0));
         const ic = Math.max(q.equity * 0.6, q.equity + nonCashDebt);
         if (ic > 0) {
-          roicSamples5y.push(clamp((nopat / ic) * 100, -50, 80));
+          const roicVal = clamp((nopat / ic) * 100, -50, 80);
+          if (k < 3) roicSamples3y.push(roicVal);
+          roicSamples5y.push(roicVal);
         }
       }
     }
   }
+  const calcMean = (arr) => arr.length ? (arr.reduce((a, b) => a + b, 0) / arr.length) : null;
+  const calcStd = (arr) => {
+    if (arr.length < 2) return null;
+    const m = calcMean(arr);
+    return Math.sqrt(arr.reduce((s, x) => s + (x - m) ** 2, 0) / (arr.length - 1));
+  };
+  const cashConv3y = (cfPairs3y >= 1 && sumNp3y > 0) ? clamp(sumOcf3y / sumNp3y, -5, 10) : null;
   const cashConv5y = (cfPairs5y >= 1 && sumNp5y > 0) ? clamp(sumOcf5y / sumNp5y, -5, 10) : null;
-  const roeMean5y = roeSamples5y.length ? (roeSamples5y.reduce((a, b) => a + b, 0) / roeSamples5y.length) : null;
-  let roeVol5y = dcfModel?.std5Y ?? null;
-  if (roeSamples5y.length >= 2) {
-    const varRoe = roeSamples5y.reduce((s, x) => s + (x - roeMean5y) ** 2, 0) / (roeSamples5y.length - 1);
-    roeVol5y = Math.sqrt(varRoe);
-  }
+  const roeMean3y = calcMean(roeSamples3y);
+  const roeMin3y = roeSamples3y.length ? Math.min(...roeSamples3y) : null;
+  const roeVol3y = calcStd(roeSamples3y);
+  const roeMean5y = calcMean(roeSamples5y);
+  const roeMin5y = roeSamples5y.length ? Math.min(...roeSamples5y) : null;
+  const roeVol5y = calcStd(roeSamples5y) ?? dcfModel?.std5Y ?? null;
   const roicIsRoeProxy = isFinCompany;
-  const roic5yMean = isFinCompany
-    ? (roeMean5y !== null ? roeMean5y : roeTtm)
-    : (roicSamples5y.length ? (roicSamples5y.reduce((a, b) => a + b, 0) / roicSamples5y.length) : null);
+  const roic3yMean = isFinCompany ? (roeMean3y !== null ? roeMean3y : roeTtm) : calcMean(roicSamples3y);
+  const roic5yMean = isFinCompany ? (roeMean5y !== null ? roeMean5y : roeTtm) : calcMean(roicSamples5y);
+  const np3yAvg = calcMean(npSamples3y);
+  const np5yAvg = calcMean(npSamples5y);
+  const pe3yNorm = (impliedMktCap > 0 && np3yAvg > 0) ? (impliedMktCap / np3yAvg) : null;
+  const pe5yNorm = (impliedMktCap > 0 && np5yAvg > 0) ? (impliedMktCap / np5yAvg) : null;
+  const fcf5yAvg = calcMean(fcfSamples5y);
+  const fcf3yYieldPct = (impliedMktCap > 0 && fcf3yAvg !== null) ? (fcf3yAvg / impliedMktCap) * 100 : null;
+  const fcf5yYieldPct = (impliedMktCap > 0 && fcf5yAvg !== null) ? (fcf5yAvg / impliedMktCap) * 100 : null;
 
   // Marginal 1Y TTM Net Profit YoY
   let npYoy1yRaw = null;
@@ -1439,6 +1475,22 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
     fcf: computeHistoricalSeriesStats(barsWin, quarters, "fcf", bandOpts)
   };
 
+  const tailValidMean = (arr, tailLen, minPts = 20) => {
+    if (!Array.isArray(arr) || !arr.length) return null;
+    const sub = arr.slice(-tailLen).filter(v => v !== null && v !== undefined && Number.isFinite(v));
+    return sub.length >= minPts ? (sub.reduce((a, b) => a + b, 0) / sub.length) : null;
+  };
+  const pb3yAvg = tailValidMean(bands.pb?.values, 750);
+  const pb5yAvg = tailValidMean(bands.pb?.values, 1250);
+  const pe3yAvg = tailValidMean(bands.pe?.values, 750);
+  const pe5yAvg = tailValidMean(bands.pe?.values, 1250);
+
+  const roeToPbTtm = (roeTtm !== null && pb > 0) ? (roeTtm / pb) : null;
+  const roeToPb3y = (roeMean3y !== null && pb > 0) ? (roeMean3y / pb) : null;
+  const roeToPb5y = (roeMean5y !== null && pb > 0) ? (roeMean5y / pb) : null;
+  const histRoeToPb3y = (roeMean3y !== null && pb3yAvg > 0) ? (roeMean3y / pb3yAvg) : null;
+  const histRoeToPb5y = (roeMean5y !== null && pb5yAvg > 0) ? (roeMean5y / pb5yAvg) : null;
+
   return {
     code,
     name: symbolName,
@@ -1455,11 +1507,20 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
     qNow,
     quarters,
     fcf3yAvg,
+    fcf5yAvg,
+    fcf3yYieldPct,
+    fcf5yYieldPct,
     cagrNp,
     cagrLabel,
     dcfModel,
     peTtm,
+    pe3yNorm,
+    pe5yNorm,
+    pe3yAvg,
+    pe5yAvg,
     pb,
+    pb3yAvg,
+    pb5yAvg,
     psTtm,
     fcfYieldPct,
     pFcf,
@@ -1476,10 +1537,22 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
     buybackDetail,
     shareHistoryCount: shareTimeline.length,
     shareholderYieldPct,
+    cashConv3y,
     cashConv5y,
+    roeMean3y,
+    roeMean5y,
+    roeMin3y,
+    roeMin5y,
+    roeVol3y,
+    roeVol5y,
+    roic3yMean,
     roic5yMean,
     roicIsRoeProxy,
-    roeVol5y,
+    roeToPbTtm,
+    roeToPb3y,
+    roeToPb5y,
+    histRoeToPb3y,
+    histRoeToPb5y,
     npYoy1y,
     npYoy1yRaw,
     vol3y,
@@ -1555,8 +1628,14 @@ export function computePeerMetrics(snap, opts = {}) {
     unadjPrice: curPrice,
     mktCap: snap.impliedMktCap,
     peTtm: snap.peTtm,
+    pe3yNorm: snap.pe3yNorm ?? null,
+    pe5yNorm: snap.pe5yNorm ?? null,
+    pe3yAvg: snap.pe3yAvg ?? null,
+    pe5yAvg: snap.pe5yAvg ?? null,
     pePct5y: snap.bands?.pe?.pct ?? null,
     pb: snap.pb,
+    pb3yAvg: snap.pb3yAvg ?? null,
+    pb5yAvg: snap.pb5yAvg ?? null,
     pbPct5y: snap.bands?.pb?.pct ?? null,
     psTtm: snap.psTtm,
     divYieldPct: snap.approxDivYieldPct,
@@ -1576,12 +1655,26 @@ export function computePeerMetrics(snap, opts = {}) {
     divCagr5y,
     divYieldTrap,
     fcfYieldPct: snap.fcfYieldPct ?? null,
+    fcf3yYieldPct: snap.fcf3yYieldPct ?? null,
+    fcf5yYieldPct: snap.fcf5yYieldPct ?? null,
+    cashConv3y: snap.cashConv3y ?? null,
     cashConv5y: snap.cashConv5y ?? null,
     roeTtm: snap.roeTtm,
+    roeMean3y: snap.roeMean3y ?? null,
+    roeMean5y: snap.roeMean5y ?? null,
+    roeMin3y: snap.roeMin3y ?? null,
+    roeMin5y: snap.roeMin5y ?? null,
+    roeVol3y: snap.roeVol3y ?? null,
+    roic3yMean: snap.roic3yMean ?? null,
     roic5yMean: snap.roic5yMean ?? null,
     roicIsRoeProxy: Boolean(snap.roicIsRoeProxy),
     roicSpread,
     roeVol5y: snap.roeVol5y ?? null,
+    roeToPbTtm: snap.roeToPbTtm ?? null,
+    roeToPb3y: snap.roeToPb3y ?? null,
+    roeToPb5y: snap.roeToPb5y ?? null,
+    histRoeToPb3y: snap.histRoeToPb3y ?? null,
+    histRoeToPb5y: snap.histRoeToPb5y ?? null,
     g1Base: scen?.g1 ?? null,
     npYoy1y: snap.npYoy1y ?? null,
     npYoy1yRaw: snap.npYoy1yRaw ?? null,

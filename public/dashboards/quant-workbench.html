@@ -1032,6 +1032,12 @@
             <button type="button" data-val="neutral" class="active">中性</button>
             <button type="button" data-val="optimistic">乐观</button>
           </div>
+          <span class="ctrl-label" style="margin-left:6px;">对比周期:</span>
+          <div class="seg" id="seg-cmp-horizon" title="切换同业散点图与对比矩阵的盈利/估值周期口径（平滑单年周期波动）">
+            <button type="button" data-val="ttm" class="active">当期 TTM</button>
+            <button type="button" data-val="3y">3年均值</button>
+            <button type="button" data-val="5y">5年均值</button>
+          </div>
         </div>
         <div class="inline-group">
           <button id="btn-cmp-netcash" class="preset-btn" type="button" aria-pressed="false" title="非金融标的计入账面净现金(货币资金-总负债)">DCF含净现金: 关</button>
@@ -1080,6 +1086,7 @@
           <button type="button" data-val="cf_return">现金流 vs 股东回报</button>
           <button type="button" data-val="roic_stability">资本效率 vs 稳定性</button>
           <button type="button" data-val="div_stability">红利稳定性</button>
+          <button type="button" data-val="long_term_roe_pb">长期 ROE/PB</button>
         </div>
       </div>
 
@@ -1119,7 +1126,7 @@
         <table class="cmp-table">
           <thead id="cmp-thead"></thead>
           <tbody id="cmp-tbody">
-            <tr><td colspan="13" class="center flat" style="padding:28px;">切换至此标签页后自动拉取并测算对比标的…</td></tr>
+            <tr><td colspan="18" class="center flat" style="padding:28px;">切换至此标签页后自动拉取并测算对比标的…</td></tr>
           </tbody>
         </table>
       </div>

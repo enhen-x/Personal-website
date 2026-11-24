@@ -841,6 +841,25 @@ function bindEvents() {
       renderCompareResults();
     });
   });
+  document.querySelectorAll("#seg-cmp-horizon button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const nextHz = btn.dataset.val || "ttm";
+      STATE.compare.horizon = nextHz;
+      const sortRemap = {
+        pe: { ttm: "peTtm", "3y": "pe3yNorm", "5y": "pe5yNorm" },
+        roeToPb: { ttm: "roeToPbTtm", "3y": "roeToPb3y", "5y": "roeToPb5y" },
+        fcf: { ttm: "fcfYieldPct", "3y": "fcf3yYieldPct", "5y": "fcf5yYieldPct" },
+        roic: { ttm: "roic5yMean", "3y": "roic3yMean", "5y": "roic5yMean" }
+      };
+      for (const grp of Object.values(sortRemap)) {
+        if (Object.values(grp).includes(STATE.compare.sortBy)) {
+          STATE.compare.sortBy = grp[nextHz] || grp.ttm;
+          break;
+        }
+      }
+      renderCompareResults();
+    });
+  });
   document.getElementById("btn-cmp-netcash").addEventListener("click", () => {
     STATE.compare.netCashAdj = !STATE.compare.netCashAdj;
     renderCompareResults();
@@ -867,10 +886,13 @@ function bindEvents() {
     const rows = getCompareRows();
     if (!rows.length) return;
     const headers = [
-      "code", "name", "mkt_cap", "unadj_close", "pe_ttm", "pe_pct_5y", "pb", "pb_pct_5y",
+      "code", "name", "mkt_cap", "unadj_close", "pe_ttm", "pe_3y_norm", "pe_5y_norm", "pe_pct_5y",
+      "pb", "pb_3y_avg", "pb_5y_avg", "pb_pct_5y",
+      "roe_ttm", "roe_3y_mean", "roe_5y_mean", "roe_3y_vol", "roe_3y_min",
+      "roe_to_pb_ttm", "roe_to_pb_3y", "roe_to_pb_5y",
       "shareholder_yield_pct", "div_yield_ttm", "buyback_yield_pct", "buyback_source", "payout_pct",
       "div_stability_score", "div_stability_grade", "div_consec_years", "div_cv_5y", "div_cut_count_5y", "div_cagr_5y",
-      "fcf_yield_pct", "cash_conv_5y", "roe_ttm", "roic_5y_mean", "roe_vol_5y",
+      "fcf_yield_pct", "fcf_3y_yield_pct", "fcf_5y_yield_pct", "cash_conv_5y", "roic_5y_mean", "roe_vol_5y",
       "g1_base", "np_yoy_1y", "dcf_base", "dcf_mid", "dcf_upside_pct",
       "rim_mid", "rim_upside_pct", "implied_irr", "r_used", "net_cash_per_share",
       "debt_ratio_pct", "net_cash_to_mktcap", "vol_3y", "max_dd_3y", "risk_flag"
@@ -879,10 +901,13 @@ function bindEvents() {
       `peer_compare_${new Date().toISOString().slice(0, 10)}.csv`,
       headers,
       rows.map(r => [
-        r.code, r.name, r.mktCap, r.unadjPrice, r.peTtm, r.pePct5y, r.pb, r.pbPct5y,
+        r.code, r.name, r.mktCap, r.unadjPrice, r.peTtm, r.pe3yNorm, r.pe5yNorm, r.pePct5y,
+        r.pb, r.pb3yAvg, r.pb5yAvg, r.pbPct5y,
+        r.roeTtm, r.roeMean3y, r.roeMean5y, r.roeVol3y, r.roeMin3y,
+        r.roeToPbTtm, r.roeToPb3y, r.roeToPb5y,
         r.shareholderYieldPct, r.divYieldPct, r.buybackYieldPct, r.buybackSource, r.payoutPct,
         r.divStabilityScore, r.divStabilityGrade, r.divConsecYears, r.divCv5y, r.divCutCount5y, r.divCagr5y,
-        r.fcfYieldPct, r.cashConv5y, r.roeTtm, r.roic5yMean, r.roeVol5y,
+        r.fcfYieldPct, r.fcf3yYieldPct, r.fcf5yYieldPct, r.cashConv5y, r.roic5yMean, r.roeVol5y,
         r.g1Base, r.npYoy1yRaw, r.dcfBase, r.dcfMid, r.dcfUpsidePct,
         r.rimMid, r.rimUpsidePct, r.impliedIrr, r.rUsed, r.netCashPerShare,
         r.debtRatioPct, r.netCashToMktCap, r.vol3y, r.maxDd3y, r.riskFlag
