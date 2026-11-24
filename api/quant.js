@@ -3,7 +3,7 @@ const ALLOWED_ENDPOINT_PATTERNS = [
   /^\/api\/overview$/,
   /^\/api\/stocks$/,
   /^\/api\/screener$/,
-  /^\/api\/stocks\/[A-Za-z0-9._-]+\/(kline|financials)$/,
+  /^\/api\/stocks\/[A-Za-z0-9._-]+\/(kline|financials|peers)$/,
 ];
 
 function isAllowedEndpoint(endpoint) {
@@ -32,6 +32,9 @@ function getCacheControl(endpoint, isFresh) {
   }
   if (/^\/api\/stocks\/[A-Za-z0-9._-]+\/financials$/.test(endpoint)) {
     return 'public, max-age=300, s-maxage=1800, stale-while-revalidate=86400';
+  }
+  if (/^\/api\/stocks\/[A-Za-z0-9._-]+\/peers$/.test(endpoint)) {
+    return 'public, max-age=120, s-maxage=1800, stale-while-revalidate=86400';
   }
   return 'no-store';
 }

@@ -1,0 +1,1150 @@
+import { fmtPct, median, clamp, daysBetweenDates, addDaysIso } from "./utils.js";
+
+export function quarterIndex(fy, fp) {
+  const qMap = { Q1: 1, Q2: 2, Q3: 3, Q4: 4 };
+  const q = qMap[String(fp || "").toUpperCase()] || 0;
+  const y = Number(fy);
+  if (!Number.isFinite(y) || !q) return 0;
+  return y * 4 + q;
+}
+
+export function calcQuantile(sortedArr, q) {
+  if (!sortedArr.length) return null;
+  const idx = (sortedArr.length - 1) * q;
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sortedArr[lo];
+  return sortedArr[lo] + (sortedArr[hi] - sortedArr[lo]) * (idx - lo);
+}
+
+export function percentileRank(arr, val) {
+  if (!arr.length || val === null || val === undefined || !Number.isFinite(val)) return null;
+  let le = 0;
+  for (let i = 0; i < arr.length; i++) {
+    if (arr[i] <= val) le++;
+  }
+  return (le / arr.length) * 100;
+}
+
+export function resolveEffectiveReportDate(r) {
+  const erd = String(r?.effective_report_date || "").slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(erd)) return erd;
+  const pe = String(r?.period_end || `${r?.fiscal_year || 2000}-12-31`).slice(0, 10);
+  const rd = String(r?.report_date || "").slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(rd) && /^\d{4}-\d{2}-\d{2}$/.test(pe)) {
+    const lag = daysBetweenDates(pe, rd);
+    if (lag >= 0 && lag <= 200) return rd;
+  }
+  const fp = String(r?.fiscal_period || "").toUpperCase();
+  const fallbackLag = fp === "Q1" ? 30 : (fp === "Q2" ? 60 : (fp === "Q3" ? 30 : 115));
+  return addDaysIso(pe, fallbackLag) || pe;
+}
+
+export function buildSplitMultiplierHelper(adjustmentEvents) {
+  const events = (adjustmentEvents || [])
+    .filter(e => e && e.ex_date)
+    .map(e => ({
+      ex_date: String(e.ex_date).slice(0, 10),
+      ratio: 1 + (Number(e.per_share_bonus) || 0) + (Number(e.allotment_ratio) || 0),
+      dividend_per_share: Number(e.dividend_per_share) || 0
+    }))
+    .sort((a, b) => a.ex_date.localeCompare(b.ex_date));
+
+  const splitEvents = events.filter(e => e.ratio > 1.0001);
+  let cum = 1;
+  const cumSteps = splitEvents.map(e => {
+    const before = cum;
+    cum *= e.ratio;
+    return { ex_date: e.ex_date, before, after: cum };
+  });
+
+  const getMultAt = (dateStr) => {
+    if (!dateStr || !cumSteps.length) return 1;
+    let mult = 1;
+    for (let i = 0; i < cumSteps.length; i++) {
+      if (cumSteps[i].ex_date <= dateStr) mult = cumSteps[i].after;
+      else break;
+    }
+    return mult;
+  };
+
+  const getMultBefore = (dateStr) => {
+    if (!dateStr || !cumSteps.length) return 1;
+    let mult = 1;
+    for (let i = 0; i < cumSteps.length; i++) {
+      if (cumSteps[i].ex_date < dateStr) mult = cumSteps[i].after;
+      else break;
+    }
+    return mult;
+  };
+
+  return { events, splitEvents, cumSteps, getMultAt, getMultBefore };
+}
+
+export function extractExDividendFromEvents(adjustmentEvents, lastDate, splitHelper) {
+  if (!Array.isArray(adjustmentEvents) || !lastDate || lastDate === "--") return null;
+  const sh = splitHelper || buildSplitMultiplierHelper(adjustmentEvents);
+  const multNow = sh.getMultAt(lastDate) || 1;
+  const cashEvents = [];
+  for (const e of adjustmentEvents) {
+    if (!e || !e.ex_date) continue;
+    const exDate = String(e.ex_date).slice(0, 10);
+    if (exDate > lastDate) continue;
+    const rawDps = Number(e.dividend_per_share);
+    if (!(rawDps > 0)) continue;
+    const multBefore = sh.getMultBefore(exDate) || 1;
+    const adjFactor = multNow / multBefore;
+    const dps = rawDps / (adjFactor > 0 ? adjFactor : 1);
+    if (dps > 0.0005) {
+      cashEvents.push({
+        date: exDate,
+        rawDps,
+        splitK: 1 + (Number(e.per_share_bonus) || 0) + (Number(e.allotment_ratio) || 0),
+        dps
+      });
+    }
+  }
+  cashEvents.sort((a, b) => a.date.localeCompare(b.date));
+
+  const in365 = cashEvents.filter(e => daysBetweenDates(e.date, lastDate) <= 365);
+  let chosen = in365;
+  let note = "官方除息事件";
+
+  if (chosen.length === 2 && daysBetweenDates(chosen[0].date, chosen[1].date) >= 280) {
+    chosen = chosen.slice(-1);
+    note = "官方除息(去重跨期年报)";
+  } else if (
+    chosen.length === 3 &&
+    daysBetweenDates(chosen[0].date, chosen[1].date) >= 125 &&
+    daysBetweenDates(chosen[1].date, chosen[2].date) >= 125
+  ) {
+    chosen = chosen.slice(-2);
+    note = "官方除息(去重跨期中期)";
+  } else if (chosen.length === 0) {
+    const near = cashEvents.filter(e => {
+      const d = daysBetweenDates(e.date, lastDate);
+      return d > 365 && d <= 395;
+    });
+    if (near.length === 1) {
+      chosen = near;
+      note = "官方除息(近13月顺延)";
+    }
+  }
+
+  const dpsTtm = chosen.reduce((s, e) => s + e.dps, 0);
+  const hasSplit = sh.splitEvents.some(se => chosen.some(ce => se.ex_date >= ce.date && se.ex_date <= lastDate));
+  return {
+    dpsTtm,
+    count: chosen.length,
+    events: chosen,
+    hasSplit,
+    source: "events",
+    note
+  };
+}
+
+export function detectFinancialCompany(symbolName, incRow, balRow, ttmOcf, ttmNp) {
+  const name = String(symbolName || "");
+  if (/银行|保险|证券|信托|金融|人寿|人保|太保|中国平安|中金公司|东方财富|申万宏源|国泰君安|国泰海通|期货|金租|产融/.test(name)) {
+    return true;
+  }
+  const opInc = Number(incRow?.operating_income);
+  const intExp = Number(incRow?.interest_expenses);
+  if (Number.isFinite(opInc) && opInc > 0 && Number.isFinite(intExp) && intExp > opInc * 0.15) {
+    return true;
+  }
+  const debtRatio = Number(balRow?.debt_to_assets_pct);
+  if (Number.isFinite(debtRatio) && debtRatio > 84 && ttmNp > 0 && ttmOcf > ttmNp * 2.2) {
+    return true;
+  }
+  return false;
+}
+
+export function buildQuarterlyValuationSeries(finData, symbolName = "") {
+  const incList = [...(finData?.income_statements || [])].sort((a, b) => quarterIndex(a.fiscal_year, a.fiscal_period) - quarterIndex(b.fiscal_year, b.fiscal_period));
+  const balMap = new Map((finData?.balance_sheets || []).map(r => [`${r.fiscal_year}-${r.fiscal_period}`, r]));
+  const cfsMap = new Map((finData?.cash_flow_statements || []).map(r => [`${r.fiscal_year}-${r.fiscal_period}`, r]));
+
+  if (!incList.length) return [];
+
+  const idxByYm = new Map();
+  const divGrossYtd = new Array(incList.length).fill(null);
+  const intExpYtd = new Array(incList.length).fill(null);
+  for (let i = 0; i < incList.length; i++) {
+    const r = incList[i];
+    const fp = String(r.fiscal_period || "").toUpperCase();
+    const key = `${r.fiscal_year}-${r.fiscal_period}`;
+    idxByYm.set(`${r.fiscal_year}-${fp}`, i);
+
+    const c = cfsMap.get(key);
+    if (c && c.pay_dividends_profits_interest_cash != null) {
+      const divGross = Number(c.pay_dividends_profits_interest_cash);
+      if (Number.isFinite(divGross)) divGrossYtd[i] = Math.max(0, divGross);
+    }
+    if (r.interest_expenses != null) {
+      const intExp = Number(r.interest_expenses);
+      if (Number.isFinite(intExp)) intExpYtd[i] = Math.max(0, intExp);
+    }
+  }
+
+  const rawSharesArr = incList.map(r => {
+    const np = Number(r.parent_holder_net_profit);
+    const eps = Number(r.basic_eps);
+    if (Number.isFinite(np) && Number.isFinite(eps) && Math.abs(eps) >= 0.05 && np * eps > 0) {
+      return { shares: np / eps, src: `${r.fiscal_year}${r.fiscal_period}` };
+    }
+    return null;
+  });
+
+  // Forward-fill then backward-fill shares across quarters
+  const filledShares = new Array(incList.length).fill(null);
+  let lastValid = null;
+  for (let i = 0; i < incList.length; i++) {
+    if (rawSharesArr[i]) lastValid = rawSharesArr[i];
+    filledShares[i] = lastValid;
+  }
+  let nextValid = null;
+  for (let i = incList.length - 1; i >= 0; i--) {
+    if (rawSharesArr[i]) nextValid = rawSharesArr[i];
+    if (!filledShares[i]) filledShares[i] = nextValid;
+  }
+
+  const quarters = [];
+  for (let i = 0; i < incList.length; i++) {
+    const r = incList[i];
+    const key = `${r.fiscal_year}-${r.fiscal_period}`;
+    const b = balMap.get(key) || {};
+    const c = cfsMap.get(key) || {};
+    const qi = quarterIndex(r.fiscal_year, r.fiscal_period);
+    const fp = String(r.fiscal_period || "").toUpperCase();
+    const fy = Number(r.fiscal_year);
+
+    let ttmRev = null;
+    let ttmNp = null;
+    let ttmOcf = null;
+    let ttmCapex = null;
+
+    if (i >= 3 && qi - quarterIndex(incList[i - 3].fiscal_year, incList[i - 3].fiscal_period) === 3) {
+      let revS = 0, npS = 0, ocfS = 0, capS = 0;
+      let revOk = true, npOk = true, ocfOk = true, capOk = true;
+      for (let k = i - 3; k <= i; k++) {
+        const rk = incList[k];
+        const ck = cfsMap.get(`${rk.fiscal_year}-${rk.fiscal_period}`) || {};
+        if (rk.q_operating_income == null) revOk = false; else revS += Number(rk.q_operating_income);
+        if (rk.q_parent_holder_net_profit == null) npOk = false; else npS += Number(rk.q_parent_holder_net_profit);
+        if (ck.q_act_cash_flow_net == null) ocfOk = false; else ocfS += Number(ck.q_act_cash_flow_net);
+        if (ck.q_pay_fixed_assets_etc_cash == null) capOk = false; else capS += Math.max(0, Number(ck.q_pay_fixed_assets_etc_cash));
+      }
+      if (revOk) ttmRev = revS;
+      if (npOk) ttmNp = npS;
+      if (ocfOk) ttmOcf = ocfS;
+      if (capOk) ttmCapex = capS;
+    }
+
+    // Fall back to Q4 full-year YTD figures when consecutive single-quarter fields are unavailable
+    if (fp === "Q4") {
+      if (ttmRev === null && r.operating_income != null) ttmRev = Number(r.operating_income);
+      if (ttmNp === null && r.parent_holder_net_profit != null) ttmNp = Number(r.parent_holder_net_profit);
+      if (ttmOcf === null && c.act_cash_flow_net != null) ttmOcf = Number(c.act_cash_flow_net);
+      if (ttmCapex === null && c.pay_fixed_assets_etc_cash != null) ttmCapex = Math.max(0, Number(c.pay_fixed_assets_etc_cash));
+    }
+
+    // Compute TTM gross dividends/interest cash payout using exact YTD identity (prevQ4 - prevSameQ + curr)
+    let ttmDivGross = null;
+    const currCfsExists = Boolean(c && c.act_cash_flow_net != null);
+    if (fp === "Q4") {
+      if (divGrossYtd[i] !== null) ttmDivGross = divGrossYtd[i];
+    } else {
+      const prevQ4Idx = idxByYm.get(`${fy - 1}-Q4`);
+      const prevSameIdx = idxByYm.get(`${fy - 1}-${fp}`);
+      const prevQ4Div = prevQ4Idx !== undefined ? divGrossYtd[prevQ4Idx] : null;
+      if (prevQ4Div !== null && prevSameIdx !== undefined && (divGrossYtd[i] !== null || currCfsExists)) {
+        ttmDivGross = Math.max(0, prevQ4Div - (divGrossYtd[prevSameIdx] ?? 0) + (divGrossYtd[i] ?? 0));
+      } else {
+        for (let k = i; k >= Math.max(0, i - 4); k--) {
+          if (String(incList[k].fiscal_period || "").toUpperCase() === "Q4" && divGrossYtd[k] !== null) {
+            ttmDivGross = divGrossYtd[k];
+            break;
+          }
+        }
+      }
+    }
+
+    // Compute TTM interest expense using the same YTD identity
+    let ttmIntExp = null;
+    if (fp === "Q4") {
+      if (intExpYtd[i] !== null) ttmIntExp = intExpYtd[i];
+    } else {
+      const prevQ4Idx = idxByYm.get(`${fy - 1}-Q4`);
+      const prevSameIdx = idxByYm.get(`${fy - 1}-${fp}`);
+      const prevQ4Int = prevQ4Idx !== undefined ? intExpYtd[prevQ4Idx] : null;
+      if (prevQ4Int !== null && prevSameIdx !== undefined) {
+        ttmIntExp = Math.max(0, prevQ4Int - (intExpYtd[prevSameIdx] ?? 0) + (intExpYtd[i] ?? 0));
+      } else {
+        for (let k = i; k >= Math.max(0, i - 4); k--) {
+          if (String(incList[k].fiscal_period || "").toUpperCase() === "Q4" && intExpYtd[k] !== null) {
+            ttmIntExp = intExpYtd[k];
+            break;
+          }
+        }
+      }
+    }
+
+    const isFinQ = detectFinancialCompany(symbolName, r, b, ttmOcf, ttmNp);
+    const ttmFcf = ttmOcf !== null ? (ttmOcf - (ttmCapex || 0)) : null;
+    const equity = b.holder_equity_total != null ? Number(b.holder_equity_total) : null;
+    const assets = b.assets_total != null ? Number(b.assets_total) : null;
+    const cash = b.cash != null ? Number(b.cash) : null;
+    const debt = b.total_debt != null ? Number(b.total_debt) : null;
+
+    const erd = resolveEffectiveReportDate(r);
+    const sharesBasisDate = String(r.report_date || erd || r.period_end || `${r.fiscal_year}-12-31`).slice(0, 10);
+
+    quarters.push({
+      qi,
+      label: `${r.fiscal_year}${r.fiscal_period}`,
+      period_end: r.period_end || `${r.fiscal_year}-12-31`,
+      report_date: r.report_date || "",
+      effective_report_date: erd,
+      sharesBasisDate,
+      shares: filledShares[i]?.shares || null,
+      sharesSrc: filledShares[i]?.src || "--",
+      isExactShares: Boolean(rawSharesArr[i]),
+      ttmRev,
+      ttmNp,
+      ttmOcf,
+      ttmCapex,
+      ttmFcf,
+      ttmDivGross,
+      ttmIntExp,
+      ttmDiv: ttmDivGross,
+      isFinancial: isFinQ,
+      divIncludesBondInterest: isFinQ,
+      equity,
+      assets,
+      cash,
+      debt
+    });
+  }
+
+  // Apply consistent company-level financial classification based on the latest 4 quarters
+  const recentStart = Math.max(0, quarters.length - 4);
+  const companyIsFinancial = quarters.slice(recentStart).some(q => q.isFinancial);
+  for (let i = 0; i < quarters.length; i++) {
+    const q = quarters[i];
+    const isFin = companyIsFinancial || q.isFinancial;
+    q.isFinancial = isFin;
+    if (q.ttmDivGross === null) {
+      q.ttmDiv = null;
+      q.divIncludesBondInterest = false;
+    } else if (isFin) {
+      q.ttmDiv = q.ttmDivGross;
+      q.divIncludesBondInterest = true;
+    } else if (q.ttmIntExp !== null && q.ttmIntExp > 0 && q.ttmIntExp < q.ttmDivGross * 0.75) {
+      q.ttmDiv = Math.max(0, q.ttmDivGross - q.ttmIntExp);
+      q.divIncludesBondInterest = false;
+    } else {
+      q.ttmDiv = q.ttmDivGross;
+      q.divIncludesBondInterest = Boolean(q.ttmIntExp !== null && q.ttmIntExp > 0);
+    }
+  }
+
+  return quarters;
+}
+
+export function computeHistoricalSeriesStats(bars, quarters, metric, opts = {}) {
+  const alignMode = opts.alignMode === "period_end" ? "period_end" : "pit";
+  const authTotalShares = Number(opts.authTotalShares) > 0 ? Number(opts.authTotalShares) : null;
+  const authTradeDate = String(opts.authTradeDate || "2099-12-31").slice(0, 10);
+  const splitHelper = opts.splitHelper || null;
+  const multNow = splitHelper ? (splitHelper.getMultAt(authTradeDate) || 1) : 1;
+
+  const orderedQ = alignMode === "pit"
+    ? [...quarters].sort((a, b) => (a.effective_report_date || a.period_end).localeCompare(b.effective_report_date || b.period_end) || (a.qi - b.qi))
+    : quarters;
+
+  const n = bars.length;
+  const dates = new Array(n);
+  const prices = new Array(n);
+  const values = new Array(n);
+  const qLabels = new Array(n);
+  const qAlignDates = new Array(n);
+  const validVals = [];
+
+  let qPtr = -1;
+  let firstValidIdx = -1;
+  let lastValidIdx = -1;
+  for (let i = 0; i < n; i++) {
+    const bar = bars[i];
+    dates[i] = bar.date;
+    const unadj = Number(bar.close);
+    prices[i] = unadj;
+
+    while (qPtr + 1 < orderedQ.length) {
+      const nextQ = orderedQ[qPtr + 1];
+      const nextDate = alignMode === "pit" ? nextQ.effective_report_date : nextQ.period_end;
+      if (nextDate <= bar.date) qPtr++;
+      else break;
+    }
+    const q = qPtr >= 0 ? orderedQ[qPtr] : null;
+    qLabels[i] = q ? q.label : "--";
+    qAlignDates[i] = q ? (alignMode === "pit" ? q.effective_report_date : q.period_end) : "--";
+
+    let dayShares = null;
+    if (authTotalShares > 0) {
+      const multDay = splitHelper ? (splitHelper.getMultAt(bar.date) || 1) : 1;
+      dayShares = authTotalShares * (multDay / multNow);
+    } else if (q && q.shares > 0) {
+      const multDay = splitHelper ? (splitHelper.getMultAt(bar.date) || 1) : 1;
+      const multQ = splitHelper ? (splitHelper.getMultAt(q.sharesBasisDate || q.period_end) || 1) : 1;
+      dayShares = q.shares * (multDay / multQ);
+    }
+
+    let v = null;
+    if (q && dayShares > 0 && unadj > 0) {
+      const mktCap = unadj * dayShares;
+      if (metric === "pe" && q.ttmNp > 0) {
+        const pe = mktCap / q.ttmNp;
+        if (pe > 0 && pe <= 200) v = +pe.toFixed(2);
+      } else if (metric === "pb" && q.equity > 0) {
+        const pb = mktCap / q.equity;
+        if (pb > 0 && pb <= 50) v = +pb.toFixed(2);
+      } else if (metric === "ps" && q.ttmRev > 0) {
+        const ps = mktCap / q.ttmRev;
+        if (ps > 0 && ps <= 60) v = +ps.toFixed(2);
+      } else if (metric === "fcf" && q.ttmFcf !== null) {
+        const fy = (q.ttmFcf / mktCap) * 100;
+        if (fy >= -30 && fy <= 30) v = +fy.toFixed(2);
+      }
+    }
+    values[i] = v;
+    if (v !== null) {
+      if (firstValidIdx === -1) firstValidIdx = i;
+      lastValidIdx = i;
+      validVals.push(v);
+    }
+  }
+
+  const trimStart = firstValidIdx > 0 ? firstValidIdx : 0;
+  const outDates = trimStart > 0 ? dates.slice(trimStart) : dates;
+  const outPrices = trimStart > 0 ? prices.slice(trimStart) : prices;
+  const outValues = trimStart > 0 ? values.slice(trimStart) : values;
+  const outQLabels = trimStart > 0 ? qLabels.slice(trimStart) : qLabels;
+  const outQAlignDates = trimStart > 0 ? qAlignDates.slice(trimStart) : qAlignDates;
+
+  const sorted = [...validVals].sort((a, b) => a - b);
+  const p20 = calcQuantile(sorted, 0.2);
+  const p50 = calcQuantile(sorted, 0.5);
+  const p80 = calcQuantile(sorted, 0.8);
+  const mean = sorted.length ? sorted.reduce((s, x) => s + x, 0) / sorted.length : null;
+  const latestVal = [...outValues].reverse().find(v => v !== null) ?? null;
+  const pct = latestVal !== null ? percentileRank(sorted, latestVal) : null;
+  const firstDate = firstValidIdx >= 0 ? dates[firstValidIdx] : "";
+  const lastDate = lastValidIdx >= 0 ? dates[lastValidIdx] : "";
+
+  return {
+    dates: outDates,
+    prices: outPrices,
+    values: outValues,
+    qLabels: outQLabels,
+    qAlignDates: outQAlignDates,
+    validCount: sorted.length,
+    firstDate,
+    lastDate,
+    p20,
+    p50,
+    p80,
+    mean,
+    latestVal,
+    pct
+  };
+}
+
+export function extractExDividendTTM(noneItems, adjItems, cfsUpperBound, shares) {
+  if (!noneItems?.length || !adjItems?.length || adjItems.length < 2) return null;
+  const noneByDate = new Map(noneItems.map(b => [b.date, b]));
+  const raw = [];
+
+  for (let i = 1; i < adjItems.length; i++) {
+    const f0 = Number(adjItems[i - 1].factor);
+    const f1 = Number(adjItems[i].factor);
+    if (!(f0 > 0) || !(f1 > 0)) continue;
+    const ratio = f1 / f0;
+    if (ratio <= 1.00015) continue;
+
+    const prevBar = noneByDate.get(adjItems[i - 1].date);
+    if (!prevBar || !(prevBar.close > 0)) continue;
+    const prevC = Number(prevBar.close);
+    const naiveDiv = prevC * (1 - 1 / ratio);
+
+    let splitK = 1;
+    let dpsOld = naiveDiv;
+    const naiveTotalCash = shares > 0 ? naiveDiv * shares : null;
+    const isLikelySplit =
+      ratio > 1.18 ||
+      (ratio > 1.095 && cfsUpperBound > 0 && naiveTotalCash !== null && naiveTotalCash > cfsUpperBound * 1.45) ||
+      (ratio > 1.08 && cfsUpperBound === 0);
+
+    if (isLikelySplit) {
+      const kGuess = Math.floor((ratio + 1e-5) * 20) / 20;
+      if (kGuess >= 1.05) {
+        splitK = kGuess;
+        dpsOld = Math.max(0, prevC * (1 - kGuess / ratio));
+        if (cfsUpperBound > 0 && shares > 0 && (dpsOld / splitK) * shares > cfsUpperBound * 1.45) {
+          const kFine = Math.floor((ratio + 1e-5) * 100) / 100;
+          if (kFine >= 1.05) {
+            splitK = kFine;
+            dpsOld = Math.max(0, prevC * (1 - kFine / ratio));
+          }
+        }
+      } else {
+        dpsOld = 0;
+      }
+    }
+
+    raw.push({
+      date: adjItems[i].date,
+      ratio,
+      splitK,
+      dpsOld
+    });
+  }
+
+  // Normalize historical pre-split per-share dividends onto current share basis
+  let cumSplitAfter = 1;
+  for (let i = raw.length - 1; i >= 0; i--) {
+    raw[i].dps = raw[i].dpsOld / (cumSplitAfter * raw[i].splitK);
+    cumSplitAfter *= raw[i].splitK;
+  }
+
+  const lastDate = adjItems[adjItems.length - 1].date;
+  const in365 = raw.filter(e => daysBetweenDates(e.date, lastDate) <= 365 && e.dps > 0.0005);
+  let chosen = in365;
+  let note = "近12月除息";
+
+  if (chosen.length === 2 && daysBetweenDates(chosen[0].date, chosen[1].date) >= 280) {
+    chosen = chosen.slice(-1);
+    note = "近12月除息(去重跨期年报)";
+  } else if (
+    chosen.length === 3 &&
+    daysBetweenDates(chosen[0].date, chosen[1].date) >= 125 &&
+    daysBetweenDates(chosen[1].date, chosen[2].date) >= 125
+  ) {
+    chosen = chosen.slice(-2);
+    note = "近12月除息(去重跨期中期)";
+  } else if (chosen.length === 0) {
+    const near = raw.filter(e => {
+      const d = daysBetweenDates(e.date, lastDate);
+      return d > 365 && d <= 395 && e.dps > 0.0005;
+    });
+    if (near.length === 1) {
+      chosen = near;
+      note = "近13月除息(跨期顺延)";
+    }
+  }
+
+  const dpsTtm = chosen.reduce((s, e) => s + e.dps, 0);
+  return {
+    dpsTtm,
+    count: chosen.length,
+    events: chosen,
+    hasSplit: chosen.some(e => e.splitK > 1),
+    source: "exdiv",
+    note
+  };
+}
+
+export function computeMedianHistDivYield(bars, adjustmentEvents, splitHelper, kAdj) {
+  if (!bars?.length) return null;
+  const histBars = bars.length >= 65 ? bars.slice(0, -1) : bars;
+  let winBars = histBars.slice(-1250);
+  if (winBars.length < 20) return null;
+
+  let sh = splitHelper;
+  let cashEvs = Array.isArray(adjustmentEvents)
+    ? adjustmentEvents
+      .filter(e => e && e.ex_date && Number(e.dividend_per_share) > 0)
+      .map(e => {
+        const exDate = String(e.ex_date).slice(0, 10);
+        return {
+          exDate,
+          ts: Date.parse(exDate + "T00:00:00Z"),
+          rawDps: Number(e.dividend_per_share),
+          multBefore: (sh ? sh.getMultBefore(exDate) : 1) || 1
+        };
+      })
+      .filter(e => Number.isFinite(e.ts))
+      .sort((a, b) => a.ts - b.ts)
+    : [];
+
+  let step = 5;
+  if (!cashEvs.length && kAdj?.items?.length >= 60) {
+    const adjItems = kAdj.items;
+    const noneByDate = new Map(bars.map(b => [String(b.date).slice(0, 10), b]));
+    const derivedEvents = [];
+    for (let i = 1; i < adjItems.length; i++) {
+      const f0 = Number(adjItems[i - 1].factor);
+      const f1 = Number(adjItems[i].factor);
+      if (!(f0 > 0) || !(f1 > 0)) continue;
+      const ratio = f1 / f0;
+      if (ratio <= 1.00015) continue;
+      const prevBar = noneByDate.get(String(adjItems[i - 1].date).slice(0, 10));
+      if (!prevBar || !(prevBar.close > 0)) continue;
+      const prevC = Number(prevBar.close);
+      let splitK = 1;
+      let dpsOld = prevC * (1 - 1 / ratio);
+      if (ratio > 1.18) {
+        const kGuess = Math.floor((ratio + 1e-5) * 20) / 20;
+        if (kGuess >= 1.05) {
+          splitK = kGuess;
+          dpsOld = Math.max(0, prevC * (1 - kGuess / ratio));
+        } else {
+          dpsOld = 0;
+        }
+      }
+      derivedEvents.push({
+        ex_date: String(adjItems[i].date).slice(0, 10),
+        dividend_per_share: dpsOld,
+        per_share_bonus: splitK > 1 ? splitK - 1 : 0,
+        allotment_ratio: 0
+      });
+    }
+    if (!derivedEvents.length) return null;
+    sh = buildSplitMultiplierHelper(derivedEvents);
+    cashEvs = derivedEvents
+      .filter(e => e.dividend_per_share > 0.0005)
+      .map(e => ({
+        exDate: e.ex_date,
+        ts: Date.parse(e.ex_date + "T00:00:00Z"),
+        rawDps: e.dividend_per_share,
+        multBefore: sh.getMultBefore(e.ex_date) || 1
+      }))
+      .filter(e => Number.isFinite(e.ts))
+      .sort((a, b) => a.ts - b.ts);
+    const minCovDate = addDaysIso(String(adjItems[0].date).slice(0, 10), 365);
+    winBars = minCovDate ? winBars.filter(b => String(b.date).slice(0, 10) >= minCovDate) : [];
+    if (winBars.length < 15 || !cashEvs.length) return null;
+    step = winBars.length < 120 ? 1 : 5;
+  } else if (!cashEvs.length) {
+    return null;
+  } else if (winBars.length < 60) {
+    return null;
+  }
+
+  const samples = [];
+  let posCount = 0;
+  for (let i = 0; i < winBars.length; i += step) {
+    const b = winBars[i];
+    const px = Number(b?.close);
+    if (!(px > 0) || !b.date) continue;
+    const dStr = String(b.date).slice(0, 10);
+    const ts = Date.parse(dStr + "T00:00:00Z");
+    if (!Number.isFinite(ts)) continue;
+    const multDay = (sh ? sh.getMultAt(dStr) : 1) || 1;
+    const winStart = ts - 365 * 86400000;
+    let dps12m = 0;
+    for (let j = 0; j < cashEvs.length; j++) {
+      const ev = cashEvs[j];
+      if (ev.ts > ts) break;
+      if (ev.ts >= winStart) {
+        dps12m += ev.rawDps * (ev.multBefore / multDay);
+      }
+    }
+    const dy = clamp((dps12m / px) * 100, 0, 30);
+    if (dy > 0) posCount++;
+    samples.push(dy);
+  }
+  if (!samples.length || posCount < samples.length * 0.2) return null;
+  return median(samples);
+}
+
+export function buildDcfScenarioModel(quarters, kAdj, kUnadj, cagrNp, isFinancial, qNow, adjEvents, splitHelper, dcfRModeOpt = "capm") {
+  const roundHalf = (v) => Math.round(v * 2) / 2;
+  const roundQtr = (v) => Math.round(v * 4) / 4;
+
+  // 5-year rolling annual TTM net profit YoY growth series
+  const yoySamples = [];
+  for (let k = 0; k < 5; k++) {
+    const iC = quarters.length - 1 - 4 * k;
+    const iP = quarters.length - 1 - 4 * (k + 1);
+    if (iP >= 0 && quarters[iC]?.ttmNp > 0 && quarters[iP]?.ttmNp > 0) {
+      const yoy = (quarters[iC].ttmNp / quarters[iP].ttmNp - 1) * 100;
+      if (Number.isFinite(yoy)) {
+        yoySamples.push({ label: quarters[iC].label, yoy });
+      }
+    }
+  }
+
+  const n = yoySamples.length;
+  const rawMeanUnclipped = n ? yoySamples.reduce((s, x) => s + x.yoy, 0) / n : null;
+  const winMean = yoySamples.map(x => clamp(x.yoy, -20, 30));
+  const winVol = yoySamples.map(x => clamp(x.yoy, -40, 60));
+
+  const mean5Y = n ? (winMean.reduce((a, b) => a + b, 0) / n) : (cagrNp ?? 6.0);
+  const meanVol = n ? (winVol.reduce((a, b) => a + b, 0) / n) : 0;
+  const std5Y = n > 1
+    ? Math.sqrt(winVol.reduce((a, b) => a + (b - meanVol) ** 2, 0) / (n - 1))
+    : 4.0;
+
+  const baseG1 = roundHalf(clamp(mean5Y, 1.0, 18.0));
+  const deltaG1 = roundHalf(clamp(std5Y * 0.35, 1.0, Math.min(3.5, Math.max(1.5, baseG1 * 0.5))));
+  const baseG2 = baseG1 <= 4.0 ? 2.0 : 2.5;
+
+  // 1Y realized annualized volatility from trailing 250 bars up to T-1 (independent of today's spot close)
+  const volBarsRaw = (kAdj?.items?.length >= 20 ? kAdj.items : kUnadj?.items) || [];
+  const volBarsBase = volBarsRaw.length >= 25 ? volBarsRaw.slice(0, -1) : volBarsRaw;
+  const volSlice = volBarsBase.slice(-250);
+  const rets = [];
+  for (let i = 1; i < volSlice.length; i++) {
+    const p0 = Number(volSlice[i - 1].close);
+    const p1 = Number(volSlice[i].close);
+    if (p0 > 0 && p1 > 0) rets.push(Math.log(p1 / p0));
+  }
+  let vol1Y = 24.0;
+  if (rets.length >= 20) {
+    const rMean = rets.reduce((a, b) => a + b, 0) / rets.length;
+    const rVar = rets.reduce((a, b) => a + (b - rMean) ** 2, 0) / Math.max(1, rets.length - 1);
+    vol1Y = Math.sqrt(rVar * 242) * 100;
+  }
+
+  // Pure risk CAPM (spot-price independent: uses book equity scale instead of current market cap)
+  const rf = 2.0;
+  const erp = 5.5;
+  const betaVol = clamp(vol1Y / 20.0, 0.72, 1.65);
+  const eqScale = Number(qNow?.equity) || 0;
+  const sizeAdj = eqScale >= 1000e8 ? -0.25 : (eqScale > 0 && eqScale < 100e8 ? 0.50 : 0);
+  const debtRatio = (qNow?.assets > 0 && qNow?.debt != null) ? (qNow.debt / qNow.assets) * 100 : 0;
+  const levAdj = (!isFinancial && debtRatio > 70) ? 0.35 : 0;
+  const rCapm = clamp(rf + erp * betaVol + sizeAdj + levAdj, 6.25, 11.75);
+
+  // Optional spot-independent 5Y historical median dividend yield + g fit
+  const divYield5YMed = computeMedianHistDivYield(kUnadj?.items || [], adjEvents, splitHelper, kAdj);
+  let rGordonHist = null;
+  let rTargetHist = rCapm;
+  if (divYield5YMed !== null && divYield5YMed >= 1.0) {
+    const gEff = Math.min(baseG1, baseG2 + (baseG1 - baseG2) * 0.40);
+    rGordonHist = clamp(divYield5YMed * (1 + gEff / 100) + gEff, 6.00, 11.50);
+    rTargetHist = 0.65 * rGordonHist + 0.35 * rCapm;
+  }
+
+  const baseRCapm = roundQtr(clamp(rCapm, Math.max(6.25, baseG2 + 2.5), 12.0));
+  const baseRHist = roundQtr(clamp(rTargetHist, Math.max(6.00, baseG2 + 2.5), 12.0));
+  const deltaR = vol1Y >= 32 ? 0.75 : 0.50;
+
+  const roundFive = (v) => Math.round(v / 5) * 5;
+  const baseMos = roundFive(clamp(8 + baseG1 * 1.5, 10, 35));
+  const consMos = Math.min(45, baseMos + 5);
+  const optMos = Math.max(5, baseMos - 5);
+
+  const consG2 = Math.max(1.0, +(baseG2 - 0.5).toFixed(1));
+  const optG2 = Math.min(3.5, +(baseG2 + 0.5).toFixed(1));
+  const makePresets = (baseR) => ({
+    conservative: {
+      g1: +(baseG1 - deltaG1).toFixed(1),
+      g2: consG2,
+      r: Math.min(15.0, +(baseR + deltaR).toFixed(2)),
+      mos: consMos
+    },
+    neutral: {
+      g1: baseG1,
+      g2: baseG2,
+      r: baseR,
+      mos: baseMos
+    },
+    optimistic: {
+      g1: Math.min(28.0, +(baseG1 + deltaG1).toFixed(1)),
+      g2: optG2,
+      r: Math.max(optG2 + 1.5, +(baseR - deltaR).toFixed(2)),
+      mos: optMos
+    }
+  });
+
+  const presetsByMode = {
+    capm: makePresets(baseRCapm),
+    hist_gordon: makePresets(baseRHist)
+  };
+  const rHintByMode = {
+    capm: `纯风险CAPM(无风险2%+波动率${vol1Y.toFixed(0)}%+规模/杠杆) · 脱离现价 · 情景±${deltaR.toFixed(2)}%`,
+    hist_gordon: rGordonHist !== null
+      ? `5年中位股息(${divYield5YMed.toFixed(1)}%)+增速→${rGordonHist.toFixed(1)}%与CAPM(${rCapm.toFixed(1)}%)拟合 · 脱离现价 · 情景±${deltaR.toFixed(2)}%`
+      : (divYield5YMed === null
+        ? `缺少近5年除息记录，自动回退纯风险CAPM(${rCapm.toFixed(2)}%) · 情景±${deltaR.toFixed(2)}%`
+        : `近5年中位股息(${divYield5YMed.toFixed(2)}%)不足1%，自动回退纯风险CAPM(${rCapm.toFixed(2)}%) · 情景±${deltaR.toFixed(2)}%`)
+  };
+  const activeMode = dcfRModeOpt === "hist_gordon" ? "hist_gordon" : "capm";
+
+  const g1Hint = n >= 2
+    ? `近${n}年净利YoY均值 ${rawMeanUnclipped.toFixed(1)}% · 波动带 ±${deltaG1.toFixed(1)}%`
+    : "历史年数不足，按可用净利增速拟合";
+  const g1Title = n >= 2
+    ? `近${n}年年度净利YoY: ${yoySamples.map(x => `${x.label} ${fmtPct(x.yoy, 1, true)}`).join(", ")}`
+    : "";
+  const mosHint = `按中性g₁(${baseG1.toFixed(1)}%)匹配基准 ${baseMos}% · 买入价=公允×(1−MOS)`;
+
+  return {
+    mean5Y,
+    rawMeanUnclipped,
+    std5Y,
+    vol1Y,
+    rCapm,
+    rGordon: rGordonHist,
+    divYield5YMed,
+    deltaG1,
+    deltaR,
+    baseMos,
+    yoySamples,
+    presetsByMode,
+    presets: presetsByMode[activeMode],
+    rHintByMode,
+    g1Hint,
+    g1Title,
+    rHint: rHintByMode[activeMode],
+    mosHint
+  };
+}
+
+export function selectDefaultDcfBase(snap) {
+  const ttmFcf = snap?.qNow?.ttmFcf ?? 0;
+  const ttmNp = snap?.qNow?.ttmNp ?? 0;
+  const fcf3y = snap?.fcf3yAvg ?? 0;
+  const ttmDistorted = ttmNp > 0 && ttmFcf > ttmNp * 1.8;
+  const fcf3yDistorted = ttmNp > 0 && fcf3y > ttmNp * 1.8;
+
+  if (snap?.isFinancial) {
+    return ttmNp > 0 ? "np_ttm" : (((snap.ttmDivActual ?? snap.qNow?.ttmDiv) || 0) > 0 ? "div_ttm" : "fcf_3y");
+  }
+  if (ttmFcf <= 0 || ttmDistorted) {
+    if (fcf3y > 0 && !fcf3yDistorted) return "fcf_3y";
+    if (ttmNp > 0) return "np_ttm";
+    return ((snap?.ttmDivActual ?? snap?.qNow?.ttmDiv) || 0) > 0 ? "div_ttm" : "fcf_ttm";
+  }
+  return "fcf_ttm";
+}
+
+export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, valWindow = 1250, valAlignMode = "pit", dcfRMode = "capm" }) {
+  const symSnap = finData?.symbol || kMain?.symbol || kUnadj?.symbol || null;
+  const code = symSnap?.thscode || "";
+  const symbolName = symSnap?.name || kMain?.symbol?.name || kUnadj?.symbol?.name || "";
+  const quarters = buildQuarterlyValuationSeries(finData, symbolName);
+  const qNow = quarters[quarters.length - 1] || null;
+  const adjEvents = Array.isArray(finData?.adjustment_events) ? finData.adjustment_events : [];
+  const splitHelper = buildSplitMultiplierHelper(adjEvents);
+
+  // Strictly use direct unadjusted close (adjust=none)
+  let unadjPrice = null;
+  let priceDate = "--";
+  if (kUnadj?.items?.length) {
+    const lb = kUnadj.items[kUnadj.items.length - 1];
+    unadjPrice = Number(lb.close);
+    priceDate = lb.date;
+  }
+
+  const authTotalSharesRaw = Number(symSnap?.total_shares);
+  const authTradeDate = String(symSnap?.trade_date || priceDate || "2099-12-31").slice(0, 10);
+  let shares = null;
+  let sharesSrc = qNow?.sharesSrc || "--";
+  let isExactShares = Boolean(qNow?.isExactShares);
+  let sharesSourceKind = "implied";
+  if (Number.isFinite(authTotalSharesRaw) && authTotalSharesRaw > 0) {
+    const mSnap = splitHelper.getMultAt(authTradeDate) || 1;
+    const mNow = (priceDate && priceDate !== "--" ? splitHelper.getMultAt(priceDate) : mSnap) || mSnap;
+    shares = authTotalSharesRaw * (mNow / mSnap);
+    sharesSrc = symSnap?.trade_date ? `快照 ${symSnap.trade_date}` : "权威总股本";
+    isExactShares = true;
+    sharesSourceKind = "authoritative";
+  } else if (qNow?.shares > 0) {
+    const mQ = splitHelper.getMultAt(qNow.sharesBasisDate || qNow.period_end) || 1;
+    const mNow = (priceDate && priceDate !== "--" ? splitHelper.getMultAt(priceDate) : mQ) || mQ;
+    shares = qNow.shares * (mNow / mQ);
+  }
+
+  const impliedMktCap = (unadjPrice > 0 && shares > 0) ? unadjPrice * shares : null;
+
+  // 3Y average FCF (from latest 12 quarters = 3 annual FCF points: q[n-1], q[n-5], q[n-9])
+  const fcfSamples = [];
+  for (let idx = quarters.length - 1; idx >= 0 && fcfSamples.length < 3; idx -= 4) {
+    if (quarters[idx].ttmFcf !== null) fcfSamples.push(quarters[idx].ttmFcf);
+  }
+  const fcf3yAvg = fcfSamples.length ? fcfSamples.reduce((a, b) => a + b, 0) / fcfSamples.length : null;
+
+  // 3Y / 2Y / 1Y Net Profit CAGR
+  let cagrNp = null;
+  let cagrLabel = "3年CAGR";
+  const tryHorizon = (lagQuarters, years, lbl) => {
+    const prevIdx = quarters.length - 1 - lagQuarters;
+    if (prevIdx >= 0 && qNow?.ttmNp > 0 && quarters[prevIdx]?.ttmNp > 0) {
+      cagrNp = (Math.pow(qNow.ttmNp / quarters[prevIdx].ttmNp, 1 / years) - 1) * 100;
+      cagrLabel = lbl;
+      return true;
+    }
+    return false;
+  };
+  if (!tryHorizon(12, 3, "3年净利CAGR")) {
+    if (!tryHorizon(8, 2, "2年净利CAGR")) {
+      tryHorizon(4, 1, "1年净利YoY");
+    }
+  }
+
+  const epsTtm = (shares > 0 && qNow?.ttmNp !== null) ? qNow.ttmNp / shares : null;
+  const bvps = (shares > 0 && qNow?.equity !== null) ? qNow.equity / shares : null;
+
+  const peTtm = (impliedMktCap && qNow?.ttmNp > 0) ? impliedMktCap / qNow.ttmNp : null;
+  const pb = (impliedMktCap && qNow?.equity > 0) ? impliedMktCap / qNow.equity : null;
+  const psTtm = (impliedMktCap && qNow?.ttmRev > 0) ? impliedMktCap / qNow.ttmRev : null;
+  const fcfYieldPct = (impliedMktCap && qNow?.ttmFcf !== null) ? (qNow.ttmFcf / impliedMktCap) * 100 : null;
+  const pFcf = (impliedMktCap && qNow?.ttmFcf > 0) ? impliedMktCap / qNow.ttmFcf : null;
+
+  const snapDpsRaw = symSnap?.dps_ttm !== null && symSnap?.dps_ttm !== undefined ? Number(symSnap.dps_ttm) : null;
+  const exDivFromEvents = (adjEvents.length > 0 && priceDate && priceDate !== "--")
+    ? extractExDividendFromEvents(adjEvents, priceDate, splitHelper)
+    : null;
+  const exDiv = exDivFromEvents !== null
+    ? exDivFromEvents
+    : ((kUnadj?.items?.length >= 2 && kAdj?.items?.length >= 2)
+      ? extractExDividendTTM(kUnadj.items, kAdj.items, qNow?.ttmDivGross ?? 0, shares)
+      : null);
+
+  let dpsTtm = null;
+  let ttmDivActual = null;
+  let approxDivYieldPct = null;
+  let approxPayoutPct = null;
+  if (exDiv !== null && (exDiv.count > 0 || snapDpsRaw === null)) {
+    dpsTtm = exDiv.dpsTtm;
+    approxDivYieldPct = (unadjPrice > 0) ? (dpsTtm / unadjPrice) * 100 : null;
+    approxPayoutPct = (epsTtm > 0) ? (dpsTtm / epsTtm) * 100 : null;
+    ttmDivActual = (shares > 0) ? dpsTtm * shares : (qNow?.ttmDiv ?? null);
+  } else if (snapDpsRaw !== null && Number.isFinite(snapDpsRaw)) {
+    dpsTtm = snapDpsRaw;
+    approxDivYieldPct = (unadjPrice > 0) ? (dpsTtm / unadjPrice) * 100 : null;
+    approxPayoutPct = (epsTtm > 0) ? (dpsTtm / epsTtm) * 100 : null;
+    ttmDivActual = (shares > 0) ? dpsTtm * shares : (qNow?.ttmDiv ?? null);
+  } else if (exDiv !== null) {
+    dpsTtm = exDiv.dpsTtm;
+    approxDivYieldPct = (unadjPrice > 0) ? (dpsTtm / unadjPrice) * 100 : null;
+    approxPayoutPct = (epsTtm > 0) ? (dpsTtm / epsTtm) * 100 : null;
+    ttmDivActual = (shares > 0) ? dpsTtm * shares : (qNow?.ttmDiv ?? null);
+  } else {
+    approxDivYieldPct = (impliedMktCap && qNow?.ttmDiv !== null) ? (qNow.ttmDiv / impliedMktCap) * 100 : null;
+    approxPayoutPct = (qNow?.ttmNp > 0 && qNow?.ttmDiv !== null) ? (qNow.ttmDiv / qNow.ttmNp) * 100 : null;
+    ttmDivActual = qNow?.ttmDiv ?? null;
+  }
+
+  const dcfModel = buildDcfScenarioModel(
+    quarters,
+    kAdj,
+    kUnadj,
+    cagrNp,
+    Boolean(qNow?.isFinancial),
+    qNow,
+    adjEvents,
+    splitHelper,
+    dcfRMode
+  );
+
+  const peg = (peTtm > 0 && cagrNp > 0) ? peTtm / cagrNp : null;
+
+  // DuPont & quality
+  const netMargin = (qNow?.ttmRev > 0 && qNow?.ttmNp !== null) ? (qNow.ttmNp / qNow.ttmRev) * 100 : null;
+  const assetTurnover = (qNow?.assets > 0 && qNow?.ttmRev !== null) ? qNow.ttmRev / qNow.assets : null;
+  const equityMultiplier = (qNow?.equity > 0 && qNow?.assets !== null) ? qNow.assets / qNow.equity : null;
+  const roeTtm = (qNow?.equity > 0 && qNow?.ttmNp !== null) ? (qNow.ttmNp / qNow.equity) * 100 : null;
+  const accrualRatio = (qNow?.assets > 0 && qNow?.ttmNp !== null && qNow?.ttmOcf !== null)
+    ? ((qNow.ttmNp - qNow.ttmOcf) / qNow.assets) * 100
+    : null;
+  const netCashToMktCap = (impliedMktCap && qNow?.cash !== null && qNow?.debt !== null)
+    ? ((qNow.cash - qNow.debt) / impliedMktCap) * 100
+    : null;
+
+  // Historical bands (PIT vs period_end + split-adjusted share restoration)
+  const barsAll = kUnadj?.items || [];
+  const barsWin = valWindow === "all"
+    ? barsAll
+    : barsAll.slice(-Math.min(barsAll.length, Number(valWindow) || 1250));
+  const bandOpts = {
+    alignMode: valAlignMode,
+    authTotalShares: sharesSourceKind === "authoritative" ? authTotalSharesRaw : null,
+    authTradeDate,
+    splitHelper
+  };
+  const bands = {
+    pe: computeHistoricalSeriesStats(barsWin, quarters, "pe", bandOpts),
+    pb: computeHistoricalSeriesStats(barsWin, quarters, "pb", bandOpts),
+    ps: computeHistoricalSeriesStats(barsWin, quarters, "ps", bandOpts),
+    fcf: computeHistoricalSeriesStats(barsWin, quarters, "fcf", bandOpts)
+  };
+
+  return {
+    code,
+    name: symbolName,
+    symSnap,
+    priceDate,
+    unadjPrice,
+    shares,
+    sharesSrc,
+    sharesSourceKind,
+    isExactShares,
+    impliedMktCap,
+    isFinancial: Boolean(qNow?.isFinancial),
+    divIncludesBondInterest: Boolean(qNow?.divIncludesBondInterest),
+    qNow,
+    quarters,
+    fcf3yAvg,
+    cagrNp,
+    cagrLabel,
+    dcfModel,
+    peTtm,
+    pb,
+    psTtm,
+    fcfYieldPct,
+    pFcf,
+    dpsTtm,
+    exDiv,
+    ttmDivActual,
+    approxDivYieldPct,
+    approxPayoutPct,
+    peg,
+    epsTtm,
+    bvps,
+    netMargin,
+    assetTurnover,
+    equityMultiplier,
+    roeTtm,
+    accrualRatio,
+    netCashToMktCap,
+    bands
+  };
+}
+
+export function getBaseCashFlowByKey(snap, baseKey) {
+  if (!snap) return null;
+  if (baseKey === "fcf_3y") return snap.fcf3yAvg;
+  if (baseKey === "np_ttm") return snap.qNow?.ttmNp ?? null;
+  if (baseKey === "div_ttm") return snap.ttmDivActual ?? snap.qNow?.ttmDiv ?? null;
+  return snap.qNow?.ttmFcf ?? null;
+}
+
+export function computePeerMetrics(snap, opts = {}) {
+  const rMode = opts.rMode === "hist_gordon" ? "hist_gordon" : "capm";
+  const scenario = ["conservative", "neutral", "optimistic"].includes(opts.scenario) ? opts.scenario : "neutral";
+  const netCashAdj = Boolean(opts.netCashAdj);
+  const rimAllowBelowBook = Boolean(opts.rimAllowBelowBook);
+
+  const scen = snap?.dcfModel?.presetsByMode?.[rMode]?.[scenario]
+    || snap?.dcfModel?.presetsByMode?.[rMode]?.neutral
+    || snap?.dcfModel?.presets?.neutral
+    || null;
+  const dcfBase = selectDefaultDcfBase(snap);
+  const dcfBaseLabelMap = {
+    fcf_ttm: "TTM FCF",
+    fcf_3y: "3年FCF",
+    np_ttm: "TTM净利",
+    div_ttm: "DDM"
+  };
+  const baseCF = getBaseCashFlowByKey(snap, dcfBase);
+  const ncAdj = (netCashAdj && !snap.isFinancial && dcfBase !== "div_ttm" && snap.shares > 0 && snap.qNow?.cash != null && snap.qNow?.debt != null)
+    ? (snap.qNow.cash - snap.qNow.debt) / snap.shares
+    : 0;
+  const dcfRaw = scen ? calcTwoStageDCF(baseCF, snap.shares, scen.g1, scen.g2, scen.r)?.valuePerShare : null;
+  const dcfMid = (dcfRaw != null && dcfRaw + ncAdj > 0) ? (dcfRaw + ncAdj) : null;
+  const curPrice = snap.unadjPrice;
+  const dcfUpsidePct = (dcfMid > 0 && curPrice > 0) ? ((dcfMid / curPrice - 1) * 100) : null;
+  const rimMid = scen ? calcRIM(snap.bvps, snap.roeTtm, snap.approxPayoutPct, scen.g2, scen.r, rimAllowBelowBook) : null;
+  const rimUpsidePct = (rimMid > 0 && curPrice > 0) ? ((rimMid / curPrice - 1) * 100) : null;
+  const opCur = (curPrice > 0 && curPrice - ncAdj > 0) ? (curPrice - ncAdj) : null;
+  const impliedIrr = (scen && opCur != null) ? solveImpliedReturn(baseCF, snap.shares, scen.g1, scen.g2, opCur) : null;
+
+  return {
+    code: snap.code,
+    name: snap.name || snap.code,
+    isFinancial: Boolean(snap.isFinancial),
+    unadjPrice: curPrice,
+    mktCap: snap.impliedMktCap,
+    peTtm: snap.peTtm,
+    pePct5y: snap.bands?.pe?.pct ?? null,
+    pb: snap.pb,
+    pbPct5y: snap.bands?.pb?.pct ?? null,
+    psTtm: snap.psTtm,
+    divYieldPct: snap.approxDivYieldPct,
+    payoutPct: snap.approxPayoutPct,
+    roeTtm: snap.roeTtm,
+    g1Base: scen?.g1 ?? null,
+    dcfBase,
+    dcfBaseLabel: dcfBaseLabelMap[dcfBase] || "DCF",
+    dcfMid,
+    dcfUpsidePct,
+    rimMid,
+    rimUpsidePct,
+    impliedIrr,
+    rUsed: scen?.r ?? null,
+    netCashPerShare: ncAdj,
+    snap
+  };
+}
+
+export function calcTwoStageDCF(baseCF, shares, g1Pct, g2Pct, rPct) {
+  const g1 = g1Pct / 100;
+  const g2 = g2Pct / 100;
+  const r = rPct / 100;
+  if (!(baseCF > 0) || !(shares > 0) || !(r > g2 + 0.005)) return null;
+
+  let pvStage1 = 0;
+  let cf = baseCF;
+  for (let t = 1; t <= 5; t++) {
+    cf *= (1 + g1);
+    pvStage1 += cf / Math.pow(1 + r, t);
+  }
+  const tv = (cf * (1 + g2)) / (r - g2);
+  const pvTerminal = tv / Math.pow(1 + r, 5);
+  return {
+    valuePerShare: (pvStage1 + pvTerminal) / shares,
+    pvStage1: pvStage1 / shares,
+    pvTerminal: pvTerminal / shares
+  };
+}
+
+export function solveImpliedReturn(baseCF, shares, g1Pct, g2Pct, curPrice) {
+  if (!(baseCF > 0) || !(shares > 0) || !(curPrice > 0)) return null;
+  const rLoInit = g2Pct + 0.55;
+  const rHiInit = 45.0;
+  const vAtLo = calcTwoStageDCF(baseCF, shares, g1Pct, g2Pct, rLoInit)?.valuePerShare;
+  const vAtHi = calcTwoStageDCF(baseCF, shares, g1Pct, g2Pct, rHiInit)?.valuePerShare;
+  if (!(vAtLo > 0) || !(vAtHi > 0)) return null;
+  if (curPrice >= vAtLo || curPrice <= vAtHi) return null;
+
+  let lo = rLoInit;
+  let hi = rHiInit;
+  for (let iter = 0; iter < 28; iter++) {
+    const mid = (lo + hi) / 2;
+    const vMid = calcTwoStageDCF(baseCF, shares, g1Pct, g2Pct, mid)?.valuePerShare;
+    if (!(vMid > 0)) return null;
+    if (vMid > curPrice) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+export function calcRIM(bvps, roePct, payoutPct, g2Pct, rPct, allowBelowBook = false) {
+  const r = rPct / 100;
+  const g2 = g2Pct / 100;
+  if (!(bvps > 0) || !(r > g2 + 0.005)) return null;
+
+  const roe0 = clamp((roePct ?? 10) / 100, -0.25, 0.45);
+  const targetRoe = allowBelowBook
+    ? clamp(roe0 * 0.72, 0.02, 0.30)
+    : clamp(Math.max(r, roe0 * 0.72), 0.04, 0.30);
+  const retention = clamp(1 - (payoutPct != null ? payoutPct / 100 : 0.30), 0.15, 0.90);
+
+  let bv = bvps;
+  let pvRI = 0;
+  for (let t = 1; t <= 5; t++) {
+    const roeT = roe0 + ((targetRoe - roe0) * (t - 1)) / 5;
+    const ri = (roeT - r) * bv;
+    pvRI += ri / Math.pow(1 + r, t);
+    bv *= (1 + Math.max(-0.15, roeT * retention));
+  }
+  const termRI = ((targetRoe - r) * bv) / (r - g2);
+  const pvTerm = termRI / Math.pow(1 + r, 5);
+  const rawVal = bvps + pvRI + pvTerm;
+  const minFloor = allowBelowBook ? bvps * 0.25 : bvps * 0.4;
+  return clamp(rawVal, minFloor, bvps * 12);
+}
