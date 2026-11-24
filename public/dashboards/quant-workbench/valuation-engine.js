@@ -143,6 +143,110 @@ export function extractExDividendFromEvents(adjustmentEvents, lastDate, splitHel
   };
 }
 
+export function computeDividendStability(adjustmentEvents, lastDate, splitHelper) {
+  const emptyRes = {
+    divStabilityScore: 0,
+    divStabilityGrade: "无分红",
+    divConsecYears: 0,
+    divYearsIn5: 0,
+    divCv5y: null,
+    divCutCount5y: 0,
+    divCagr5y: null
+  };
+  if (!Array.isArray(adjustmentEvents) || !adjustmentEvents.length) return emptyRes;
+
+  const refDate = (lastDate && /^\d{4}-\d{2}-\d{2}/.test(String(lastDate)))
+    ? String(lastDate).slice(0, 10)
+    : new Date().toISOString().slice(0, 10);
+  const curYear = Number(refDate.slice(0, 4));
+  const curMonth = Number(refDate.slice(5, 7));
+  if (!Number.isFinite(curYear) || !Number.isFinite(curMonth)) return emptyRes;
+
+  const sh = splitHelper || buildSplitMultiplierHelper(adjustmentEvents);
+  const multNow = sh.getMultAt(refDate) || 1;
+  const byYear = new Map();
+
+  for (const e of adjustmentEvents) {
+    if (!e || !e.ex_date) continue;
+    const exDate = String(e.ex_date).slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(exDate) || exDate > refDate) continue;
+    const rawDps = Number(e.dividend_per_share);
+    if (!(rawDps > 0)) continue;
+    const multBefore = sh.getMultBefore(exDate) || 1;
+    const adjFactor = multNow / multBefore;
+    const dps = rawDps / (adjFactor > 0 ? adjFactor : 1);
+    if (dps > 0.0005 && Number.isFinite(dps)) {
+      const y = Number(exDate.slice(0, 4));
+      byYear.set(y, (byYear.get(y) || 0) + dps);
+    }
+  }
+
+  const hasPaid = (y) => (byYear.get(y) || 0) > 0.0005;
+  let anyPaid = false;
+  for (const v of byYear.values()) {
+    if (v > 0.0005) {
+      anyPaid = true;
+      break;
+    }
+  }
+  if (!anyPaid) return emptyRes;
+
+  const anchorYear = (hasPaid(curYear) || curMonth > 8) ? curYear : (curYear - 1);
+  let divConsecYears = 0;
+  for (let y = anchorYear; y >= anchorYear - 25; y--) {
+    if (hasPaid(y)) divConsecYears++;
+    else break;
+  }
+
+  const curDay = Number(refDate.slice(8, 10)) || 1;
+  const winEndYear = (curMonth === 12 && curDay >= 28) ? curYear : (curYear - 1);
+
+  const vals5 = [];
+  for (let y = winEndYear - 4; y <= winEndYear; y++) {
+    vals5.push(byYear.get(y) || 0);
+  }
+  const divYearsIn5 = vals5.filter(v => v > 0.0005).length;
+  const mean5 = vals5.reduce((a, b) => a + b, 0) / 5;
+
+  let divCv5y = null;
+  if (divYearsIn5 >= 2 && mean5 > 0) {
+    const var5 = vals5.reduce((s, v) => s + (v - mean5) ** 2, 0) / 4;
+    divCv5y = Math.sqrt(var5) / mean5;
+  }
+
+  let divCutCount5y = 0;
+  for (let i = 1; i < vals5.length; i++) {
+    if (vals5[i - 1] > 0.0005 && vals5[i] < vals5[i - 1] * 0.90) {
+      divCutCount5y++;
+    }
+  }
+
+  const divCagr5y = (vals5[0] > 0.0005 && vals5[4] > 0.0005)
+    ? clamp((Math.pow(vals5[4] / vals5[0], 1 / 4) - 1) * 100, -50, 80)
+    : null;
+
+  const consecPts = Math.min(40, divConsecYears * 4);
+  const freqPts = (divYearsIn5 / 5) * 20;
+  const cvPts = divCv5y !== null ? clamp((1 - divCv5y / 0.85) * 25, 0, 25) : 0;
+  const noCutPts = Math.max(0, 15 - divCutCount5y * 7.5);
+  const divStabilityScore = Math.round(clamp(consecPts + freqPts + cvPts + noCutPts, 0, 100));
+
+  let divStabilityGrade = "波动";
+  if (divStabilityScore === 0) divStabilityGrade = "无分红";
+  else if (divStabilityScore >= 75 && divConsecYears >= 5) divStabilityGrade = "稳健";
+  else if (divStabilityScore >= 50) divStabilityGrade = "较稳";
+
+  return {
+    divStabilityScore,
+    divStabilityGrade,
+    divConsecYears,
+    divYearsIn5,
+    divCv5y,
+    divCutCount5y,
+    divCagr5y
+  };
+}
+
 export function detectFinancialCompany(symbolName, incRow, balRow, ttmOcf, ttmNp) {
   const name = String(symbolName || "");
   if (/银行|保险|证券|信托|金融|人寿|人保|太保|中国平安|中金公司|东方财富|申万宏源|国泰君安|国泰海通|期货|金租|产融/.test(name)) {
@@ -959,6 +1063,7 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, va
   );
 
   const peg = (peTtm > 0 && cagrNp > 0) ? peTtm / cagrNp : null;
+  const divStability = computeDividendStability(adjEvents, priceDate, splitHelper);
 
   // DuPont, quality & P2-4 peer upgrade metrics
   const isFinCompany = Boolean(qNow?.isFinancial);
@@ -973,27 +1078,40 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, va
     ? ((qNow.cash - qNow.debt) / impliedMktCap) * 100
     : null;
 
-  // Buyback & Shareholder Yield (treasury stock delta + split-adjusted share cancellation)
+  // Buyback & Shareholder Yield: prioritize official backend fields if present, fallback to treasury/share-capital delta
   const qPrev4 = quarters.length >= 5 ? quarters[quarters.length - 5] : null;
-  let buybackRaw = 0;
-  if (impliedMktCap > 0 && qNow?.treasuryStock != null && qPrev4?.treasuryStock != null) {
-    const deltaTs = qNow.treasuryStock - qPrev4.treasuryStock;
-    if (deltaTs > impliedMktCap * 0.0005) {
-      buybackRaw += (deltaTs / impliedMktCap) * 100;
+  const hasNumField = (v) => v !== null && v !== undefined && v !== "" && Number.isFinite(Number(v));
+  const officialBbYield = hasNumField(symSnap?.buyback_yield_ttm)
+    ? Number(symSnap.buyback_yield_ttm)
+    : (hasNumField(symSnap?.buyback_ttm) && impliedMktCap > 0
+      ? (Number(symSnap.buyback_ttm) / impliedMktCap) * 100
+      : null);
+  let buybackYieldPct = 0;
+  let buybackSource = "仅现金分红";
+  if (officialBbYield !== null && officialBbYield >= 0) {
+    buybackYieldPct = clamp(officialBbYield, 0, 20);
+    buybackSource = buybackYieldPct >= 0.01 ? "官方回购口径" : "仅现金分红";
+  } else {
+    let buybackRaw = 0;
+    if (impliedMktCap > 0 && qNow?.treasuryStock != null && qPrev4?.treasuryStock != null) {
+      const deltaTs = qNow.treasuryStock - qPrev4.treasuryStock;
+      if (deltaTs > impliedMktCap * 0.0005) {
+        buybackRaw += (deltaTs / impliedMktCap) * 100;
+      }
     }
-  }
-  if (qNow?.shareCapital > 0 && qPrev4?.shareCapital > 0) {
-    const mPrev4 = splitHelper.getMultAt(qPrev4.period_end) || 1;
-    const mNowSc = splitHelper.getMultAt(qNow.period_end) || 1;
-    const adjPrevSc = qPrev4.shareCapital * (mNowSc / mPrev4);
-    const shrinkRatio = adjPrevSc > 0 ? (adjPrevSc - qNow.shareCapital) / adjPrevSc : 0;
-    if (shrinkRatio >= 0.001 && shrinkRatio <= 0.15) {
-      buybackRaw += shrinkRatio * 100;
+    if (qNow?.shareCapital > 0 && qPrev4?.shareCapital > 0) {
+      const mPrev4 = splitHelper.getMultAt(qPrev4.period_end) || 1;
+      const mNowSc = splitHelper.getMultAt(qNow.period_end) || 1;
+      const adjPrevSc = qPrev4.shareCapital * (mNowSc / mPrev4);
+      const shrinkRatio = adjPrevSc > 0 ? (adjPrevSc - qNow.shareCapital) / adjPrevSc : 0;
+      if (shrinkRatio >= 0.001 && shrinkRatio <= 0.15) {
+        buybackRaw += shrinkRatio * 100;
+      }
     }
+    const hasEstimatedBuyback = buybackRaw >= 0.05;
+    buybackYieldPct = hasEstimatedBuyback ? clamp(buybackRaw, 0, 15) : 0;
+    buybackSource = hasEstimatedBuyback ? "库存股/注销估算" : "仅现金分红";
   }
-  const hasEstimatedBuyback = buybackRaw >= 0.05;
-  const buybackYieldPct = hasEstimatedBuyback ? clamp(buybackRaw, 0, 15) : 0;
-  const buybackSource = hasEstimatedBuyback ? "库存股/注销估算" : "仅现金分红";
   const shareholderYieldPct = approxDivYieldPct !== null
     ? (approxDivYieldPct + buybackYieldPct)
     : (buybackYieldPct > 0 ? buybackYieldPct : null);
@@ -1137,6 +1255,7 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, va
     ttmDivActual,
     approxDivYieldPct,
     approxPayoutPct,
+    divStability,
     buybackYieldPct,
     buybackSource,
     shareholderYieldPct,
@@ -1202,6 +1321,15 @@ export function computePeerMetrics(snap, opts = {}) {
   const opCur = (curPrice > 0 && curPrice - ncAdj > 0) ? (curPrice - ncAdj) : null;
   const impliedIrr = (scen && opCur != null) ? solveImpliedReturn(baseCF, snap.shares, scen.g1, scen.g2, opCur) : null;
   const roicSpread = (snap.roic5yMean != null && scen?.r != null) ? (snap.roic5yMean - scen.r) : null;
+  const dstab = snap.divStability || {};
+  const divStabilityScore = dstab.divStabilityScore ?? 0;
+  const divStabilityGrade = dstab.divStabilityGrade || "无分红";
+  const divConsecYears = dstab.divConsecYears ?? 0;
+  const divYearsIn5 = dstab.divYearsIn5 ?? 0;
+  const divCv5y = dstab.divCv5y ?? null;
+  const divCutCount5y = dstab.divCutCount5y ?? 0;
+  const divCagr5y = dstab.divCagr5y ?? null;
+  const divYieldTrap = Boolean(snap.approxDivYieldPct != null && snap.approxDivYieldPct >= 4 && divStabilityScore < 50);
 
   return {
     code: snap.code,
@@ -1219,6 +1347,14 @@ export function computePeerMetrics(snap, opts = {}) {
     buybackSource: snap.buybackSource || "仅现金分红",
     shareholderYieldPct: snap.shareholderYieldPct ?? snap.approxDivYieldPct ?? null,
     payoutPct: snap.approxPayoutPct,
+    divStabilityScore,
+    divStabilityGrade,
+    divConsecYears,
+    divYearsIn5,
+    divCv5y,
+    divCutCount5y,
+    divCagr5y,
+    divYieldTrap,
     fcfYieldPct: snap.fcfYieldPct ?? null,
     cashConv5y: snap.cashConv5y ?? null,
     roeTtm: snap.roeTtm,

@@ -861,6 +861,7 @@ function bindEvents() {
     const headers = [
       "code", "name", "mkt_cap", "unadj_close", "pe_ttm", "pe_pct_5y", "pb", "pb_pct_5y",
       "shareholder_yield_pct", "div_yield_ttm", "buyback_yield_pct", "payout_pct",
+      "div_stability_score", "div_stability_grade", "div_consec_years", "div_cv_5y", "div_cut_count_5y", "div_cagr_5y",
       "fcf_yield_pct", "cash_conv_5y", "roe_ttm", "roic_5y_mean", "roe_vol_5y",
       "g1_base", "np_yoy_1y", "dcf_base", "dcf_mid", "dcf_upside_pct",
       "rim_mid", "rim_upside_pct", "implied_irr", "r_used", "net_cash_per_share",
@@ -872,6 +873,7 @@ function bindEvents() {
       rows.map(r => [
         r.code, r.name, r.mktCap, r.unadjPrice, r.peTtm, r.pePct5y, r.pb, r.pbPct5y,
         r.shareholderYieldPct, r.divYieldPct, r.buybackYieldPct, r.payoutPct,
+        r.divStabilityScore, r.divStabilityGrade, r.divConsecYears, r.divCv5y, r.divCutCount5y, r.divCagr5y,
         r.fcfYieldPct, r.cashConv5y, r.roeTtm, r.roic5yMean, r.roeVol5y,
         r.g1Base, r.npYoy1yRaw, r.dcfBase, r.dcfMid, r.dcfUpsidePct,
         r.rimMid, r.rimUpsidePct, r.impliedIrr, r.rUsed, r.netCashPerShare,

@@ -666,6 +666,19 @@ export function renderCompareScatter(rows) {
       yFmt: v => `${v.toFixed(1)}%`,
       getX: r => r.roic5yMean,
       getY: r => r.roeVol5y
+    },
+    div_stability: {
+      xLabel: "分红稳定性评分 (0~100 · 连分/波动/缩水)",
+      yLabel: "股东总回报率 (%)",
+      subtitle: "横轴分红稳定性综合评分（连续分红年数+5年低波动+零缩水） · 纵轴股东总回报率 · 右上象限为高息稳健真红利，左上防突击分红陷阱",
+      badge: "占优区：高回报 · 稳健真红利",
+      badgePos: "tr",
+      clampX: [0, 100],
+      forceZeroY: true,
+      xFmt: v => `${v.toFixed(0)}分`,
+      yFmt: v => `${v.toFixed(2)}%`,
+      getX: r => r.divStabilityScore,
+      getY: r => r.shareholderYieldPct
     }
   };
   const cfg = configs[mode] || configs.pb_roe;
@@ -781,6 +794,17 @@ export function renderCompareScatter(rows) {
     refParts.push(`<rect x="${Math.max(pad.l, rx)}" y="${Math.max(pad.t, ry)}" width="${Math.max(0, pad.l + plotW - Math.max(pad.l, rx))}" height="${Math.max(0, pad.t + plotH - Math.max(pad.t, ry))}" fill="rgba(15,118,110,0.05)" />`);
     refParts.push(`<line x1="${rx}" y1="${pad.t}" x2="${rx}" y2="${pad.t + plotH}" stroke="#6B7280" stroke-width="1" stroke-dasharray="4 4" />`);
     refParts.push(`<line x1="${pad.l}" y1="${ry}" x2="${pad.l + plotW}" y2="${ry}" stroke="#6B7280" stroke-width="1" stroke-dasharray="4 4" />`);
+  } else if (mode === "div_stability") {
+    const rx75 = toPxX(75);
+    const rx50 = toPxX(50);
+    const ry4 = toPxY(4);
+    refParts.push(`<rect x="${Math.max(pad.l, rx75)}" y="${pad.t}" width="${Math.max(0, pad.l + plotW - Math.max(pad.l, rx75))}" height="${Math.max(0, Math.min(pad.t + plotH, ry4) - pad.t)}" fill="rgba(15,118,110,0.06)" />`);
+    refParts.push(`<rect x="${pad.l}" y="${pad.t}" width="${Math.max(0, Math.min(pad.l + plotW, rx50) - pad.l)}" height="${Math.max(0, Math.min(pad.t + plotH, ry4) - pad.t)}" fill="rgba(185,28,28,0.04)" />`);
+    refParts.push(`<line x1="${rx75}" y1="${pad.t}" x2="${rx75}" y2="${pad.t + plotH}" stroke="#0F766E" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" />`);
+    refParts.push(`<line x1="${pad.l}" y1="${ry4}" x2="${pad.l + plotW}" y2="${ry4}" stroke="#6B7280" stroke-width="1" stroke-dasharray="4 4" />`);
+    if (rx75 >= pad.l && rx75 <= pad.l + plotW - 10) {
+      refParts.push(`<text x="${rx75 + 5}" y="${pad.t + 14}" text-anchor="start" font-size="10" fill="#0F766E" font-family="Noto Sans SC, sans-serif">稳健线 75分</text>`);
+    }
   }
 
   // Gridlines & ticks
@@ -937,15 +961,21 @@ export function renderCompareScatter(rows) {
       const riskBadge = r.riskFlag === "low_vol"
         ? ` <span style="color:#6EE7B7;">[低波稳健]</span>`
         : (r.riskFlag === "high_risk" ? ` <span style="color:#FCA5A5;">[高负债/回撤预警]</span>` : "");
+      const dstScore = r.divStabilityScore != null ? `${r.divStabilityScore}分(${r.divStabilityGrade || "--"})` : "--";
+      const dstConsec = r.divConsecYears != null ? `连分${r.divConsecYears}年` : "";
+      const dstCv = r.divCv5y != null ? ` · CV ${r.divCv5y.toFixed(2)}` : "";
+      const dstCut = r.divCutCount5y > 0 ? ` · 缩水${r.divCutCount5y}次` : "";
+      const trapBadge = r.divYieldTrap ? ` <span style="color:#FBBF24;">[高息波动提示]</span>` : "";
 
       tt.innerHTML = `
-        <div class="tt-date">${esc(r.name)} <span style="opacity:.7;font-weight:400;">(${esc(r.code)})</span>${riskBadge}</div>
+        <div class="tt-date">${esc(r.name)} <span style="opacity:.7;font-weight:400;">(${esc(r.code)})</span>${riskBadge}${trapBadge}</div>
         <div class="tt-row"><span class="tt-lbl">${esc(cfg.xLabel)}</span><span class="tt-val">${esc(cfg.xFmt(b.x))}</span></div>
         <div class="tt-row"><span class="tt-lbl">${esc(cfg.yLabel)}</span><span class="tt-val">${esc(cfg.yFmt(b.y))}</span></div>
         <div class="tt-row"><span class="tt-lbl">不复权价 / 市值</span><span class="tt-val">¥${fmtNum(r.unadjPrice)} / ${fmtMoneyShort(r.mktCap)}</span></div>
         <div class="tt-row"><span class="tt-lbl">隐含回报 IRR</span><span class="tt-val" style="color:${(r.impliedIrr ?? 0) >= 8 ? "#6EE7B7" : "#FCA5A5"};">${r.impliedIrr != null ? r.impliedIrr.toFixed(2) + "%" : "--"}</span></div>
         <div class="tt-row"><span class="tt-lbl">${esc(r.dcfBaseLabel)} / RIM</span><span class="tt-val">¥${fmtNum(r.dcfMid)}(${esc(dcfUp)}) / ¥${fmtNum(r.rimMid)}(${esc(rimUp)})</span></div>
         <div class="tt-row"><span class="tt-lbl">股东回报 (股息${bbPart ? "+回购" : ""})</span><span class="tt-val">${esc(shTotal)} (${esc(divPart)}${esc(bbPart)})</span></div>
+        <div class="tt-row"><span class="tt-lbl">分红稳定性</span><span class="tt-val">${esc(dstScore)}${dstConsec ? ` · ${esc(dstConsec + dstCv + dstCut)}` : ""}</span></div>
         <div class="tt-row"><span class="tt-lbl">FCF收益 / 5Y净现比</span><span class="tt-val">${esc(fcfPart)} / ${esc(ccPart)}</span></div>
         <div class="tt-row"><span class="tt-lbl">5Y ${esc(roicTag)} / ROE波动</span><span class="tt-val">${esc(roicVal)} / ${esc(roeVolVal)}</span></div>
         <div class="tt-row"><span class="tt-lbl">增速 (5Y→1Y)</span><span class="tt-val">${esc(g5Val)} → ${esc(g1Val)}${esc(gDir)}</span></div>
@@ -987,6 +1017,7 @@ export function renderCompareTable(rows) {
     { key: "peTtm", label: "PE_TTM (5Y分位)", align: "", sortable: true },
     { key: "pb", label: "PB (5Y分位)", align: "", sortable: true },
     { key: "shareholderYieldPct", label: "股东回报 (股息/回购)", align: "", sortable: true },
+    { key: "divStabilityScore", label: "分红稳定性", align: "", sortable: true },
     { key: "fcfYieldPct", label: "FCF收益 (5Y净现比)", align: "", sortable: true },
     { key: "roic5yMean", label: "5Y ROIC (ROE波动)", align: "", sortable: true },
     { key: "g1Base", label: "5Y→1Y净利增速", align: "", sortable: true },
@@ -1059,6 +1090,13 @@ export function renderCompareTable(rows) {
     const riskMark = r.riskFlag === "low_vol"
       ? `<span style="color:var(--emerald);font-weight:600;">[低波] </span>`
       : (r.riskFlag === "high_risk" ? `<span style="color:var(--crimson);font-weight:600;">[预警] </span>` : "");
+    const dstColor = r.divStabilityScore >= 75
+      ? "var(--emerald)"
+      : (r.divStabilityScore >= 50 ? "var(--ink)" : (r.divStabilityScore > 0 ? "var(--crimson)" : "var(--ink-faint)"));
+    const dstSub = r.divStabilityScore > 0
+      ? `连分${r.divConsecYears ?? 0}年${r.divCv5y != null ? ` · CV ${r.divCv5y.toFixed(2)}` : ""}${r.divCutCount5y > 0 ? ` · 缩水${r.divCutCount5y}次` : ""}`
+      : "近5年无稳定派息";
+    const dstTrap = r.divYieldTrap ? `<span style="color:#D97706;font-weight:600;">[慎] </span>` : "";
     return `
       <tr data-cmp-row="${esc(r.code)}">
         <td class="left mono"><strong>${esc(r.code)}</strong></td>
@@ -1068,6 +1106,7 @@ export function renderCompareTable(rows) {
         <td>${r.peTtm != null ? `<strong>${fmtNum(r.peTtm, 1)}x</strong><br><small class="flat" style="font-size:10.5px;">${peSub}</small>` : `<span class="flat">亏损/无</span>`}</td>
         <td>${r.pb != null ? `<strong>${fmtNum(r.pb, 2)}x</strong><br><small class="flat" style="font-size:10.5px;">${pbSub}</small>` : `--`}</td>
         <td>${r.shareholderYieldPct != null ? `<strong>${r.shareholderYieldPct.toFixed(2)}%</strong><br><small class="flat" style="font-size:10.5px;">${esc(divTxt + bbTxt)}</small>` : `--`}</td>
+        <td>${dstTrap}<strong style="color:${dstColor};">${r.divStabilityScore ?? 0}分 ${esc(r.divStabilityGrade || "无分红")}</strong><br><small class="flat" style="font-size:10.5px;">${esc(dstSub)}</small></td>
         <td>${r.fcfYieldPct != null ? `<strong>${r.fcfYieldPct.toFixed(1)}%</strong><br><small class="flat" style="font-size:10.5px;">${esc(fcfSub)}</small>` : `<span class="flat">--</span><br><small class="flat" style="font-size:10.5px;">${esc(fcfSub)}</small>`}</td>
         <td>${r.roic5yMean != null ? `<strong>${r.roic5yMean.toFixed(1)}%</strong><br><small class="flat" style="font-size:10.5px;">${esc(roicSub)}</small>` : `--`}</td>
         <td class="mono ${clsSign(r.g1Base)}"><strong>${r.g1Base != null ? fmtPct(r.g1Base, 1, true) : "--"}</strong><br><small class="flat" style="font-size:10.5px;">${esc(g1Sub)}</small></td>
