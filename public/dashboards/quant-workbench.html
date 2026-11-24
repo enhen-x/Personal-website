@@ -11,7 +11,7 @@
     var u = new URL('/api/quant', window.location.origin);
     u.searchParams.set('endpoint', ep);
     var merged = Object.assign({}, params || {});
-    if (ep === '/api/screener' || ep === '/api/stocks' || /\/(financials|peers)$/.test(ep)) {
+    if (ep === '/api/screener' || ep === '/api/stocks' || /\/(financials|peers|shares)$/.test(ep)) {
       merged.v = '3';
     }
     Object.keys(merged).sort().forEach(function (k) {
@@ -42,6 +42,7 @@
     kick('/api/stocks/' + encodeURIComponent(code) + '/kline', { adjust: 'forward', limit: 250 });
     kick('/api/stocks/' + encodeURIComponent(code) + '/kline', { adjust: 'none', limit: 1250 });
     kick('/api/stocks/' + encodeURIComponent(code) + '/financials', { limit: 40 });
+    kick('/api/stocks/' + encodeURIComponent(code) + '/shares', { limit: 200 });
   }
 })();
 </script>
@@ -743,7 +744,7 @@
 
         <div class="kpi-card">
           <div class="kpi-head">
-            <span class="kpi-title">股息率 (TTM)</span>
+            <span class="kpi-title">股东总回报 (股息+净回购)</span>
             <span id="val-kpi-div-pill" class="status-pill pill-mid">--</span>
           </div>
           <div id="val-kpi-div" class="kpi-num">--</div>

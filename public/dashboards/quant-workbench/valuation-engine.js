@@ -43,11 +43,18 @@ export function resolveEffectiveReportDate(r) {
 export function buildSplitMultiplierHelper(adjustmentEvents) {
   const events = (adjustmentEvents || [])
     .filter(e => e && e.ex_date)
-    .map(e => ({
-      ex_date: String(e.ex_date).slice(0, 10),
-      ratio: 1 + (Number(e.per_share_bonus) || 0) + (Number(e.allotment_ratio) || 0),
-      dividend_per_share: Number(e.dividend_per_share) || 0
-    }))
+    .map(e => {
+      const perShareBonus = Number(e.per_share_bonus) || 0;
+      const allotmentRatio = Number(e.allotment_ratio) || 0;
+      return {
+        ex_date: String(e.ex_date).slice(0, 10),
+        per_share_bonus: perShareBonus,
+        allotment_ratio: allotmentRatio,
+        bonusRatio: 1 + perShareBonus,
+        ratio: 1 + perShareBonus + allotmentRatio,
+        dividend_per_share: Number(e.dividend_per_share) || 0
+      };
+    })
     .sort((a, b) => a.ex_date.localeCompare(b.ex_date));
 
   const splitEvents = events.filter(e => e.ratio > 1.0001);
@@ -56,6 +63,14 @@ export function buildSplitMultiplierHelper(adjustmentEvents) {
     const before = cum;
     cum *= e.ratio;
     return { ex_date: e.ex_date, before, after: cum };
+  });
+
+  const bonusEvents = events.filter(e => e.bonusRatio > 1.0001);
+  let bonusCum = 1;
+  const bonusCumSteps = bonusEvents.map(e => {
+    const before = bonusCum;
+    bonusCum *= e.bonusRatio;
+    return { ex_date: e.ex_date, before, after: bonusCum };
   });
 
   const getMultAt = (dateStr) => {
@@ -78,7 +93,165 @@ export function buildSplitMultiplierHelper(adjustmentEvents) {
     return mult;
   };
 
-  return { events, splitEvents, cumSteps, getMultAt, getMultBefore };
+  const getBonusMultAt = (dateStr) => {
+    if (!dateStr || !bonusCumSteps.length) return 1;
+    let mult = 1;
+    for (let i = 0; i < bonusCumSteps.length; i++) {
+      if (bonusCumSteps[i].ex_date <= dateStr) mult = bonusCumSteps[i].after;
+      else break;
+    }
+    return mult;
+  };
+
+  return { events, splitEvents, cumSteps, bonusEvents, bonusCumSteps, getMultAt, getMultBefore, getBonusMultAt };
+}
+
+export function normalizeShareTimeline(shareData, maxDate = "2099-12-31") {
+  const raw = Array.isArray(shareData) ? shareData : (Array.isArray(shareData?.items) ? shareData.items : []);
+  if (!raw.length) return [];
+  const capDate = /^\d{4}-\d{2}-\d{2}/.test(String(maxDate || "")) ? String(maxDate).slice(0, 10) : "2099-12-31";
+  const byDate = new Map();
+  for (const it of raw) {
+    if (!it || !it.change_date) continue;
+    const cd = String(it.change_date).slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(cd) || cd > capDate) continue;
+    const tot = Number(it.total_shares);
+    if (!(tot > 0) || !Number.isFinite(tot)) continue;
+    byDate.set(cd, {
+      change_date: cd,
+      announce_date: it.announce_date ? String(it.announce_date).slice(0, 10) : "",
+      reason_code: String(it.reason_code || ""),
+      change_reason: String(it.change_reason || "").trim(),
+      total_shares: tot
+    });
+  }
+  return [...byDate.values()].sort((a, b) => a.change_date.localeCompare(b.change_date));
+}
+
+export function computeNetBuybackFromShares(shareData, refDate, splitHelper) {
+  const effectiveRefDate = /^\d{4}-\d{2}-\d{2}/.test(String(refDate || ""))
+    ? String(refDate).slice(0, 10)
+    : new Date().toISOString().slice(0, 10);
+  const rows = normalizeShareTimeline(shareData, effectiveRefDate);
+  if (!rows.length) return null;
+
+  const curIdx = rows.length - 1;
+  const curRow = rows[curIdx];
+  const targetPrevDate = addDaysIso(effectiveRefDate, -365) || effectiveRefDate;
+
+  let prevIdx = -1;
+  for (let i = rows.length - 1; i >= 0; i--) {
+    if (rows[i].change_date <= targetPrevDate) {
+      prevIdx = i;
+      break;
+    }
+  }
+  if (prevIdx < 0) return null;
+
+  const prevRow = rows[prevIdx];
+  if (prevIdx === curIdx) {
+    return {
+      buybackYieldPct: 0,
+      rawPct: 0,
+      source: "历史股本(无变动)",
+      note: "近12月总股本无变动",
+      prevDate: prevRow.change_date,
+      curDate: curRow.change_date,
+      prevShares: prevRow.total_shares,
+      curShares: curRow.total_shares,
+      adjPrevShares: prevRow.total_shares,
+      bonusFactor: 1,
+      reasons: []
+    };
+  }
+
+  const matchedStepIdx = new Set();
+  let bonusFactor = 1;
+  const prevPlus10 = addDaysIso(prevRow.change_date, 10) || prevRow.change_date;
+  const prevMinus10 = addDaysIso(prevRow.change_date, -10) || prevRow.change_date;
+  const curMinus10 = addDaysIso(curRow.change_date, -10) || curRow.change_date;
+  const curPlus10 = addDaysIso(curRow.change_date, 10) || curRow.change_date;
+
+  for (const be of (splitHelper?.bonusEvents || [])) {
+    const k = be.bonusRatio;
+    const exD = be.ex_date;
+    if (!(k > 1.0001) || !exD) continue;
+    if (exD > prevPlus10 && exD < curMinus10) {
+      bonusFactor *= k;
+      for (let idx = prevIdx + 1; idx <= curIdx; idx++) {
+        if (matchedStepIdx.has(idx)) continue;
+        if (Math.abs(daysBetweenDates(rows[idx].change_date, exD)) <= 10) {
+          const stepRatio = rows[idx].total_shares / rows[idx - 1].total_shares;
+          if (/送股|转增|红股|拆/.test(rows[idx].change_reason) || (stepRatio >= k * 0.82 && stepRatio <= k * 1.18)) {
+            matchedStepIdx.add(idx);
+          }
+        }
+      }
+    } else if (exD >= prevMinus10 && exD <= curPlus10) {
+      for (let idx = prevIdx + 1; idx <= curIdx; idx++) {
+        if (matchedStepIdx.has(idx)) continue;
+        if (Math.abs(daysBetweenDates(rows[idx].change_date, exD)) <= 10) {
+          const stepRatio = rows[idx].total_shares / rows[idx - 1].total_shares;
+          if (/送股|转增|红股|拆/.test(rows[idx].change_reason) || (stepRatio >= k * 0.82 && stepRatio <= k * 1.18)) {
+            bonusFactor *= k;
+            matchedStepIdx.add(idx);
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  // Fallback if adjustment_events lacks a pure bonus-split entry
+  for (let idx = prevIdx + 1; idx <= curIdx; idx++) {
+    if (matchedStepIdx.has(idx)) continue;
+    const rsn = rows[idx].change_reason;
+    if (/送股|转增/.test(rsn) && !/增发|配股|回购|激励|转债/.test(rsn)) {
+      const stepRatio = rows[idx].total_shares / rows[idx - 1].total_shares;
+      if (stepRatio >= 1.05 && stepRatio <= 10) {
+        bonusFactor *= stepRatio;
+        matchedStepIdx.add(idx);
+      }
+    }
+  }
+
+  const adjPrevShares = prevRow.total_shares * bonusFactor;
+  const rawPct = adjPrevShares > 0 ? ((adjPrevShares - curRow.total_shares) / adjPrevShares) * 100 : 0;
+  const buybackYieldPct = Math.abs(rawPct) < 0.05 ? 0 : clamp(rawPct, -15, 15);
+
+  const betweenRows = rows.slice(prevIdx + 1, curIdx + 1);
+  const allReasons = [];
+  for (const br of betweenRows) {
+    if (br.change_reason && !allReasons.includes(br.change_reason)) {
+      allReasons.push(br.change_reason);
+    }
+  }
+  const nonPeriodic = allReasons.filter(r => r !== "定期报告");
+  const reasons = (nonPeriodic.length ? nonPeriodic : allReasons).slice(0, 2);
+
+  let source = "历史股本(无变动)";
+  let note = reasons.length ? reasons.join("/") : "股本基本不变";
+  if (buybackYieldPct >= 0.05) {
+    source = "历史股本净回购";
+    note = reasons.length ? reasons.join("/") : "股本收缩";
+  } else if (buybackYieldPct <= -0.05) {
+    source = "历史股本净稀释";
+    note = reasons.length ? reasons.join("/") : "股本扩张";
+  }
+
+  return {
+    buybackYieldPct,
+    rawPct,
+    source,
+    note,
+    prevDate: prevRow.change_date,
+    curDate: curRow.change_date,
+    prevShares: prevRow.total_shares,
+    curShares: curRow.total_shares,
+    adjPrevShares,
+    bonusFactor,
+    reasons
+  };
 }
 
 export function extractExDividendFromEvents(adjustmentEvents, lastDate, splitHelper) {
@@ -478,6 +651,7 @@ export function computeHistoricalSeriesStats(bars, quarters, metric, opts = {}) 
   const authTotalShares = Number(opts.authTotalShares) > 0 ? Number(opts.authTotalShares) : null;
   const authTradeDate = String(opts.authTradeDate || "2099-12-31").slice(0, 10);
   const splitHelper = opts.splitHelper || null;
+  const shareTimeline = Array.isArray(opts.shareTimeline) ? opts.shareTimeline : [];
   const multNow = splitHelper ? (splitHelper.getMultAt(authTradeDate) || 1) : 1;
 
   const orderedQ = alignMode === "pit"
@@ -493,6 +667,7 @@ export function computeHistoricalSeriesStats(bars, quarters, metric, opts = {}) 
   const validVals = [];
 
   let qPtr = -1;
+  let sPtr = -1;
   let firstValidIdx = -1;
   let lastValidIdx = -1;
   for (let i = 0; i < n; i++) {
@@ -511,8 +686,21 @@ export function computeHistoricalSeriesStats(bars, quarters, metric, opts = {}) 
     qLabels[i] = q ? q.label : "--";
     qAlignDates[i] = q ? (alignMode === "pit" ? q.effective_report_date : q.period_end) : "--";
 
+    while (sPtr + 1 < shareTimeline.length && shareTimeline[sPtr + 1].change_date <= bar.date) {
+      sPtr++;
+    }
+
     let dayShares = null;
-    if (authTotalShares > 0) {
+    if (sPtr >= 0) {
+      const sRow = shareTimeline[sPtr];
+      if (sPtr === shareTimeline.length - 1 && bar.date > sRow.change_date && splitHelper) {
+        const mS = splitHelper.getMultAt(sRow.change_date) || 1;
+        const mD = splitHelper.getMultAt(bar.date) || 1;
+        dayShares = sRow.total_shares * (mD / mS);
+      } else {
+        dayShares = sRow.total_shares;
+      }
+    } else if (authTotalShares > 0) {
       const multDay = splitHelper ? (splitHelper.getMultAt(bar.date) || 1) : 1;
       dayShares = authTotalShares * (multDay / multNow);
     } else if (q && q.shares > 0) {
@@ -942,7 +1130,7 @@ export function selectDefaultDcfBase(snap) {
   return "fcf_ttm";
 }
 
-export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, valWindow = 1250, valAlignMode = "pit", dcfRMode = "capm" }) {
+export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, shareData = null, valWindow = 1250, valAlignMode = "pit", dcfRMode = "capm" }) {
   const symSnap = finData?.symbol || kMain?.symbol || kUnadj?.symbol || null;
   const code = symSnap?.thscode || "";
   const symbolName = symSnap?.name || kMain?.symbol?.name || kUnadj?.symbol?.name || "";
@@ -960,6 +1148,7 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, va
     priceDate = lb.date;
   }
 
+  const shareTimeline = normalizeShareTimeline(shareData, priceDate && priceDate !== "--" ? priceDate : "2099-12-31");
   const authTotalSharesRaw = Number(symSnap?.total_shares);
   const authTradeDate = String(symSnap?.trade_date || priceDate || "2099-12-31").slice(0, 10);
   let shares = null;
@@ -971,6 +1160,14 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, va
     const mNow = (priceDate && priceDate !== "--" ? splitHelper.getMultAt(priceDate) : mSnap) || mSnap;
     shares = authTotalSharesRaw * (mNow / mSnap);
     sharesSrc = symSnap?.trade_date ? `快照 ${symSnap.trade_date}` : "权威总股本";
+    isExactShares = true;
+    sharesSourceKind = "authoritative";
+  } else if (shareTimeline.length > 0) {
+    const latestShare = shareTimeline[shareTimeline.length - 1];
+    const mShare = splitHelper.getMultAt(latestShare.change_date) || 1;
+    const mNow = (priceDate && priceDate !== "--" ? splitHelper.getMultAt(priceDate) : mShare) || mShare;
+    shares = latestShare.total_shares * (mNow / mShare);
+    sharesSrc = `股本表 ${latestShare.change_date}`;
     isExactShares = true;
     sharesSourceKind = "authoritative";
   } else if (qNow?.shares > 0) {
@@ -1078,7 +1275,8 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, va
     ? ((qNow.cash - qNow.debt) / impliedMktCap) * 100
     : null;
 
-  // Buyback & Shareholder Yield: prioritize official backend fields if present, fallback to treasury/share-capital delta
+  // Buyback / Dilution & Shareholder Yield:
+  // 1) Official backend fields, 2) Split-adjusted historical share capital net buyback/dilution, 3) Balance sheet proxy
   const qPrev4 = quarters.length >= 5 ? quarters[quarters.length - 5] : null;
   const hasNumField = (v) => v !== null && v !== undefined && v !== "" && Number.isFinite(Number(v));
   const officialBbYield = hasNumField(symSnap?.buyback_yield_ttm)
@@ -1087,34 +1285,48 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, va
       ? (Number(symSnap.buyback_ttm) / impliedMktCap) * 100
       : null);
   let buybackYieldPct = 0;
+  let buybackRawPct = 0;
   let buybackSource = "仅现金分红";
+  let buybackNote = "";
+  let buybackDetail = null;
   if (officialBbYield !== null && officialBbYield >= 0) {
     buybackYieldPct = clamp(officialBbYield, 0, 20);
+    buybackRawPct = officialBbYield;
     buybackSource = buybackYieldPct >= 0.01 ? "官方回购口径" : "仅现金分红";
   } else {
-    let buybackRaw = 0;
-    if (impliedMktCap > 0 && qNow?.treasuryStock != null && qPrev4?.treasuryStock != null) {
-      const deltaTs = qNow.treasuryStock - qPrev4.treasuryStock;
-      if (deltaTs > impliedMktCap * 0.0005) {
-        buybackRaw += (deltaTs / impliedMktCap) * 100;
+    const histBb = computeNetBuybackFromShares(shareTimeline, priceDate, splitHelper);
+    if (histBb !== null) {
+      buybackYieldPct = histBb.buybackYieldPct;
+      buybackRawPct = histBb.rawPct;
+      buybackSource = histBb.source;
+      buybackNote = histBb.note;
+      buybackDetail = histBb;
+    } else {
+      let buybackRaw = 0;
+      if (impliedMktCap > 0 && qNow?.treasuryStock != null && qPrev4?.treasuryStock != null) {
+        const deltaTs = qNow.treasuryStock - qPrev4.treasuryStock;
+        if (deltaTs > impliedMktCap * 0.0005) {
+          buybackRaw += (deltaTs / impliedMktCap) * 100;
+        }
       }
-    }
-    if (qNow?.shareCapital > 0 && qPrev4?.shareCapital > 0) {
-      const mPrev4 = splitHelper.getMultAt(qPrev4.period_end) || 1;
-      const mNowSc = splitHelper.getMultAt(qNow.period_end) || 1;
-      const adjPrevSc = qPrev4.shareCapital * (mNowSc / mPrev4);
-      const shrinkRatio = adjPrevSc > 0 ? (adjPrevSc - qNow.shareCapital) / adjPrevSc : 0;
-      if (shrinkRatio >= 0.001 && shrinkRatio <= 0.15) {
-        buybackRaw += shrinkRatio * 100;
+      if (qNow?.shareCapital > 0 && qPrev4?.shareCapital > 0) {
+        const mPrev4 = splitHelper.getMultAt(qPrev4.period_end) || 1;
+        const mNowSc = splitHelper.getMultAt(qNow.period_end) || 1;
+        const adjPrevSc = qPrev4.shareCapital * (mNowSc / mPrev4);
+        const shrinkRatio = adjPrevSc > 0 ? (adjPrevSc - qNow.shareCapital) / adjPrevSc : 0;
+        if (shrinkRatio >= 0.001 && shrinkRatio <= 0.15) {
+          buybackRaw += shrinkRatio * 100;
+        }
       }
+      const hasEstimatedBuyback = buybackRaw >= 0.05;
+      buybackYieldPct = hasEstimatedBuyback ? clamp(buybackRaw, 0, 15) : 0;
+      buybackRawPct = buybackYieldPct;
+      buybackSource = hasEstimatedBuyback ? "库存股/注销估算" : "仅现金分红";
     }
-    const hasEstimatedBuyback = buybackRaw >= 0.05;
-    buybackYieldPct = hasEstimatedBuyback ? clamp(buybackRaw, 0, 15) : 0;
-    buybackSource = hasEstimatedBuyback ? "库存股/注销估算" : "仅现金分红";
   }
   const shareholderYieldPct = approxDivYieldPct !== null
     ? (approxDivYieldPct + buybackYieldPct)
-    : (buybackYieldPct > 0 ? buybackYieldPct : null);
+    : (Math.abs(buybackYieldPct) >= 0.05 ? buybackYieldPct : null);
 
   // 5Y Cash Conversion, 5Y ROIC Mean, and 5Y ROE Volatility
   let sumOcf5y = 0;
@@ -1215,9 +1427,10 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, va
     : barsAll.slice(-Math.min(barsAll.length, Number(valWindow) || 1250));
   const bandOpts = {
     alignMode: valAlignMode,
-    authTotalShares: sharesSourceKind === "authoritative" ? authTotalSharesRaw : null,
+    authTotalShares: (Number.isFinite(authTotalSharesRaw) && authTotalSharesRaw > 0) ? authTotalSharesRaw : null,
     authTradeDate,
-    splitHelper
+    splitHelper,
+    shareTimeline
   };
   const bands = {
     pe: computeHistoricalSeriesStats(barsWin, quarters, "pe", bandOpts),
@@ -1257,7 +1470,11 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, va
     approxPayoutPct,
     divStability,
     buybackYieldPct,
+    buybackRawPct,
     buybackSource,
+    buybackNote,
+    buybackDetail,
+    shareHistoryCount: shareTimeline.length,
     shareholderYieldPct,
     cashConv5y,
     roic5yMean,
@@ -1344,7 +1561,10 @@ export function computePeerMetrics(snap, opts = {}) {
     psTtm: snap.psTtm,
     divYieldPct: snap.approxDivYieldPct,
     buybackYieldPct: snap.buybackYieldPct ?? 0,
+    buybackRawPct: snap.buybackRawPct ?? (snap.buybackYieldPct ?? 0),
     buybackSource: snap.buybackSource || "仅现金分红",
+    buybackNote: snap.buybackNote || "",
+    buybackDetail: snap.buybackDetail || null,
     shareholderYieldPct: snap.shareholderYieldPct ?? snap.approxDivYieldPct ?? null,
     payoutPct: snap.approxPayoutPct,
     divStabilityScore,

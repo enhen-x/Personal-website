@@ -16,6 +16,7 @@ export function computeValuationSnapshot() {
     kUnadj,
     kAdj,
     kMain,
+    shareData: STATE.stock.shareData,
     valWindow: STATE.stock.valWindow,
     valAlignMode: STATE.stock.valAlignMode,
     dcfRMode: STATE.stock.dcfRMode
@@ -179,34 +180,59 @@ export function renderValuationKPIs(snap) {
   );
 
   const divY = snap.approxDivYieldPct;
-  let divMeta = "";
+  const bb = snap.buybackYieldPct || 0;
+  const shY = snap.shareholderYieldPct ?? divY;
+  let divBaseMeta = "";
   if (snap.exDiv) {
     if (snap.exDiv.count > 0) {
       const dpsStr = fmtNum(snap.dpsTtm, snap.dpsTtm >= 10 ? 2 : 3);
       const payStr = snap.approxPayoutPct !== null ? `${snap.approxPayoutPct.toFixed(0)}%` : "--";
-      divMeta = `近12月除息${snap.exDiv.count}次 · ¥${dpsStr}/股 · 派息率 ${payStr}${snap.exDiv.hasSplit ? " (含送转折算)" : ""}`;
+      divBaseMeta = `股息 ${divY !== null ? divY.toFixed(2) + "%" : "--"} (¥${dpsStr}·派息${payStr}${snap.exDiv.hasSplit ? "·含送转" : ""})`;
     } else {
-      divMeta = "近12月无现金除息记录";
+      divBaseMeta = "近12月零现金除息";
     }
   } else {
-    divMeta = snap.qNow?.divIncludesBondInterest
-      ? `含债券/优先股付息(金融口径) · TTM流出 ${fmtMoneyShort(snap.qNow?.ttmDiv)}`
-      : `近似TTM分红 ${fmtMoneyShort(snap.qNow?.ttmDiv)} · 派息率 ${snap.approxPayoutPct !== null ? snap.approxPayoutPct.toFixed(0) + "%" : "--"}`;
+    divBaseMeta = snap.qNow?.divIncludesBondInterest
+      ? `股息 ${divY !== null ? divY.toFixed(2) + "%" : "--"} (含债券/优先股付息)`
+      : `近似股息 ${divY !== null ? divY.toFixed(2) + "%" : "--"} · 派息 ${snap.approxPayoutPct !== null ? snap.approxPayoutPct.toFixed(0) + "%" : "--"}`;
+  }
+  const bbMeta = Math.abs(bb) >= 0.05
+    ? ` · ${bb > 0 ? "净回购 +" : "净稀释 "}${bb.toFixed(2)}%${snap.buybackNote ? ` (${snap.buybackNote})` : ""}`
+    : (snap.shareHistoryCount > 0 && !(snap.exDiv?.count > 0) ? " · 近12月股本无变动" : "");
+  const divMeta = `${divBaseMeta}${bbMeta}`;
+
+  let shPillText = "--";
+  let shPillCls = "pill-fail";
+  if (bb >= 0.05) {
+    shPillText = `含回购 +${bb.toFixed(2)}%`;
+    shPillCls = "pill-pass";
+  } else if (bb <= -0.05) {
+    shPillText = `含稀释 ${bb.toFixed(2)}%`;
+    shPillCls = (shY !== null && shY < 0) ? "pill-hot" : "pill-mid";
+  } else if (shY !== null) {
+    shPillText = shY >= 3.0 ? "高股息" : (shY >= 1.5 ? "稳健" : (shY > 0 ? "低派息" : "零派息"));
+    shPillCls = shY >= 3.0 ? "pill-pass" : (shY > 0 ? "pill-mid" : "pill-fail");
   }
   setCard(
     "val-kpi-div",
-    divY !== null ? fmtPct(divY, 2, false) : "--",
-    divY !== null ? (divY >= 3.0 ? "高股息" : (divY >= 1.5 ? "稳健" : (divY > 0 ? "低派息" : "零派息"))) : "--",
-    divY !== null ? (divY >= 3.0 ? "pill-pass" : (divY > 0 ? "pill-mid" : "pill-fail")) : "pill-fail",
-    divY !== null ? clamp(divY * 18, divY > 0 ? 4 : 0, 100) : 0,
-    "var(--emerald)",
+    shY !== null ? fmtPct(shY, 2, false) : "--",
+    shPillText,
+    shPillCls,
+    shY !== null ? clamp(Math.max(0, shY) * 18, shY > 0 ? 4 : 0, 100) : 0,
+    (shY !== null && shY < 0) ? "var(--crimson)" : "var(--emerald)",
     divMeta
   );
   const divMetaEl = document.getElementById("val-kpi-div-meta");
   if (divMetaEl) {
-    divMetaEl.title = (snap.exDiv && snap.exDiv.events.length)
-      ? snap.exDiv.events.map(e => `${e.date}: ¥${e.dps.toFixed(3)}/股`).join(" | ")
-      : "";
+    const tipParts = [];
+    if (snap.exDiv?.events?.length) {
+      tipParts.push("除息: " + snap.exDiv.events.map(e => `${e.date} ¥${e.dps.toFixed(3)}/股`).join(" | "));
+    }
+    if (snap.buybackDetail) {
+      const bd = snap.buybackDetail;
+      tipParts.push(`历史股本: ${bd.prevDate} ${(bd.prevShares / 1e8).toFixed(2)}亿股 → ${bd.curDate} ${(bd.curShares / 1e8).toFixed(2)}亿股 (${bd.source}${bd.note ? "·" + bd.note : ""})`);
+    }
+    divMetaEl.title = tipParts.join("\n");
   }
 
   const peg = snap.peg;

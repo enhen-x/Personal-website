@@ -1,6 +1,6 @@
 import { esc, fmtNum, fmtPct, fmtMoneyShort, clamp, downloadCsv } from "./utils.js";
 import { STATE, initPersistedLists, saveWatchlist, saveCompareList } from "./state.js";
-import { quantFetch, fetchFinancialsChecked, showGlobalAlert, clearGlobalAlert } from "./api.js";
+import { quantFetch, fetchFinancialsChecked, fetchSharesSafe, showGlobalAlert, clearGlobalAlert } from "./api.js";
 import { renderHealthAndStatus, renderOverview, runStockProbe, loadInspectData } from "./inspect.js";
 import {
   setScreenerHandlers,
@@ -294,13 +294,16 @@ async function loadFullHistoryValuation() {
   if (box) box.innerHTML = `<div class="chart-empty">正在载入全历史估值分位带…</div>`;
 
   try {
-    const [kAll, finAll] = await Promise.all([
+    const needShares = STATE.stock.shareData?.symbol?.thscode !== code || ((STATE.stock.shareData?.items?.length || 0) >= 200);
+    const [kAll, finAll, shareAll] = await Promise.all([
       quantFetch(`/api/stocks/${encodeURIComponent(code)}/kline`, { adjust: "none", limit: 6000 }),
-      fetchFinancialsChecked(code, 160)
+      fetchFinancialsChecked(code, 160),
+      needShares ? fetchSharesSafe(code, 500) : Promise.resolve(STATE.stock.shareData)
     ]);
     if (STATE.stock.code !== code) return;
     STATE.stock.valKlineData = kAll;
     STATE.stock.valFinData = finAll;
+    if (shareAll) STATE.stock.shareData = shareAll;
     STATE.stock.valAllLoadedCode = code;
     clearGlobalAlert();
     if (STATE.stock.valWindow === "all") {
@@ -320,6 +323,7 @@ async function loadStockDashboard(code) {
   STATE.stock.loadedCode = clean;
   STATE.stock.dcfAutoFittedCode = "";
   STATE.stock.valAllLoadedCode = "";
+  STATE.stock.shareData = null;
   STATE.stock.valFwdKlineData = null;
   STATE.stock.valFwdLoadedCode = "";
   document.querySelectorAll(".stk-chip").forEach(b => b.classList.toggle("active", b.dataset.code === clean));
@@ -359,12 +363,15 @@ async function loadStockDashboard(code) {
         limit: 260
       }));
     }
+    const shareIdx = reqs.length;
+    reqs.push(fetchSharesSafe(clean, 200));
 
     const results = await Promise.all(reqs);
     const kData = results[0];
     const finData = results[1];
     const valKData = valKIdx >= 0 ? results[valKIdx] : kData;
     const fwdKData = fwdKIdx >= 0 ? results[fwdKIdx] : kData;
+    const shareData = results[shareIdx] || null;
 
     clearGlobalAlert();
     STATE.stock.klineData = kData;
@@ -372,6 +379,7 @@ async function loadStockDashboard(code) {
     STATE.stock.valFwdKlineData = fwdKData;
     STATE.stock.valFwdLoadedCode = clean;
     STATE.stock.valFinData = finData;
+    STATE.stock.shareData = shareData;
     STATE.stock.valAllLoadedCode = wantAll ? clean : "";
     if (STATE.stock.stmtLimit < valFinLimit) {
       STATE.stock.finData = {
@@ -860,7 +868,7 @@ function bindEvents() {
     if (!rows.length) return;
     const headers = [
       "code", "name", "mkt_cap", "unadj_close", "pe_ttm", "pe_pct_5y", "pb", "pb_pct_5y",
-      "shareholder_yield_pct", "div_yield_ttm", "buyback_yield_pct", "payout_pct",
+      "shareholder_yield_pct", "div_yield_ttm", "buyback_yield_pct", "buyback_source", "payout_pct",
       "div_stability_score", "div_stability_grade", "div_consec_years", "div_cv_5y", "div_cut_count_5y", "div_cagr_5y",
       "fcf_yield_pct", "cash_conv_5y", "roe_ttm", "roic_5y_mean", "roe_vol_5y",
       "g1_base", "np_yoy_1y", "dcf_base", "dcf_mid", "dcf_upside_pct",
@@ -872,7 +880,7 @@ function bindEvents() {
       headers,
       rows.map(r => [
         r.code, r.name, r.mktCap, r.unadjPrice, r.peTtm, r.pePct5y, r.pb, r.pbPct5y,
-        r.shareholderYieldPct, r.divYieldPct, r.buybackYieldPct, r.payoutPct,
+        r.shareholderYieldPct, r.divYieldPct, r.buybackYieldPct, r.buybackSource, r.payoutPct,
         r.divStabilityScore, r.divStabilityGrade, r.divConsecYears, r.divCv5y, r.divCutCount5y, r.divCagr5y,
         r.fcfYieldPct, r.cashConv5y, r.roeTtm, r.roic5yMean, r.roeVol5y,
         r.g1Base, r.npYoy1yRaw, r.dcfBase, r.dcfMid, r.dcfUpsidePct,

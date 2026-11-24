@@ -8,7 +8,7 @@ export function getClientCacheTtlMs(endpoint) {
   if (endpoint === "/api/screener") return 180000;
   if (endpoint === "/api/stocks") return 300000;
   if (/\/kline$/.test(endpoint)) return 180000;
-  if (/\/(financials|peers)$/.test(endpoint)) return 600000;
+  if (/\/(financials|peers|shares)$/.test(endpoint)) return 600000;
   return 60000;
 }
 
@@ -16,7 +16,7 @@ export function buildQuantUrl(endpoint, params = {}, fresh = false) {
   const url = new URL("/api/quant", window.location.origin);
   url.searchParams.set("endpoint", endpoint);
   const merged = { ...params };
-  if (endpoint === "/api/screener" || endpoint === "/api/stocks" || /\/(financials|peers)$/.test(endpoint)) {
+  if (endpoint === "/api/screener" || endpoint === "/api/stocks" || /\/(financials|peers|shares)$/.test(endpoint)) {
     merged.v = API_SCHEMA_VER;
   }
   const keys = Object.keys(merged).sort();
@@ -129,6 +129,18 @@ export async function fetchFinancialsChecked(code, limit) {
     data = await quantFetch(ep, { limit }, { fresh: true });
   }
   return data;
+}
+
+export async function fetchSharesSafe(code, limit = 200, fresh = false) {
+  try {
+    return await quantFetch(
+      `/api/stocks/${encodeURIComponent(code)}/shares`,
+      { limit },
+      fresh ? { fresh: true } : undefined
+    );
+  } catch {
+    return null;
+  }
 }
 
 export function updateLatencyBadge(ms, fromCache = false) {

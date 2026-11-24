@@ -34,6 +34,7 @@ export const STATE = {
     finData: null,
     valFinData: null,
     valAllLoadedCode: "",
+    shareData: null,
     valMetric: "pe",
     valWindow: 1250,
     valAlignMode: "pit",
