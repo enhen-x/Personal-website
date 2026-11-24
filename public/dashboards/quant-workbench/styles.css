@@ -400,6 +400,18 @@ html.is-embedded .wrap {
   gap: 10px;
   margin-bottom: 12px;
 }
+.cmp-scatter-head {
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  gap: 12px 16px;
+}
+.cmp-scatter-head > div:first-child {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.cmp-scatter-head #seg-cmp-scatter {
+  flex: 0 0 auto;
+}
 .mod-title {
   font-family: var(--font-display);
   font-size: 17px;
@@ -1631,6 +1643,12 @@ html, body {
   .cmp-mode-bar {
     padding: 8px 10px;
     gap: 6px 10px;
+  }
+  .cmp-scatter-head {
+    flex-wrap: wrap;
+  }
+  .cmp-scatter-head > div:first-child {
+    flex: 1 1 100%;
   }
   .cmp-sub-seg-wrap {
     flex-wrap: wrap;
