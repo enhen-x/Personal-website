@@ -324,6 +324,7 @@ export function computeDividendStability(adjustmentEvents, lastDate, splitHelper
     divYearsIn5: 0,
     divCv5y: null,
     divCutCount5y: 0,
+    divCagr3y: null,
     divCagr5y: null
   };
   if (!Array.isArray(adjustmentEvents) || !adjustmentEvents.length) return emptyRes;
@@ -394,6 +395,9 @@ export function computeDividendStability(adjustmentEvents, lastDate, splitHelper
     }
   }
 
+  const divCagr3y = (vals5[1] > 0.0005 && vals5[4] > 0.0005)
+    ? clamp((Math.pow(vals5[4] / vals5[1], 1 / 3) - 1) * 100, -50, 80)
+    : null;
   const divCagr5y = (vals5[0] > 0.0005 && vals5[4] > 0.0005)
     ? clamp((Math.pow(vals5[4] / vals5[0], 1 / 4) - 1) * 100, -50, 80)
     : null;
@@ -416,6 +420,7 @@ export function computeDividendStability(adjustmentEvents, lastDate, splitHelper
     divYearsIn5,
     divCv5y,
     divCutCount5y,
+    divCagr3y,
     divCagr5y
   };
 }
@@ -1404,6 +1409,32 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
   const fcf3yYieldPct = (impliedMktCap > 0 && fcf3yAvg !== null) ? (fcf3yAvg / impliedMktCap) * 100 : null;
   const fcf5yYieldPct = (impliedMktCap > 0 && fcf5yAvg !== null) ? (fcf5yAvg / impliedMktCap) * 100 : null;
 
+  // Dividend/Shareholder-Return Cash Flow Coverage & CapEx Intensity
+  const cashDivOut = (ttmDivActual > 0) ? ttmDivActual : ((qNow?.ttmDiv > 0) ? qNow.ttmDiv : 0);
+  const netBuybackOut = (impliedMktCap > 0 && buybackYieldPct > 0) ? (impliedMktCap * (buybackYieldPct / 100)) : 0;
+  const shCashOutflow = cashDivOut + netBuybackOut;
+  let fcfDivCoverage = null;
+  let fcf3yDivCoverage = null;
+  const fcfCoverageIsProfitProxy = isFinCompany;
+  if (isFinCompany) {
+    if (cashDivOut > 0 && qNow?.ttmNp !== null && Number.isFinite(qNow.ttmNp)) {
+      fcfDivCoverage = clamp(qNow.ttmNp / cashDivOut, -3, 10);
+    }
+    if (cashDivOut > 0 && np3yAvg !== null && Number.isFinite(np3yAvg)) {
+      fcf3yDivCoverage = clamp(np3yAvg / cashDivOut, -3, 10);
+    }
+  } else {
+    if (shCashOutflow > 0 && qNow?.ttmFcf !== null && Number.isFinite(qNow.ttmFcf)) {
+      fcfDivCoverage = clamp(qNow.ttmFcf / shCashOutflow, -3, 10);
+    }
+    if (shCashOutflow > 0 && fcf3yAvg !== null && Number.isFinite(fcf3yAvg)) {
+      fcf3yDivCoverage = clamp(fcf3yAvg / shCashOutflow, -3, 10);
+    }
+  }
+  const capexToOcfPct = (!isFinCompany && qNow?.ttmOcf > 0 && qNow?.ttmCapex !== null && Number.isFinite(qNow.ttmCapex))
+    ? clamp((Math.abs(qNow.ttmCapex) / qNow.ttmOcf) * 100, 0, 200)
+    : null;
+
   // Marginal 1Y TTM Net Profit YoY
   let npYoy1yRaw = null;
   let npYoy1y = null;
@@ -1510,6 +1541,10 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
     fcf5yAvg,
     fcf3yYieldPct,
     fcf5yYieldPct,
+    fcfDivCoverage,
+    fcf3yDivCoverage,
+    fcfCoverageIsProfitProxy,
+    capexToOcfPct,
     cagrNp,
     cagrLabel,
     dcfModel,
@@ -1618,8 +1653,27 @@ export function computePeerMetrics(snap, opts = {}) {
   const divYearsIn5 = dstab.divYearsIn5 ?? 0;
   const divCv5y = dstab.divCv5y ?? null;
   const divCutCount5y = dstab.divCutCount5y ?? 0;
+  const divCagr3y = dstab.divCagr3y ?? null;
   const divCagr5y = dstab.divCagr5y ?? null;
   const divYieldTrap = Boolean(snap.approxDivYieldPct != null && snap.approxDivYieldPct >= 4 && divStabilityScore < 50);
+  const retainRatio = snap.approxPayoutPct != null ? clamp(1 - snap.approxPayoutPct / 100, 0, 1) : 0.5;
+  const divElasticityForward = (scen?.g1 != null && Number.isFinite(scen.g1))
+    ? clamp(scen.g1 * retainRatio, -20, 40)
+    : null;
+  const maxDd3yAbs = (snap.maxDd3y != null && Number.isFinite(snap.maxDd3y))
+    ? Math.abs(snap.maxDd3y)
+    : null;
+  const isDivVeto = (!snap.isFinancial && snap.fcfDivCoverage != null && snap.fcfDivCoverage < 1.0)
+    || (snap.isFinancial && snap.approxPayoutPct != null && snap.approxPayoutPct > 90)
+    || (divStabilityScore < 50 || divCutCount5y >= 2)
+    || (snap.maxDd3y != null && snap.maxDd3y < -45)
+    || ((snap.buybackYieldPct ?? 0) <= -3.0);
+  const isDivShield = !isDivVeto
+    && divStabilityScore >= 75
+    && (snap.fcfDivCoverage != null && snap.fcfDivCoverage >= 1.2)
+    && (snap.vol3y != null && snap.vol3y <= 24)
+    && (snap.maxDd3y != null && snap.maxDd3y >= -25);
+  const divRiskFlag = isDivVeto ? "high_risk" : (isDivShield ? "low_vol" : "normal");
 
   return {
     code: snap.code,
@@ -1652,8 +1706,16 @@ export function computePeerMetrics(snap, opts = {}) {
     divYearsIn5,
     divCv5y,
     divCutCount5y,
+    divCagr3y,
     divCagr5y,
+    divElasticityForward,
     divYieldTrap,
+    fcfDivCoverage: snap.fcfDivCoverage ?? null,
+    fcf3yDivCoverage: snap.fcf3yDivCoverage ?? null,
+    fcfCoverageIsProfitProxy: Boolean(snap.fcfCoverageIsProfitProxy),
+    capexToOcfPct: snap.capexToOcfPct ?? null,
+    maxDd3yAbs,
+    divRiskFlag,
     fcfYieldPct: snap.fcfYieldPct ?? null,
     fcf3yYieldPct: snap.fcf3yYieldPct ?? null,
     fcf5yYieldPct: snap.fcf5yYieldPct ?? null,

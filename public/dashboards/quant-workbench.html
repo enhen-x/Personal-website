@@ -1073,20 +1073,27 @@
 
     <!-- 2D Scatter Valuation Map -->
     <div class="module-card">
+      <div class="cmp-mode-bar">
+        <div class="inline-group">
+          <span class="ctrl-label">研究模式:</span>
+          <div class="seg cmp-research-seg" id="seg-cmp-research-mode">
+            <button type="button" data-val="dividend" class="active">红利模式</button>
+            <button type="button" data-val="quality">白马质量</button>
+            <button type="button" data-val="cycle">周期右侧</button>
+            <button type="button" data-val="growth">成长模式</button>
+          </div>
+        </div>
+        <span id="cmp-mode-brief" class="cmp-mode-brief">吃现金回报 + 防缩水断供 + 赚提息弹性（风控外环自动切换红利排雷口径）</span>
+      </div>
       <div class="mod-header">
         <div>
           <h2 class="mod-title">一、同业性价比二维散点图</h2>
           <span id="cmp-scatter-subtitle" class="mod-desc">基于同一套多维估值引擎横向测算 · 气泡大小代表总市值，绿色代表高于现价具备安全边际</span>
         </div>
         <div class="seg" id="seg-cmp-scatter">
-          <button type="button" data-val="pb_roe" class="active">PB-ROE 性价比</button>
-          <button type="button" data-val="irr_upside">IRR vs 估值空间</button>
-          <button type="button" data-val="div_growth">股东回报 vs 增速</button>
-          <button type="button" data-val="pe_pct">PE vs 5Y分位</button>
-          <button type="button" data-val="cf_return">现金流 vs 股东回报</button>
-          <button type="button" data-val="roic_stability">资本效率 vs 稳定性</button>
-          <button type="button" data-val="div_stability">红利稳定性</button>
-          <button type="button" data-val="long_term_roe_pb">长期 ROE/PB</button>
+          <button type="button" data-val="div_return_stab" class="active">回报 vs 稳定性</button>
+          <button type="button" data-val="div_elast_cov">弹性 vs 持续性</button>
+          <button type="button" data-val="div_return_risk">回报 vs 低波回撤</button>
         </div>
       </div>
 
@@ -1095,13 +1102,27 @@
           <span class="legend-item"><span class="legend-swatch" style="background:#0F766E;"></span><span>低估空间 ≥ +15%</span></span>
           <span class="legend-item"><span class="legend-swatch" style="background:#374151;"></span><span>估值合理 (-10% ~ +15%)</span></span>
           <span class="legend-item"><span class="legend-swatch" style="background:#B91C1C;"></span><span>偏贵 ≤ -10%</span></span>
-          <span class="legend-item"><span class="legend-ring-swatch low-vol"></span><span>低波稳健</span></span>
-          <span class="legend-item"><span class="legend-ring-swatch high-risk"></span><span>高负债/高回撤预警</span></span>
+          <span class="legend-item"><span class="legend-ring-swatch low-vol"></span><span id="cmp-legend-ring-good">稳健真红利</span></span>
+          <span class="legend-item"><span class="legend-ring-swatch high-risk"></span><span id="cmp-legend-ring-bad">红利排雷(覆盖&lt;1x/不稳/大回撤)</span></span>
           <span class="legend-item" style="color:var(--ink-faint);">· 面积 ~ 总市值</span>
         </div>
         <div class="inline-group">
+          <div id="wrap-cmp-div-elasticity" class="cmp-sub-seg-wrap hidden">
+            <span class="ctrl-label">弹性口径:</span>
+            <div class="seg" id="seg-cmp-div-elasticity">
+              <button type="button" data-val="dps_cagr" class="active">DPS 3Y CAGR</button>
+              <button type="button" data-val="forward_pot">盈利+提息潜能</button>
+            </div>
+          </div>
+          <div id="wrap-cmp-div-risk" class="cmp-sub-seg-wrap hidden">
+            <span class="ctrl-label">风险轴:</span>
+            <div class="seg" id="seg-cmp-div-risk">
+              <button type="button" data-val="max_dd" class="active">3Y最大回撤</button>
+              <button type="button" data-val="vol_3y">3Y年化波动</button>
+            </div>
+          </div>
           <button id="btn-cmp-arrows" class="preset-btn active" type="button" aria-pressed="true" title="在「股东回报 vs 增速」视图下显示 5Y→1Y 净利边际增速拖尾箭头">增速拖尾箭头: 开</button>
-          <button id="btn-cmp-risk-rings" class="preset-btn active" type="button" aria-pressed="true" title="按 3 年波动率、最大回撤与资产负债率叠加气泡风控外环">风控外环: 开</button>
+          <button id="btn-cmp-risk-rings" class="preset-btn active" type="button" aria-pressed="true" title="按当前研究模式叠加气泡风控外环">风控外环: 开</button>
           <span class="chart-hint">悬停明细 · 点击跳转个股看板</span>
         </div>
       </div>
@@ -1126,7 +1147,7 @@
         <table class="cmp-table">
           <thead id="cmp-thead"></thead>
           <tbody id="cmp-tbody">
-            <tr><td colspan="18" class="center flat" style="padding:28px;">切换至此标签页后自动拉取并测算对比标的…</td></tr>
+            <tr><td colspan="20" class="center flat" style="padding:28px;">切换至此标签页后自动拉取并测算对比标的…</td></tr>
           </tbody>
         </table>
       </div>

@@ -19,6 +19,7 @@ import {
 import { FIELD_ZH, getActiveStatementRowsAndCols, renderStatementTable } from "./statements-table.js";
 import { renderValuationModels, renderStockValuation } from "./valuation-ui.js";
 import {
+  COMPARE_RESEARCH_MODES,
   setCompareHandlers,
   syncStockWatchButton,
   renderWatchlistBar,
@@ -868,12 +869,42 @@ function bindEvents() {
     STATE.compare.rimAllowBelowBook = !STATE.compare.rimAllowBelowBook;
     renderCompareResults();
   });
-  document.querySelectorAll("#seg-cmp-scatter button").forEach(btn => {
+  document.querySelectorAll("#seg-cmp-research-mode button").forEach(btn => {
     btn.addEventListener("click", () => {
-      STATE.compare.scatterMode = btn.dataset.val || "pb_roe";
+      const nextMode = btn.dataset.val || "dividend";
+      STATE.compare.researchMode = nextMode;
+      const modeCfg = COMPARE_RESEARCH_MODES[nextMode];
+      if (modeCfg) {
+        STATE.compare.scatterMode = modeCfg.defaultView;
+      }
       renderCompareResults();
     });
   });
+  document.querySelectorAll("#seg-cmp-div-elasticity button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const nextEl = btn.dataset.val || "dps_cagr";
+      STATE.compare.divElasticityMode = nextEl;
+      if (STATE.compare.sortBy === "divCagr3y" || STATE.compare.sortBy === "divElasticityForward") {
+        STATE.compare.sortBy = nextEl === "forward_pot" ? "divElasticityForward" : "divCagr3y";
+      }
+      renderCompareResults();
+    });
+  });
+  document.querySelectorAll("#seg-cmp-div-risk button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      STATE.compare.divRiskAxis = btn.dataset.val || "max_dd";
+      renderCompareResults();
+    });
+  });
+  const cmpScatterSeg = document.getElementById("seg-cmp-scatter");
+  if (cmpScatterSeg) {
+    cmpScatterSeg.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-val]");
+      if (!btn) return;
+      STATE.compare.scatterMode = btn.dataset.val || "div_return_stab";
+      renderCompareResults();
+    });
+  }
   document.getElementById("btn-cmp-arrows").addEventListener("click", () => {
     STATE.compare.showGrowthArrows = !STATE.compare.showGrowthArrows;
     renderCompareResults();
@@ -891,7 +922,8 @@ function bindEvents() {
       "roe_ttm", "roe_3y_mean", "roe_5y_mean", "roe_3y_vol", "roe_3y_min",
       "roe_to_pb_ttm", "roe_to_pb_3y", "roe_to_pb_5y",
       "shareholder_yield_pct", "div_yield_ttm", "buyback_yield_pct", "buyback_source", "payout_pct",
-      "div_stability_score", "div_stability_grade", "div_consec_years", "div_cv_5y", "div_cut_count_5y", "div_cagr_5y",
+      "div_stability_score", "div_stability_grade", "div_consec_years", "div_cv_5y", "div_cut_count_5y", "div_cagr_3y", "div_cagr_5y",
+      "div_elasticity_fwd", "fcf_div_coverage", "capex_to_ocf_pct", "div_risk_flag",
       "fcf_yield_pct", "fcf_3y_yield_pct", "fcf_5y_yield_pct", "cash_conv_5y", "roic_5y_mean", "roe_vol_5y",
       "g1_base", "np_yoy_1y", "dcf_base", "dcf_mid", "dcf_upside_pct",
       "rim_mid", "rim_upside_pct", "implied_irr", "r_used", "net_cash_per_share",
@@ -906,7 +938,8 @@ function bindEvents() {
         r.roeTtm, r.roeMean3y, r.roeMean5y, r.roeVol3y, r.roeMin3y,
         r.roeToPbTtm, r.roeToPb3y, r.roeToPb5y,
         r.shareholderYieldPct, r.divYieldPct, r.buybackYieldPct, r.buybackSource, r.payoutPct,
-        r.divStabilityScore, r.divStabilityGrade, r.divConsecYears, r.divCv5y, r.divCutCount5y, r.divCagr5y,
+        r.divStabilityScore, r.divStabilityGrade, r.divConsecYears, r.divCv5y, r.divCutCount5y, r.divCagr3y, r.divCagr5y,
+        r.divElasticityForward, r.fcfDivCoverage, r.capexToOcfPct, r.divRiskFlag,
         r.fcfYieldPct, r.fcf3yYieldPct, r.fcf5yYieldPct, r.cashConv5y, r.roic5yMean, r.roeVol5y,
         r.g1Base, r.npYoy1yRaw, r.dcfBase, r.dcfMid, r.dcfUpsidePct,
         r.rimMid, r.rimUpsidePct, r.impliedIrr, r.rUsed, r.netCashPerShare,
