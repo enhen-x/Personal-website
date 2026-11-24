@@ -150,8 +150,8 @@
       </div>
     </div>
 
-    <!-- 5 Scale & Coverage KPIs -->
-    <div class="kpi-grid">
+    <!-- 6 Scale & Coverage KPIs -->
+    <div class="kpi-grid kpi-grid-6">
       <div class="kpi-card">
         <div class="kpi-head">
           <span class="kpi-title">A 股目录与快照覆盖</span>
@@ -201,6 +201,16 @@
         <div class="kpi-bar-track"><div id="insp-kpi5-bar" class="kpi-bar-fill" style="width:0%;background:var(--emerald);"></div></div>
         <div id="insp-kpi5-meta" class="kpi-meta">--</div>
       </div>
+
+      <div class="kpi-card">
+        <div class="kpi-head">
+          <span class="kpi-title">历史股本变动 (Share Capital)</span>
+          <span id="insp-kpi6-pill" class="status-pill pill-mid">--</span>
+        </div>
+        <div id="insp-kpi6-val" class="kpi-num">--</div>
+        <div class="kpi-bar-track"><div id="insp-kpi6-bar" class="kpi-bar-fill" style="width:0%;background:var(--indigo);"></div></div>
+        <div id="insp-kpi6-meta" class="kpi-meta">--</div>
+      </div>
     </div>
 
     <!-- Automated Data Quality Audit -->
@@ -208,9 +218,13 @@
       <div class="mod-header">
         <div>
           <h2 class="mod-title">一、全库数据质量自动检验清单</h2>
-          <span class="mod-desc">基于 /health 与 /api/overview 返回指标实时核验覆盖率、时效性、三表一致性与调度状态</span>
+          <span class="mod-desc">基于 /health 与 /api/overview 实时核验存储、日线、复权、财报、股本、水位线与调度状态（共 15 项）</span>
         </div>
-        <button id="btn-rerun-overview" class="btn btn-sm" type="button">重新拉取检验</button>
+        <div class="inline-group">
+          <span id="audit-summary" class="audit-summary"></span>
+          <button id="btn-inspect-csv" class="btn btn-sm" type="button">导出检验报告</button>
+          <button id="btn-rerun-overview" class="btn btn-sm" type="button">重新拉取检验</button>
+        </div>
       </div>
       <div class="table-wrap">
         <table>
@@ -229,11 +243,59 @@
       </div>
     </div>
 
+    <!-- Screener Snapshot Full-Field Audit -->
+    <div class="module-card">
+      <div class="mod-header">
+        <div>
+          <h2 class="mod-title">二、选股快照全字段完整性与异常扫描</h2>
+          <span class="mod-desc">分页拉取 /api/screener 全量 54 列快照，统计字段缺失率、时效分布、口径一致性与异常值；点击样本可直接抽检</span>
+        </div>
+        <div class="inline-group">
+          <span id="snap-scan-status" class="mono" style="font-size:11.5px;color:var(--ink-muted);">等待扫描</span>
+          <button id="btn-snap-scan" class="btn btn-sm" type="button">重新扫描</button>
+        </div>
+      </div>
+      <div id="snap-scan-kpis" class="snap-stat-grid"></div>
+      <div class="table-wrap" style="margin-bottom:12px;">
+        <table>
+          <thead>
+            <tr>
+              <th class="left">字段分组</th>
+              <th class="left">字段</th>
+              <th class="left">非空覆盖</th>
+              <th>缺失数</th>
+              <th class="left">说明</th>
+            </tr>
+          </thead>
+          <tbody id="snap-field-tbody">
+            <tr><td colspan="5" class="center flat">等待全市场快照扫描…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th class="left">异常规则</th>
+              <th class="center">判定</th>
+              <th>命中数</th>
+              <th class="left">样本 (点击抽检)</th>
+              <th class="left">判定标准</th>
+            </tr>
+          </thead>
+          <tbody id="snap-rule-tbody">
+            <tr><td colspan="5" class="center flat">等待异常规则检查…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="snap-industry-box" class="snap-industry-box"></div>
+    </div>
+
     <!-- Watermarks & Recent Runs -->
     <div class="two-col">
       <div class="module-card">
         <div class="mod-header">
-          <h2 class="mod-title">二、各任务最新水位线 (Watermarks)</h2>
+          <h2 class="mod-title">三、各任务最新水位线 (Watermarks)</h2>
           <span class="mod-desc">来自 meta.db 的增量同步进度游标</span>
         </div>
         <div id="watermarks-box" class="wm-grid">
@@ -243,8 +305,8 @@
 
       <div class="module-card">
         <div class="mod-header">
-          <h2 class="mod-title">三、最近 10 次定时同步任务 (sync_runs)</h2>
-          <span class="mod-desc">排查任务失败原因与单次执行耗时</span>
+          <h2 class="mod-title">四、最近 10 次定时同步任务 (sync_runs)</h2>
+          <span class="mod-desc">排查任务失败原因、写入行数与单次执行耗时</span>
         </div>
         <div class="table-wrap">
           <table>
@@ -253,12 +315,14 @@
                 <th class="left">任务名称</th>
                 <th class="center">状态</th>
                 <th class="center">模式</th>
+                <th>开始时间</th>
                 <th>耗时(s)</th>
+                <th class="left">目标日/写入行数</th>
                 <th class="left">补充信息 / 错误</th>
               </tr>
             </thead>
             <tbody id="runs-tbody">
-              <tr><td colspan="5" class="center flat">载入中…</td></tr>
+              <tr><td colspan="7" class="center flat">载入中…</td></tr>
             </tbody>
           </table>
         </div>
@@ -266,13 +330,14 @@
     </div>
 
     <!-- Live Single-Stock Cross Check -->
-    <div class="module-card">
+    <div class="module-card" id="probe-card">
       <div class="mod-header">
         <div>
-          <h2 class="mod-title">四、个股样本数据在线抽检</h2>
-          <span class="mod-desc">并发请求前复权/不复权 K 线与三大财报，核验单调递增性、空值、复权因子与单季拆解字段</span>
+          <h2 class="mod-title">五、个股样本深度交叉抽检</h2>
+          <span class="mod-desc">并发请求前复权/不复权 K 线、三大财报、复权事件、历史股本与申万同行，覆盖 29 项口径交叉验证</span>
         </div>
         <div class="inline-group">
+          <span id="probe-summary" class="audit-summary"></span>
           <input id="probe-code-input" class="input mono" style="width:140px;" value="600519.SH" placeholder="如 600519.SH" />
           <button id="btn-run-probe" class="btn btn-primary btn-sm" type="button">执行抽检</button>
           <button id="btn-probe-to-stock" class="btn btn-sm" type="button">在个股看板中打开 →</button>
@@ -284,6 +349,8 @@
         <button class="preset-btn probe-chip" type="button" data-code="000858.SZ">000858.SZ 五粮液</button>
         <button class="preset-btn probe-chip" type="button" data-code="300750.SZ">300750.SZ 宁德时代</button>
         <button class="preset-btn probe-chip" type="button" data-code="601318.SH">601318.SH 中国平安</button>
+        <button class="preset-btn probe-chip" type="button" data-code="600036.SH">600036.SH 招商银行</button>
+        <button class="preset-btn probe-chip" type="button" data-code="688981.SH">688981.SH 中芯国际</button>
       </div>
       <div class="table-wrap">
         <table>

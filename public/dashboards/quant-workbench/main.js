@@ -1,7 +1,7 @@
 import { esc, fmtNum, fmtPct, fmtMoneyShort, clamp, downloadCsv } from "./utils.js";
 import { STATE, initPersistedLists, saveWatchlist, saveCompareList } from "./state.js";
 import { quantFetch, fetchFinancialsChecked, fetchSharesSafe, showGlobalAlert, clearGlobalAlert } from "./api.js";
-import { renderHealthAndStatus, renderOverview, runStockProbe, loadInspectData } from "./inspect.js";
+import { renderHealthAndStatus, renderOverview, runSnapshotScan, runStockProbe, exportInspectReportCsv, loadInspectData } from "./inspect.js";
 import {
   setScreenerHandlers,
   initScreenerSortOptions,
@@ -455,6 +455,8 @@ function bindEvents() {
 
   document.getElementById("btn-refresh-global").addEventListener("click", () => loadInspectData(true));
   document.getElementById("btn-rerun-overview").addEventListener("click", () => loadInspectData(true));
+  document.getElementById("btn-snap-scan").addEventListener("click", () => runSnapshotScan(true));
+  document.getElementById("btn-inspect-csv").addEventListener("click", () => exportInspectReportCsv());
   document.getElementById("btn-retry-active").addEventListener("click", () => {
     if (STATE.activeTab === "inspect") loadInspectData(true);
     else if (STATE.activeTab === "screener") runScreener(false);
