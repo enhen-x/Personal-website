@@ -691,7 +691,7 @@ export function renderCompareScatter(rows) {
     div_return_stab: {
       xLabel: "综合股东回报率 (% · 股息+净回购)",
       yLabel: "分红稳定性评分 (0~100 · 连分/低CV/无缩水)",
-      subtitle: "横轴综合股东回报率（现金股息+历史股本净回购） · 纵轴分红稳定性评分 · 右上象限为「高回报+稳健真红利」，右下防突击分红陷阱",
+      subtitle: "横轴综合股东回报率（现金股息+历史股本净回购） · 纵轴分红稳定性评分 · 绿斜线(稳健+10×回报≥115)平衡收益与确定性，Y=50分以下为红利陷阱红线",
       badge: "占优区：高股东回报 · 高稳定性",
       badgePos: "tr",
       forceZeroX: true,
@@ -704,7 +704,7 @@ export function renderCompareScatter(rows) {
     div_elast_cov: {
       xLabel: elMode === "forward_pot" ? "前瞻提息潜能 g₁×(1-派息率) (%)" : "历史股息弹性 DPS 3Y CAGR (%)",
       yLabel: allFin ? "盈利分红覆盖倍数 (x · 金融净利口径)" : "FCF 覆盖倍数 (x · FCF / (分红+回购))",
-      subtitle: `横轴${elMode === "forward_pot" ? "前瞻提息潜能（盈利增速×留存比例）" : "近3年每股分红复合增速 DPS 3Y CAGR"} · 纵轴${hz === "3y" ? "3年均值" : "TTM"}现金流/盈利分红覆盖倍数 · Y=1.0x 以上防透支借债假红利`,
+      subtitle: `横轴${elMode === "forward_pot" ? "前瞻提息潜能（盈利增速×留存比例）" : "近3年每股分红复合增速 DPS 3Y CAGR"} · 纵轴${hz === "3y" ? "3年均值" : "TTM"}现金流/盈利分红覆盖倍数 · 斜虚线衡量弹性与现金垫权衡，Y=1.0x 以下为透支警戒区`,
       badge: "占优区：提息高弹性 · 现金流充裕",
       badgePos: "tr",
       forceZeroX: false,
@@ -717,7 +717,7 @@ export function renderCompareScatter(rows) {
     div_return_risk: {
       xLabel: "综合股东回报率 (% · 股息+净回购)",
       yLabel: rkMode === "vol_3y" ? "近3年股价年化波动率 (% · 越低越稳)" : "近3年最大回撤幅度 (% · 越低越稳)",
-      subtitle: `横轴综合股东回报率 · 纵轴近3年${rkMode === "vol_3y" ? "股价年化波动率" : "最大回撤幅度"} · 右下象限为「高回报+拿得住」的真防御红利`,
+      subtitle: `横轴综合股东回报率 · 纵轴近3年${rkMode === "vol_3y" ? "股价年化波动率" : "最大回撤幅度"} · 斜射线为「回报/风险」性价比前沿（越偏右下单位风险补偿越高）`,
       badge: `占优区：高回报 · ${rkMode === "vol_3y" ? "低波动" : "低回撤"}`,
       badgePos: "br",
       forceZeroX: true,
@@ -730,7 +730,7 @@ export function renderCompareScatter(rows) {
     pb_roe: {
       xLabel: hz === "ttm" ? "TTM ROE (%)" : `${ltTag}平均 ROE (%)`,
       yLabel: "当前市净率 PB (倍)",
-      subtitle: `横轴 ${hz === "ttm" ? "TTM ROE" : ltTag + "平均 ROE"} · 纵轴当前 PB · 虚线为 PB = ROE / 同业平均折现率 r 理论均衡线 · 右下角占优`,
+      subtitle: `横轴 ${hz === "ttm" ? "TTM ROE" : ltTag + "平均 ROE"} · 纵轴当前 PB · 斜虚线为 PB = ROE / 同业平均折现率 r 合理估值前沿 · 右下角占优`,
       badge: `占优区：高${hz === "ttm" ? "" : ltTag}ROE · 低PB`,
       badgePos: "br",
       forceZeroX: false,
@@ -798,7 +798,7 @@ export function renderCompareScatter(rows) {
         ? (allFin ? "3年 ROE 均值 (% · 金融)" : "3年 ROIC 均值 (% · 剔除杠杆)")
         : (allFin ? "5年 ROE 均值 (% · 金融)" : "5年 ROIC 均值 (% · 剔除杠杆)"),
       yLabel: `${hz === "3y" ? "3年" : "5年"} ROE 波动率 (% · 越低越稳)`,
-      subtitle: `横轴 ${hz === "3y" ? "3" : "5"} 年平均资本回报 ROIC（金融股自动标注 ROE 代理） · 纵轴 ${hz === "3y" ? "3" : "5"} 年 ROE 波动率 · 右下象限为高效率低波动真龙头`,
+      subtitle: `横轴 ${hz === "3y" ? "3" : "5"} 年平均资本回报 ROIC（金融股自动标注 ROE 代理） · 纵轴 ${hz === "3y" ? "3" : "5"} 年 ROE 波动率 · 斜射线为「ROIC/波动」效率前沿（右下占优）`,
       badge: "占优区：高ROIC · 低盈利波动",
       badgePos: "br",
       forceZeroX: false,
@@ -824,7 +824,7 @@ export function renderCompareScatter(rows) {
     long_term_roe_pb: {
       xLabel: `${ltTag}平均 ROE / 当前 PB (% · 长期账面性价比)`,
       yLabel: `${ltTag} ROE 波动率 (% · 越低越稳)`,
-      subtitle: `横轴 ${ltTag}平均 ROE / 当前 PB（剔除单年景气噪音的长期隐含账面回报，当前口径：${hzLabel}） · 纵轴 ${ltTag} ROE 波动率 · 右下象限为高性价比低波动真白马`,
+      subtitle: `横轴 ${ltTag}平均 ROE / 当前 PB（长期隐含账面回报，当前口径：${hzLabel}） · 纵轴 ${ltTag} ROE 波动率 · 斜射线为「长期性价比/波动」效率前沿，越偏右下越稳健超值`,
       badge: `占优区：高${ltTag} ROE/PB · 低盈利波动`,
       badgePos: "br",
       forceZeroX: false,
@@ -894,76 +894,144 @@ export function renderCompareScatter(rows) {
   );
   parts.push(`<rect x="${pad.l}" y="${pad.t}" width="${plotW}" height="${plotH}" fill="#FFFFFF" stroke="#E5E7EB" stroke-width="1" />`);
 
-  // Quadrant / Reference lines inside clipPath
+  // Frontier / Sloped Efficiency & Hard-Floor Reference Lines inside clipPath
   const refParts = [];
   const avgR = median(rows.map(r => r.rUsed)) || 8.0;
-  if (mode === "div_return_stab") {
-    const rx4 = toPxX(4);
-    const ry75 = toPxY(75);
-    const ry50 = toPxY(50);
-    const trW = Math.max(0, pad.l + plotW - Math.max(pad.l, rx4));
-    const trH = Math.max(0, Math.min(pad.t + plotH, ry75) - pad.t);
-    const brH = Math.max(0, pad.t + plotH - Math.max(pad.t, ry50));
-    refParts.push(`<rect x="${Math.max(pad.l, rx4)}" y="${pad.t}" width="${trW}" height="${trH}" fill="rgba(15,118,110,0.06)" />`);
-    refParts.push(`<rect x="${Math.max(pad.l, rx4)}" y="${Math.max(pad.t, ry50)}" width="${trW}" height="${brH}" fill="rgba(185,28,28,0.04)" />`);
+  const xSpan = Math.max(1e-6, xHi - xLo);
+  const ySpan = Math.max(1e-6, yHi - yLo);
+  const addSlopeRegion = (yFn, side, fill) => {
+    const xA = xLo - xSpan * 0.25;
+    const xB = xHi + xSpan * 0.25;
+    const yA = yFn(xA);
+    const yB = yFn(xB);
+    if (!Number.isFinite(yA) || !Number.isFinite(yB)) return;
+    const yEdge = side === "above"
+      ? Math.max(yHi + ySpan * 2.5, yA + ySpan, yB + ySpan)
+      : Math.min(yLo - ySpan * 2.5, yA - ySpan, yB - ySpan);
+    const ptsAttr = [
+      `${toPxX(xA).toFixed(1)},${toPxY(yA).toFixed(1)}`,
+      `${toPxX(xB).toFixed(1)},${toPxY(yB).toFixed(1)}`,
+      `${toPxX(xB).toFixed(1)},${toPxY(yEdge).toFixed(1)}`,
+      `${toPxX(xA).toFixed(1)},${toPxY(yEdge).toFixed(1)}`
+    ].join(" ");
+    refParts.push(`<polygon points="${ptsAttr}" fill="${fill}" />`);
+  };
+  const addSlopeLine = (yFn, stroke, width, dash, opacity, label, labelColor, preferSide = "right") => {
+    const y0 = yFn(xLo);
+    const y1 = yFn(xHi);
+    if (!Number.isFinite(y0) || !Number.isFinite(y1)) return;
+    const xA = xLo - xSpan * 0.25;
+    const xB = xHi + xSpan * 0.25;
+    const yA = yFn(xA);
+    const yB = yFn(xB);
+    if (!Number.isFinite(yA) || !Number.isFinite(yB)) return;
+    const dashAttr = dash ? ` stroke-dasharray="${dash}"` : "";
+    refParts.push(`<line x1="${toPxX(xA).toFixed(1)}" y1="${toPxY(yA).toFixed(1)}" x2="${toPxX(xB).toFixed(1)}" y2="${toPxY(yB).toFixed(1)}" stroke="${stroke}" stroke-width="${width}"${dashAttr} opacity="${opacity}" />`);
+    if (!label) return;
+    // Intersect line with visible box [xLo, xHi] x [yLo, yHi] so label always sits cleanly inside chart
+    const slope = (y1 - y0) / xSpan;
+    let visX0 = xLo;
+    let visX1 = xHi;
+    if (Math.abs(slope) > 1e-9) {
+      const txLo = xLo + (yLo - y0) / slope;
+      const txHi = xLo + (yHi - y0) / slope;
+      visX0 = Math.max(visX0, Math.min(txLo, txHi));
+      visX1 = Math.min(visX1, Math.max(txLo, txHi));
+    } else if (y0 < yLo || y0 > yHi) {
+      return;
+    }
+    if (visX1 <= visX0 + xSpan * 0.04) return;
+    const frac = preferSide === "left" ? 0.14 : (preferSide === "mid" ? 0.55 : 0.80);
+    const lxVal = visX0 + (visX1 - visX0) * frac;
+    const lyVal = yFn(lxVal);
+    if (!Number.isFinite(lyVal)) return;
+    const anchor = preferSide === "left" ? "start" : (preferSide === "mid" ? "middle" : "end");
+    const rawPx = toPxX(lxVal) + (anchor === "start" ? 4 : (anchor === "end" ? -4 : 0));
+    const px = clamp(rawPx, pad.l + (anchor === "start" ? 6 : 75), pad.l + plotW - (anchor === "end" ? 6 : 75));
+    const rawPy = toPxY(lyVal);
+    const py = rawPy - 7 >= pad.t + 14 ? rawPy - 6 : clamp(rawPy + 13, pad.t + 13, pad.t + plotH - 6);
+    refParts.push(`<text x="${px.toFixed(1)}" y="${py.toFixed(1)}" text-anchor="${anchor}" font-size="10" font-weight="600" fill="${labelColor || stroke}" font-family="Noto Sans SC, sans-serif">${esc(label)}</text>`);
+  };
+  const drawZeroX = () => {
     if (xLo < 0 && xHi > 0) {
       const xz = toPxX(0);
-      refParts.push(`<line x1="${xz}" y1="${pad.t}" x2="${xz}" y2="${pad.t + plotH}" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="3 3" />`);
+      refParts.push(`<line x1="${xz.toFixed(1)}" y1="${pad.t}" x2="${xz.toFixed(1)}" y2="${pad.t + plotH}" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="3 3" />`);
     }
-    refParts.push(`<line x1="${rx4}" y1="${pad.t}" x2="${rx4}" y2="${pad.t + plotH}" stroke="#6B7280" stroke-width="1" stroke-dasharray="4 4" />`);
-    refParts.push(`<line x1="${pad.l}" y1="${ry75}" x2="${pad.l + plotW}" y2="${ry75}" stroke="#0F766E" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" />`);
-    if (ry75 >= pad.t + 12 && ry75 <= pad.t + plotH) {
-      refParts.push(`<text x="${pad.l + 8}" y="${ry75 - 5}" text-anchor="start" font-size="10" fill="#0F766E" font-family="Noto Sans SC, sans-serif">稳健线 75分</text>`);
+  };
+
+  if (mode === "div_return_stab") {
+    // Sloped iso-value frontier: Stability + 10 * Yield >= 115, with hard floor Stability = 50
+    addSlopeRegion(x => 115 - 10 * x, "above", "rgba(15,118,110,0.065)");
+    const ry50 = toPxY(50);
+    const brH = Math.max(0, pad.t + plotH - Math.max(pad.t, ry50));
+    if (brH > 0) {
+      refParts.push(`<rect x="${pad.l}" y="${Math.max(pad.t, ry50)}" width="${plotW}" height="${brH}" fill="rgba(185,28,28,0.055)" />`);
+    }
+    drawZeroX();
+    addSlopeLine(x => 115 - 10 * x, "#0F766E", 1.35, "5 4", 0.85, "综合优势边界 (稳健+10×回报≥115)", "#0F766E", "right");
+    refParts.push(`<line x1="${pad.l}" y1="${ry50}" x2="${pad.l + plotW}" y2="${ry50}" stroke="#DC2626" stroke-width="1.2" stroke-dasharray="4 4" opacity="0.8" />`);
+    if (ry50 >= pad.t + 14 && ry50 <= pad.t + plotH - 4) {
+      refParts.push(`<text x="${pad.l + 8}" y="${ry50 - 5}" text-anchor="start" font-size="10" font-weight="600" fill="#DC2626" font-family="Noto Sans SC, sans-serif">稳定性红线 50分</text>`);
     }
   } else if (mode === "div_elast_cov") {
+    // Hard solvency floor at Y=1.0x + sloped elasticity-coverage iso-value frontier
+    const slope = elMode === "forward_pot" ? -0.20 : -0.08;
+    const baseInter = elMode === "forward_pot" ? 2.00 : 1.90;
+    addSlopeRegion(x => baseInter + slope * x, "above", "rgba(15,118,110,0.065)");
     const ry1 = toPxY(1.0);
-    const rx3 = toPxX(3.0);
-    const trW = Math.max(0, pad.l + plotW - Math.max(pad.l, rx3));
-    const trH = Math.max(0, Math.min(pad.t + plotH, ry1) - pad.t);
     const lowH = Math.max(0, pad.t + plotH - Math.max(pad.t, ry1));
-    refParts.push(`<rect x="${Math.max(pad.l, rx3)}" y="${pad.t}" width="${trW}" height="${trH}" fill="rgba(15,118,110,0.06)" />`);
-    refParts.push(`<rect x="${pad.l}" y="${Math.max(pad.t, ry1)}" width="${plotW}" height="${lowH}" fill="rgba(185,28,28,0.045)" />`);
-    if (xLo < 0 && xHi > 0) {
-      const xz = toPxX(0);
-      refParts.push(`<line x1="${xz}" y1="${pad.t}" x2="${xz}" y2="${pad.t + plotH}" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="3 3" />`);
+    if (lowH > 0) {
+      refParts.push(`<rect x="${pad.l}" y="${Math.max(pad.t, ry1)}" width="${plotW}" height="${lowH}" fill="rgba(185,28,28,0.055)" />`);
     }
-    refParts.push(`<line x1="${pad.l}" y1="${ry1}" x2="${pad.l + plotW}" y2="${ry1}" stroke="#DC2626" stroke-width="1.3" stroke-dasharray="5 4" opacity="0.8" />`);
-    refParts.push(`<line x1="${rx3}" y1="${pad.t}" x2="${rx3}" y2="${pad.t + plotH}" stroke="#6B7280" stroke-width="1" stroke-dasharray="4 4" />`);
+    drawZeroX();
+    const medInter = median(pts.map(p => p.y - slope * p.x));
+    if (medInter != null && Math.abs(medInter - baseInter) > 0.08) {
+      addSlopeLine(x => medInter + slope * x, "#6B7280", 1.0, "3 4", 0.65, "同业中位边界", "#6B7280", "left");
+    }
+    addSlopeLine(
+      x => baseInter + slope * x,
+      "#0F766E",
+      1.35,
+      "5 4",
+      0.85,
+      elMode === "forward_pot" ? "弹性-覆盖综合边界" : "增速-覆盖综合边界",
+      "#0F766E",
+      "right"
+    );
+    refParts.push(`<line x1="${pad.l}" y1="${ry1}" x2="${pad.l + plotW}" y2="${ry1}" stroke="#DC2626" stroke-width="1.3" stroke-dasharray="5 4" opacity="0.82" />`);
     if (ry1 >= pad.t + 14 && ry1 <= pad.t + plotH - 4) {
       refParts.push(`<text x="${pad.l + 8}" y="${ry1 - 5}" text-anchor="start" font-size="10" font-weight="600" fill="#DC2626" font-family="Noto Sans SC, sans-serif">1.0x 覆盖警戒线</text>`);
     }
   } else if (mode === "div_return_risk") {
-    const rkThresh = rkMode === "vol_3y" ? 24 : 25;
+    // Upward Sharpe/Calmar efficiency ray: Y = X / ratio (below & right = higher return per unit risk)
+    const baseRatio = rkMode === "vol_3y" ? 0.17 : 0.16;
     const rkBad = rkMode === "vol_3y" ? 42 : 45;
-    const rx4 = toPxX(4);
-    const ryGood = toPxY(rkThresh);
+    addSlopeRegion(x => x / baseRatio, "below", "rgba(15,118,110,0.065)");
     const ryBad = toPxY(rkBad);
-    const goodW = Math.max(0, pad.l + plotW - Math.max(pad.l, rx4));
-    const goodH = Math.max(0, pad.t + plotH - Math.max(pad.t, ryGood));
     const badH = Math.max(0, Math.min(pad.t + plotH, ryBad) - pad.t);
-    refParts.push(`<rect x="${Math.max(pad.l, rx4)}" y="${Math.max(pad.t, ryGood)}" width="${goodW}" height="${goodH}" fill="rgba(15,118,110,0.06)" />`);
     if (badH > 0) {
       refParts.push(`<rect x="${pad.l}" y="${pad.t}" width="${plotW}" height="${badH}" fill="rgba(185,28,28,0.04)" />`);
     }
-    if (xLo < 0 && xHi > 0) {
-      const xz = toPxX(0);
-      refParts.push(`<line x1="${xz}" y1="${pad.t}" x2="${xz}" y2="${pad.t + plotH}" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="3 3" />`);
+    drawZeroX();
+    const posRatios = pts.filter(p => p.x > 0 && p.y > 0.5).map(p => p.x / p.y);
+    const medRatio = posRatios.length >= 2 ? median(posRatios) : null;
+    if (medRatio != null && Math.abs(medRatio - baseRatio) > 0.015) {
+      addSlopeLine(x => x / medRatio, "#6B7280", 1.0, "3 4", 0.7, `同业中位 (${medRatio.toFixed(2)}x)`, "#6B7280", "mid");
     }
-    refParts.push(`<line x1="${rx4}" y1="${pad.t}" x2="${rx4}" y2="${pad.t + plotH}" stroke="#6B7280" stroke-width="1" stroke-dasharray="4 4" />`);
-    refParts.push(`<line x1="${pad.l}" y1="${ryGood}" x2="${pad.l + plotW}" y2="${ryGood}" stroke="#0F766E" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" />`);
-    if (ryGood >= pad.t + 12 && ryGood <= pad.t + plotH - 4) {
-      refParts.push(`<text x="${pad.l + 8}" y="${ryGood - 5}" text-anchor="start" font-size="10" fill="#0F766E" font-family="Noto Sans SC, sans-serif">低波防线 ${rkThresh}%</text>`);
-    }
+    addSlopeLine(
+      x => x / baseRatio,
+      "#0F766E",
+      1.35,
+      "5 4",
+      0.85,
+      rkMode === "vol_3y" ? `回报/波动前沿 (${baseRatio.toFixed(2)}x)` : `Calmar 效率前沿 (${baseRatio.toFixed(2)}x)`,
+      "#0F766E",
+      "right"
+    );
   } else if (mode === "pb_roe") {
-    const medX = median(pts.map(p => p.x));
-    if (medX != null) {
-      const px = toPxX(medX);
-      refParts.push(`<line x1="${px}" y1="${pad.t}" x2="${px}" y2="${pad.t + plotH}" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="4 4" />`);
-    }
-    const yAtLo = Math.max(0, xLo / avgR);
-    const yAtHi = Math.max(0, xHi / avgR);
-    refParts.push(`<line x1="${toPxX(xLo)}" y1="${toPxY(yAtLo)}" x2="${toPxX(xHi)}" y2="${toPxY(yAtHi)}" stroke="#3730A3" stroke-width="1.3" stroke-dasharray="5 4" opacity="0.7" />`);
-    refParts.push(`<text x="${pad.l + plotW - 8}" y="${toPxY(yAtHi) - 6}" text-anchor="end" font-size="10" fill="#3730A3" font-family="Noto Sans SC, sans-serif">PB = ROE / ${avgR.toFixed(1)}%</text>`);
+    drawZeroX();
+    addSlopeRegion(x => x / avgR, "below", "rgba(15,118,110,0.055)");
+    addSlopeLine(x => x / avgR, "#3730A3", 1.35, "5 4", 0.8, `PB = ROE / ${avgR.toFixed(1)}% (1x 合理线)`, "#3730A3", "right");
   } else if (mode === "irr_upside") {
     const rx = toPxX(avgR);
     const ry = toPxY(0);
@@ -971,9 +1039,9 @@ export function renderCompareScatter(rows) {
     refParts.push(`<line x1="${rx}" y1="${pad.t}" x2="${rx}" y2="${pad.t + plotH}" stroke="#6B7280" stroke-width="1" stroke-dasharray="4 4" />`);
     refParts.push(`<line x1="${pad.l}" y1="${ry}" x2="${pad.l + plotW}" y2="${ry}" stroke="#0F766E" stroke-width="1.2" stroke-dasharray="5 4" />`);
   } else if (mode === "div_growth") {
-    const yAtLo = 10 - xLo;
-    const yAtHi = 10 - xHi;
-    refParts.push(`<line x1="${toPxX(xLo)}" y1="${toPxY(yAtLo)}" x2="${toPxX(xHi)}" y2="${toPxY(yAtHi)}" stroke="#0F766E" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" />`);
+    drawZeroX();
+    addSlopeRegion(x => 10 - x, "above", "rgba(15,118,110,0.055)");
+    addSlopeLine(x => 10 - x, "#0F766E", 1.35, "5 4", 0.85, "10% 等回报前沿 (g₁+回报=10%)", "#0F766E", "right");
   } else if (mode === "pe_pct") {
     const medY = median(pts.map(p => p.y));
     const rx = toPxX(50);
@@ -988,23 +1056,18 @@ export function renderCompareScatter(rows) {
     const belowPts = `${toPxX(0)},${toPxY(0)} ${toPxX(0)},${toPxY(loB)} ${toPxX(hiB)},${toPxY(loB)} ${toPxX(hiB)},${toPxY(hiB)}`;
     refParts.push(`<polygon points="${abovePts}" fill="rgba(185,28,28,0.04)" />`);
     refParts.push(`<polygon points="${belowPts}" fill="rgba(15,118,110,0.05)" />`);
-    if (xLo < 0 && xHi > 0) {
-      const xZeroPx = toPxX(0);
-      refParts.push(`<line x1="${xZeroPx}" y1="${pad.t}" x2="${xZeroPx}" y2="${pad.t + plotH}" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="3 3" />`);
-    }
+    drawZeroX();
     refParts.push(`<line x1="${toPxX(loB)}" y1="${toPxY(loB)}" x2="${toPxX(hiB)}" y2="${toPxY(hiB)}" stroke="#0F766E" stroke-width="1.4" stroke-dasharray="5 4" />`);
     const tAnchor = Math.max(xLo + 0.5, Math.min(xHi, yHi) - (xHi - xLo) * 0.05);
     const lblY = clamp(toPxY(tAnchor) - 7, pad.t + 14, pad.t + plotH - 18);
     const lblX = clamp(toPxX(tAnchor), pad.l + 110, pad.l + plotW - 8);
     refParts.push(`<text x="${lblX.toFixed(1)}" y="${lblY.toFixed(1)}" text-anchor="end" font-size="10" font-weight="600" fill="#0F766E" font-family="Noto Sans SC, sans-serif">股东回报 = FCF (100% 覆盖线)</text>`);
   } else if (mode === "roic_stability") {
-    const medX = median(pts.map(p => p.x));
-    const medY = median(pts.map(p => p.y));
-    const rx = medX != null ? toPxX(medX) : (pad.l + plotW * 0.5);
-    const ry = medY != null ? toPxY(medY) : (pad.t + plotH * 0.5);
-    refParts.push(`<rect x="${Math.max(pad.l, rx)}" y="${Math.max(pad.t, ry)}" width="${Math.max(0, pad.l + plotW - Math.max(pad.l, rx))}" height="${Math.max(0, pad.t + plotH - Math.max(pad.t, ry))}" fill="rgba(15,118,110,0.05)" />`);
-    refParts.push(`<line x1="${rx}" y1="${pad.t}" x2="${rx}" y2="${pad.t + plotH}" stroke="#6B7280" stroke-width="1" stroke-dasharray="4 4" />`);
-    refParts.push(`<line x1="${pad.l}" y1="${ry}" x2="${pad.l + plotW}" y2="${ry}" stroke="#6B7280" stroke-width="1" stroke-dasharray="4 4" />`);
+    drawZeroX();
+    const posRatios = pts.filter(p => p.x > 0 && p.y > 0.5).map(p => p.x / p.y);
+    const ratio = clamp(median(posRatios) || 3.0, 1.5, 8.0);
+    addSlopeRegion(x => x / ratio, "below", "rgba(15,118,110,0.055)");
+    addSlopeLine(x => x / ratio, "#0F766E", 1.35, "5 4", 0.85, `效率前沿 (ROIC/波动 = ${ratio.toFixed(1)}x)`, "#0F766E", "right");
   } else if (mode === "div_stability") {
     const rx75 = toPxX(75);
     const rx50 = toPxX(50);
@@ -1017,15 +1080,11 @@ export function renderCompareScatter(rows) {
       refParts.push(`<text x="${rx75 + 5}" y="${pad.t + 14}" text-anchor="start" font-size="10" fill="#0F766E" font-family="Noto Sans SC, sans-serif">稳健线 75分</text>`);
     }
   } else if (mode === "long_term_roe_pb") {
-    const medY = median(pts.map(p => p.y));
-    const rx = toPxX(avgR);
-    const ry = medY != null ? toPxY(medY) : (pad.t + plotH * 0.5);
-    refParts.push(`<rect x="${Math.max(pad.l, rx)}" y="${Math.max(pad.t, ry)}" width="${Math.max(0, pad.l + plotW - Math.max(pad.l, rx))}" height="${Math.max(0, pad.t + plotH - Math.max(pad.t, ry))}" fill="rgba(15,118,110,0.06)" />`);
-    refParts.push(`<line x1="${rx}" y1="${pad.t}" x2="${rx}" y2="${pad.t + plotH}" stroke="#0F766E" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.75" />`);
-    refParts.push(`<line x1="${pad.l}" y1="${ry}" x2="${pad.l + plotW}" y2="${ry}" stroke="#6B7280" stroke-width="1" stroke-dasharray="4 4" />`);
-    if (rx >= pad.l && rx <= pad.l + plotW - 10) {
-      refParts.push(`<text x="${rx + 5}" y="${pad.t + 14}" text-anchor="start" font-size="10" fill="#0F766E" font-family="Noto Sans SC, sans-serif">回报门槛 ${avgR.toFixed(1)}%</text>`);
-    }
+    drawZeroX();
+    const posRatios = pts.filter(p => p.x > 0 && p.y > 0.5).map(p => p.x / p.y);
+    const ratio = clamp(median(posRatios) || 2.5, 1.2, 7.0);
+    addSlopeRegion(x => x / ratio, "below", "rgba(15,118,110,0.055)");
+    addSlopeLine(x => x / ratio, "#0F766E", 1.35, "5 4", 0.85, `长期性价比前沿 (${ltTag} ROE/PB ÷ 波动 = ${ratio.toFixed(1)}x)`, "#0F766E", "right");
   }
   if ((mode === "div_growth" || mode === "cf_return" || mode === "div_stability") && yLo < 0 && yHi > 0) {
     const yZeroPx = toPxY(0);
@@ -1200,6 +1259,13 @@ export function renderCompareScatter(rows) {
       const covVal = hz === "3y" ? (r.fcf3yDivCoverage ?? r.fcfDivCoverage) : r.fcfDivCoverage;
       const covStr = covVal != null ? `${covVal.toFixed(2)}x${r.fcfCoverageIsProfitProxy ? "(净利)" : ""}` : "--";
       const capexStr = r.capexToOcfPct != null ? `CapEx/OCF ${r.capexToOcfPct.toFixed(0)}%` : (r.payoutPct != null ? `派息率 ${r.payoutPct.toFixed(0)}%` : "");
+      const covLabel = r.fcfCoverageIsProfitProxy ? "盈利留存覆盖 (金融)" : "FCF 覆盖倍数";
+      const covDetail = r.fcfCoverageIsProfitProxy
+        ? `${covStr} · ${r.payoutBasis || "TTM"}派息 ${r.payoutPct != null ? r.payoutPct.toFixed(1) + "%" : "--"}`
+        : `${covStr}${capexStr ? ` · ${capexStr}` : ""}`;
+      const divBreakRow = r.divEventsShort
+        ? `<div class="tt-row"><span class="tt-lbl">近12月除息拆解</span><span class="tt-val">${esc(r.divEventsShort)}</span></div>`
+        : "";
       const dpsCagrStr = r.divCagr3y != null ? `3Y DPS ${fmtPct(r.divCagr3y, 1, true)}` : "3Y DPS --";
       const fwdPotStr = r.divElasticityForward != null ? `潜能 ${fmtPct(r.divElasticityForward, 1, true)}` : "潜能 --";
       const dstScore = r.divStabilityScore != null ? `${r.divStabilityScore}分(${r.divStabilityGrade || "--"})` : "--";
@@ -1216,8 +1282,9 @@ export function renderCompareScatter(rows) {
         <div class="tt-row"><span class="tt-lbl">隐含回报 IRR</span><span class="tt-val" style="color:${(r.impliedIrr ?? 0) >= 8 ? "#6EE7B7" : "#FCA5A5"};">${r.impliedIrr != null ? r.impliedIrr.toFixed(2) + "%" : "--"}</span></div>
         <div class="tt-row"><span class="tt-lbl">${esc(r.dcfBaseLabel)} / RIM</span><span class="tt-val">¥${fmtNum(r.dcfMid)}(${esc(dcfUp)}) / ¥${fmtNum(r.rimMid)}(${esc(rimUp)})</span></div>
         <div class="tt-row"><span class="tt-lbl">股东回报 (股息${bbLbl})</span><span class="tt-val">${esc(shTotal)} (${esc(divPart)}${esc(bbPart)}${esc(bbNoteTag)})</span></div>
+        ${divBreakRow}
         <div class="tt-row"><span class="tt-lbl">分红稳定性</span><span class="tt-val">${esc(dstScore)}${dstConsec ? ` · ${esc(dstConsec + dstCv + dstCut)}` : ""}</span></div>
-        <div class="tt-row"><span class="tt-lbl">FCF/盈利覆盖</span><span class="tt-val">${esc(covStr)}${capexStr ? ` · ${esc(capexStr)}` : ""}</span></div>
+        <div class="tt-row"><span class="tt-lbl">${esc(covLabel)}</span><span class="tt-val">${esc(covDetail)}</span></div>
         <div class="tt-row"><span class="tt-lbl">股息弹性 (3Y/潜能)</span><span class="tt-val">${esc(dpsCagrStr)} / ${esc(fwdPotStr)}</span></div>
         <div class="tt-row"><span class="tt-lbl">FCF收益 / 5Y净现比</span><span class="tt-val">${esc(fcfPart)} / ${esc(ccPart)}</span></div>
         <div class="tt-row"><span class="tt-lbl">5Y ${esc(roicTag)} / ROE波动</span><span class="tt-val">${esc(roicVal)} / ${esc(roeVolVal)}</span></div>
@@ -1256,13 +1323,16 @@ export function renderCompareTable(rows) {
   const hz = STATE.compare.horizon || "ttm";
   const isDivMode = STATE.compare.researchMode === "dividend";
   const elMode = STATE.compare.divElasticityMode || "dps_cagr";
+  const allFinTbl = rows.length > 0 && rows.every(r => r.isFinancial);
   const peKey = hz === "5y" ? "pe5yNorm" : (hz === "3y" ? "pe3yNorm" : "peTtm");
   const peLbl = hz === "5y" ? "5Y均利PE (5Y均PE)" : (hz === "3y" ? "3Y均利PE (3Y均PE)" : "PE_TTM (5Y分位)");
   const pbLbl = hz === "ttm" ? "PB (5Y分位)" : (hz === "3y" ? "PB (3Y均值)" : "PB (5Y均值)");
   const rpbKey = hz === "5y" ? "roeToPb5y" : (hz === "3y" ? "roeToPb3y" : "roeToPbTtm");
   const rpbLbl = hz === "5y" ? "5Y均ROE/PB (稳定)" : (hz === "3y" ? "3Y均ROE/PB (稳定)" : "ROE/PB (3Y/5Y均)");
   const covKey = hz === "3y" ? "fcf3yDivCoverage" : "fcfDivCoverage";
-  const covLbl = hz === "3y" ? "3Y覆盖倍数 (CapEx/OCF)" : "FCF覆盖倍数 (CapEx/OCF)";
+  const covLbl = allFinTbl
+    ? (hz === "3y" ? "3Y盈利覆盖 (派息率)" : "盈利覆盖 (派息率)")
+    : (hz === "3y" ? "3Y覆盖倍数 (CapEx/OCF)" : "FCF覆盖倍数 (CapEx/OCF)");
   const elKey = elMode === "forward_pot" ? "divElasticityForward" : "divCagr3y";
   const elLbl = elMode === "forward_pot" ? "提息潜能 (3Y DPS)" : "DPS 3Y增速 (提息潜能)";
   const fcfKey = hz === "5y" ? "fcf5yYieldPct" : (hz === "3y" ? "fcf3yYieldPct" : "fcfYieldPct");
@@ -1398,8 +1468,18 @@ export function renderCompareTable(rows) {
     const covVal = r[covKey];
     const covColor = covVal == null ? "var(--ink-faint)" : (covVal >= 1.2 ? "var(--emerald)" : (covVal < 1.0 ? "var(--crimson)" : "var(--ink)"));
     const covSub = r.fcfCoverageIsProfitProxy
-      ? `盈利覆盖 · 派息${r.payoutPct != null ? r.payoutPct.toFixed(0) + "%" : "--"}`
+      ? `${r.payoutBasis && r.payoutBasis.includes("普通股") ? "普通股盈利" : "盈利覆盖"} · 派息${r.payoutPct != null ? r.payoutPct.toFixed(0) + "%" : "--"}`
       : `CapEx/OCF ${r.capexToOcfPct != null ? r.capexToOcfPct.toFixed(0) + "%" : "--"}`;
+    const shTitleParts = [];
+    if (r.divEventsDetail) shTitleParts.push(r.divEventsDetail);
+    if (Math.abs(bbVal) >= 0.05) {
+      shTitleParts.push(`${bbVal >= 0 ? "净回购" : "净稀释"}: ${bbVal >= 0 ? "+" : ""}${bbVal.toFixed(2)}% (${r.buybackSource}${r.buybackNote ? "·" + r.buybackNote : ""})`);
+    }
+    const shTitleAttr = shTitleParts.length ? ` title="${esc(shTitleParts.join("\n"))}"` : "";
+    const covTitleTxt = r.fcfCoverageIsProfitProxy
+      ? `金融股不适用实业FCF，采用「${r.payoutBasis || "TTM"}净利 ÷ 现金分红」≈ 1 ÷ 派息率，倍数越高代表留存收益缓冲越厚`
+      : `FCF ÷ (现金分红 + 净回购)，≥1.0x 表示自由现金流全覆盖`;
+    const covTitleAttr = ` title="${esc(covTitleTxt)}"`;
     const elMain = r[elKey];
     const elAlt = elMode === "forward_pot"
       ? `3Y DPS ${r.divCagr3y != null ? fmtPct(r.divCagr3y, 1, true) : "--"}`
@@ -1420,9 +1500,9 @@ export function renderCompareTable(rows) {
       [peKey]: `<td>${peMainVal != null ? `<strong>${fmtNum(peMainVal, 1)}x</strong><br><small class="flat" style="font-size:10.5px;">${peSub}</small>` : `<span class="flat">亏损/无</span>`}</td>`,
       pb: `<td>${r.pb != null ? `<strong>${fmtNum(r.pb, 2)}x</strong><br><small class="flat" style="font-size:10.5px;">${pbSub}</small>` : `--`}</td>`,
       [rpbKey]: `<td>${rpbMain != null ? `<strong style="color:${rpbColor};">${rpbMain.toFixed(1)}%</strong><br><small class="flat" style="font-size:10.5px;">${esc(rpbSub)}</small>` : `<span class="flat">--</span><br><small class="flat" style="font-size:10.5px;">${esc(rpbSub)}</small>`}</td>`,
-      shareholderYieldPct: `<td>${r.shareholderYieldPct != null ? `<strong style="${shColor}">${r.shareholderYieldPct.toFixed(2)}%</strong><br><small class="flat" style="font-size:10.5px;">${esc(divTxt)}${bbHtml}</small>` : `--`}</td>`,
+      shareholderYieldPct: `<td${shTitleAttr}>${r.shareholderYieldPct != null ? `<strong style="${shColor}">${r.shareholderYieldPct.toFixed(2)}%</strong><br><small class="flat" style="font-size:10.5px;">${esc(divTxt)}${bbHtml}</small>` : `--`}</td>`,
       divStabilityScore: `<td>${dstTrap}<strong style="color:${dstColor};">${r.divStabilityScore ?? 0}分 ${esc(r.divStabilityGrade || "无分红")}</strong><br><small class="flat" style="font-size:10.5px;">${esc(dstSub)}</small></td>`,
-      [covKey]: `<td>${covVal != null ? `<strong style="color:${covColor};">${covVal.toFixed(2)}x</strong><br><small class="flat" style="font-size:10.5px;">${esc(covSub)}</small>` : `<span class="flat">--</span><br><small class="flat" style="font-size:10.5px;">${esc(covSub)}</small>`}</td>`,
+      [covKey]: `<td${covTitleAttr}>${covVal != null ? `<strong style="color:${covColor};">${covVal.toFixed(2)}x</strong><br><small class="flat" style="font-size:10.5px;">${esc(covSub)}</small>` : `<span class="flat">--</span><br><small class="flat" style="font-size:10.5px;">${esc(covSub)}</small>`}</td>`,
       [elKey]: `<td class="mono ${clsSign(elMain)}"><strong>${elMain != null ? fmtPct(elMain, 1, true) : "--"}</strong><br><small class="flat" style="font-size:10.5px;">${esc(elAlt)}</small></td>`,
       [fcfKey]: `<td>${fcfMain != null ? `<strong>${fcfMain.toFixed(1)}%</strong><br><small class="flat" style="font-size:10.5px;">${esc(fcfSub)}</small>` : `<span class="flat">--</span><br><small class="flat" style="font-size:10.5px;">${esc(fcfSub)}</small>`}</td>`,
       [roicKey]: `<td>${roicMain != null ? `<strong>${roicMain.toFixed(1)}%</strong><br><small class="flat" style="font-size:10.5px;">${esc(roicSub)}</small>` : `--`}</td>`,

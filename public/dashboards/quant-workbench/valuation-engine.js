@@ -452,6 +452,7 @@ export function buildQuarterlyValuationSeries(finData, symbolName = "") {
   const idxByYm = new Map();
   const divGrossYtd = new Array(incList.length).fill(null);
   const intExpYtd = new Array(incList.length).fill(null);
+  const basicEpsYtd = new Array(incList.length).fill(null);
   for (let i = 0; i < incList.length; i++) {
     const r = incList[i];
     const fp = String(r.fiscal_period || "").toUpperCase();
@@ -466,6 +467,9 @@ export function buildQuarterlyValuationSeries(finData, symbolName = "") {
     if (r.interest_expenses != null) {
       const intExp = Number(r.interest_expenses);
       if (Number.isFinite(intExp)) intExpYtd[i] = Math.max(0, intExp);
+    }
+    if (r.basic_eps != null && Number.isFinite(Number(r.basic_eps))) {
+      basicEpsYtd[i] = Number(r.basic_eps);
     }
   }
 
@@ -572,6 +576,29 @@ export function buildQuarterlyValuationSeries(finData, symbolName = "") {
       }
     }
 
+    // Compute TTM ordinary basic EPS (for perpetual-bond / preferred-stock deduction on banks/financials)
+    let ttmBasicEps = null;
+    let ttmBasicEpsStartDate = null;
+    if (fp === "Q4") {
+      if (basicEpsYtd[i] !== null) {
+        ttmBasicEps = basicEpsYtd[i];
+        ttmBasicEpsStartDate = `${fy - 1}-12-31`;
+      }
+    } else {
+      const prevQ4Idx = idxByYm.get(`${fy - 1}-Q4`);
+      const prevSameIdx = idxByYm.get(`${fy - 1}-${fp}`);
+      if (
+        prevQ4Idx !== undefined &&
+        prevSameIdx !== undefined &&
+        basicEpsYtd[prevQ4Idx] !== null &&
+        basicEpsYtd[prevSameIdx] !== null &&
+        basicEpsYtd[i] !== null
+      ) {
+        ttmBasicEps = basicEpsYtd[prevQ4Idx] - basicEpsYtd[prevSameIdx] + basicEpsYtd[i];
+        ttmBasicEpsStartDate = String(incList[prevSameIdx].period_end || `${fy - 1}-01-01`).slice(0, 10);
+      }
+    }
+
     const isFinQ = detectFinancialCompany(symbolName, r, b, ttmOcf, ttmNp);
     const ttmFcf = ttmOcf !== null ? (ttmOcf - (ttmCapex || 0)) : null;
     const equity = b.holder_equity_total != null ? Number(b.holder_equity_total) : null;
@@ -608,6 +635,8 @@ export function buildQuarterlyValuationSeries(finData, symbolName = "") {
       isExactShares: Boolean(rawSharesArr[i]),
       ttmRev,
       ttmNp,
+      ttmBasicEps,
+      ttmBasicEpsStartDate,
       ttmOcf,
       ttmCapex,
       ttmFcf,
@@ -1210,6 +1239,29 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
 
   const epsTtm = (shares > 0 && qNow?.ttmNp !== null) ? qNow.ttmNp / shares : null;
   const bvps = (shares > 0 && qNow?.equity !== null) ? qNow.equity / shares : null;
+  const isFinCompany = Boolean(qNow?.isFinancial);
+
+  // Align financial payout/coverage denominator to ordinary shareholders (deducting perpetual-bond / preferred interest when basic_eps reflects it)
+  let epsForPayout = epsTtm;
+  let payoutBasis = "归母TTM";
+  let ordinaryNpTtm = qNow?.ttmNp ?? null;
+  let ordinaryNpRatio = 1;
+  if (isFinCompany && shares > 0 && qNow?.ttmBasicEps > 0 && epsTtm > 0) {
+    const mStart = qNow.ttmBasicEpsStartDate ? (splitHelper.getMultAt(qNow.ttmBasicEpsStartDate) || 1) : 1;
+    const mEnd = (priceDate && priceDate !== "--") ? (splitHelper.getMultAt(priceDate) || 1) : mStart;
+    const epsNoSplit = Math.abs(mEnd / mStart - 1) < 0.001;
+    if (epsNoSplit) {
+      const ordRatio = qNow.ttmBasicEps / epsTtm;
+      if (ordRatio >= 0.65 && ordRatio <= 1.02) {
+        epsForPayout = qNow.ttmBasicEps;
+        if (ordRatio < 0.995) {
+          payoutBasis = "普通股TTM(扣永续债)";
+          ordinaryNpTtm = qNow.ttmBasicEps * shares;
+          ordinaryNpRatio = ordRatio;
+        }
+      }
+    }
+  }
 
   const peTtm = (impliedMktCap && qNow?.ttmNp > 0) ? impliedMktCap / qNow.ttmNp : null;
   const pb = (impliedMktCap && qNow?.equity > 0) ? impliedMktCap / qNow.equity : null;
@@ -1234,21 +1286,22 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
   if (exDiv !== null && (exDiv.count > 0 || snapDpsRaw === null)) {
     dpsTtm = exDiv.dpsTtm;
     approxDivYieldPct = (unadjPrice > 0) ? (dpsTtm / unadjPrice) * 100 : null;
-    approxPayoutPct = (epsTtm > 0) ? (dpsTtm / epsTtm) * 100 : null;
+    approxPayoutPct = (epsForPayout > 0) ? (dpsTtm / epsForPayout) * 100 : null;
     ttmDivActual = (shares > 0) ? dpsTtm * shares : (qNow?.ttmDiv ?? null);
   } else if (snapDpsRaw !== null && Number.isFinite(snapDpsRaw)) {
     dpsTtm = snapDpsRaw;
     approxDivYieldPct = (unadjPrice > 0) ? (dpsTtm / unadjPrice) * 100 : null;
-    approxPayoutPct = (epsTtm > 0) ? (dpsTtm / epsTtm) * 100 : null;
+    approxPayoutPct = (epsForPayout > 0) ? (dpsTtm / epsForPayout) * 100 : null;
     ttmDivActual = (shares > 0) ? dpsTtm * shares : (qNow?.ttmDiv ?? null);
   } else if (exDiv !== null) {
     dpsTtm = exDiv.dpsTtm;
     approxDivYieldPct = (unadjPrice > 0) ? (dpsTtm / unadjPrice) * 100 : null;
-    approxPayoutPct = (epsTtm > 0) ? (dpsTtm / epsTtm) * 100 : null;
+    approxPayoutPct = (epsForPayout > 0) ? (dpsTtm / epsForPayout) * 100 : null;
     ttmDivActual = (shares > 0) ? dpsTtm * shares : (qNow?.ttmDiv ?? null);
   } else {
     approxDivYieldPct = (impliedMktCap && qNow?.ttmDiv !== null) ? (qNow.ttmDiv / impliedMktCap) * 100 : null;
-    approxPayoutPct = (qNow?.ttmNp > 0 && qNow?.ttmDiv !== null) ? (qNow.ttmDiv / qNow.ttmNp) * 100 : null;
+    const npDenom = isFinCompany ? ordinaryNpTtm : qNow?.ttmNp;
+    approxPayoutPct = (npDenom > 0 && qNow?.ttmDiv !== null) ? (qNow.ttmDiv / npDenom) * 100 : null;
     ttmDivActual = qNow?.ttmDiv ?? null;
   }
 
@@ -1268,7 +1321,6 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
   const divStability = computeDividendStability(adjEvents, priceDate, splitHelper);
 
   // DuPont, quality & P2-4 peer upgrade metrics
-  const isFinCompany = Boolean(qNow?.isFinancial);
   const netMargin = (qNow?.ttmRev > 0 && qNow?.ttmNp !== null) ? (qNow.ttmNp / qNow.ttmRev) * 100 : null;
   const assetTurnover = (qNow?.assets > 0 && qNow?.ttmRev !== null) ? qNow.ttmRev / qNow.assets : null;
   const equityMultiplier = (qNow?.equity > 0 && qNow?.assets !== null) ? qNow.assets / qNow.equity : null;
@@ -1417,11 +1469,11 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
   let fcf3yDivCoverage = null;
   const fcfCoverageIsProfitProxy = isFinCompany;
   if (isFinCompany) {
-    if (cashDivOut > 0 && qNow?.ttmNp !== null && Number.isFinite(qNow.ttmNp)) {
-      fcfDivCoverage = clamp(qNow.ttmNp / cashDivOut, -3, 10);
+    if (cashDivOut > 0 && ordinaryNpTtm !== null && Number.isFinite(ordinaryNpTtm)) {
+      fcfDivCoverage = clamp(ordinaryNpTtm / cashDivOut, -3, 10);
     }
     if (cashDivOut > 0 && np3yAvg !== null && Number.isFinite(np3yAvg)) {
-      fcf3yDivCoverage = clamp(np3yAvg / cashDivOut, -3, 10);
+      fcf3yDivCoverage = clamp((np3yAvg * ordinaryNpRatio) / cashDivOut, -3, 10);
     }
   } else {
     if (shCashOutflow > 0 && qNow?.ttmFcf !== null && Number.isFinite(qNow.ttmFcf)) {
@@ -1564,6 +1616,9 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
     ttmDivActual,
     approxDivYieldPct,
     approxPayoutPct,
+    epsOrdinaryTtm: epsForPayout,
+    payoutBasis,
+    ordinaryNpRatio,
     divStability,
     buybackYieldPct,
     buybackRawPct,
@@ -1675,6 +1730,27 @@ export function computePeerMetrics(snap, opts = {}) {
     && (snap.maxDd3y != null && snap.maxDd3y >= -25);
   const divRiskFlag = isDivVeto ? "high_risk" : (isDivShield ? "low_vol" : "normal");
 
+  const fmtDpsTrim = (v) => {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return "--";
+    return Number(n.toFixed(4)).toString();
+  };
+  const exEvs = snap.exDiv?.events || [];
+  let divEventsShort = "";
+  let divEventsDetail = "";
+  if (exEvs.length > 0 && snap.dpsTtm > 0) {
+    const partsShort = exEvs.map(e => `${String(e.date).slice(2)} ¥${fmtDpsTrim(e.dps)}`);
+    const partsFull = exEvs.map(e => `${e.date} 派¥${fmtDpsTrim(e.dps)}/股`);
+    divEventsShort = `${exEvs.length}次除息 共¥${fmtDpsTrim(snap.dpsTtm)} (${partsShort.join(" + ")})`;
+    const pxTxt = curPrice > 0 ? ` ÷ 现价¥${curPrice.toFixed(2)}` : "";
+    const dyTxt = snap.approxDivYieldPct != null ? ` = 股息率${snap.approxDivYieldPct.toFixed(2)}%` : "";
+    const payTxt = snap.approxPayoutPct != null ? `\n派息率: ${snap.payoutBasis || "归母TTM"} ≈ ${snap.approxPayoutPct.toFixed(1)}%` : "";
+    divEventsDetail = `近12个月除息 (${snap.exDiv.note || "TTM"}): ${partsFull.join(" + ")} = ¥${fmtDpsTrim(snap.dpsTtm)}/股${pxTxt}${dyTxt}${payTxt}`;
+  } else if (snap.exDiv?.count === 0) {
+    divEventsShort = "近12月零现金除息";
+    divEventsDetail = "近12个月无现金分红除息记录";
+  }
+
   return {
     code: snap.code,
     name: snap.name || snap.code,
@@ -1692,6 +1768,7 @@ export function computePeerMetrics(snap, opts = {}) {
     pb5yAvg: snap.pb5yAvg ?? null,
     pbPct5y: snap.bands?.pb?.pct ?? null,
     psTtm: snap.psTtm,
+    dpsTtm: snap.dpsTtm ?? null,
     divYieldPct: snap.approxDivYieldPct,
     buybackYieldPct: snap.buybackYieldPct ?? 0,
     buybackRawPct: snap.buybackRawPct ?? (snap.buybackYieldPct ?? 0),
@@ -1700,6 +1777,9 @@ export function computePeerMetrics(snap, opts = {}) {
     buybackDetail: snap.buybackDetail || null,
     shareholderYieldPct: snap.shareholderYieldPct ?? snap.approxDivYieldPct ?? null,
     payoutPct: snap.approxPayoutPct,
+    payoutBasis: snap.payoutBasis || "归母TTM",
+    divEventsShort,
+    divEventsDetail,
     divStabilityScore,
     divStabilityGrade,
     divConsecYears,

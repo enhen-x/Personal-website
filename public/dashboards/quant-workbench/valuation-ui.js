@@ -228,6 +228,9 @@ export function renderValuationKPIs(snap) {
     if (snap.exDiv?.events?.length) {
       tipParts.push("除息: " + snap.exDiv.events.map(e => `${e.date} ¥${e.dps.toFixed(3)}/股`).join(" | "));
     }
+    if (snap.approxPayoutPct !== null) {
+      tipParts.push(`派息率口径: ${snap.payoutBasis || "归母TTM"} (${snap.approxPayoutPct.toFixed(1)}%)`);
+    }
     if (snap.buybackDetail) {
       const bd = snap.buybackDetail;
       tipParts.push(`历史股本: ${bd.prevDate} ${(bd.prevShares / 1e8).toFixed(2)}亿股 → ${bd.curDate} ${(bd.curShares / 1e8).toFixed(2)}亿股 (${bd.source}${bd.note ? "·" + bd.note : ""})`);
