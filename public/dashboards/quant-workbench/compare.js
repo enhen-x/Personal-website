@@ -490,6 +490,8 @@ export function syncCompareControls() {
   document.querySelectorAll("#seg-cmp-research-mode button").forEach(b => b.classList.toggle("active", b.dataset.val === rMode));
   const briefEl = document.getElementById("cmp-mode-brief");
   if (briefEl) briefEl.textContent = COMPARE_RESEARCH_MODES[rMode].brief;
+  const qualGlossEl = document.getElementById("cmp-quality-glossary");
+  if (qualGlossEl) qualGlossEl.classList.toggle("hidden", rMode !== "quality");
 
   document.querySelectorAll("#seg-cmp-r-mode button").forEach(b => b.classList.toggle("active", b.dataset.val === cmp.rMode));
   document.querySelectorAll("#seg-cmp-scenario button").forEach(b => b.classList.toggle("active", b.dataset.val === cmp.scenario));

@@ -1560,6 +1560,43 @@ pre.json-pre {
   color: var(--ink-muted);
   line-height: 1.4;
 }
+.cmp-glossary-bar {
+  margin: -4px 0 12px 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--emerald);
+  font-size: 11.5px;
+  color: var(--ink-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  line-height: 1.5;
+}
+.cmp-glossary-bar.hidden {
+  display: none !important;
+}
+.cmp-glossary-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 3px 14px;
+}
+.cmp-glossary-row + .cmp-glossary-row {
+  padding-top: 5px;
+  border-top: 1px dashed var(--border);
+}
+.cmp-glossary-bar strong {
+  color: var(--ink);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.cmp-glossary-bar b {
+  color: var(--ink);
+  font-weight: 600;
+  margin-right: 4px;
+}
 .cmp-research-seg button {
   font-weight: 700;
 }
@@ -1747,6 +1784,10 @@ html, body {
   .cmp-mode-bar {
     padding: 8px 10px;
     gap: 6px 10px;
+  }
+  .cmp-glossary-bar {
+    padding: 8px 10px;
+    font-size: 11px;
   }
   .cmp-scatter-head {
     flex-wrap: wrap;
