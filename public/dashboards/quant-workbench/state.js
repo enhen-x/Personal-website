@@ -64,6 +64,7 @@ export const STATE = {
     divElasticityMode: "dps_cagr",
     divRiskAxis: "max_dd",
     qualValAxis: "pe_norm",
+    qualCompAxis: "irr",
     qualCashAxis: "cash_conv",
     cycleOddsAxis: "pb_cheap",
     cycleInflectAxis: "gm_yoy",

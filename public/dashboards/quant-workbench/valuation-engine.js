@@ -700,7 +700,13 @@ export function buildQuarterlyValuationSeries(finData, symbolName = "") {
 
     const isFinQ = detectFinancialCompany(symbolName, r, b, ttmOcf, ttmNp);
     const ttmFcf = ttmOcf !== null ? (ttmOcf - (ttmCapex || 0)) : null;
-    const equity = b.holder_equity_total != null ? Number(b.holder_equity_total) : null;
+    const equityTotal = b.holder_equity_total != null && Number.isFinite(Number(b.holder_equity_total))
+      ? Number(b.holder_equity_total)
+      : null;
+    const equityParentRaw = b.parent_holder_equity_total ?? b.total_hldr_eqy_exc_min_int ?? null;
+    const hasParentEquity = equityParentRaw != null && Number.isFinite(Number(equityParentRaw)) && Number(equityParentRaw) > 0;
+    const equity = hasParentEquity ? Number(equityParentRaw) : equityTotal;
+    const equityBasis = hasParentEquity ? "归母权益" : (equityTotal != null ? "总权益" : "--");
     const assets = b.assets_total != null ? Number(b.assets_total) : null;
     const cash = b.cash != null ? Number(b.cash) : null;
     const accountsReceivable = b.accounts_receivable != null && Number.isFinite(Number(b.accounts_receivable))
@@ -721,6 +727,21 @@ export function buildQuarterlyValuationSeries(finData, symbolName = "") {
       }
     }
     const ibDebt = hasIbDebt ? ibDebtSum : null;
+    let estIbDebt = null;
+    let ibDebtMode = "总负债净额";
+    if (ibDebt != null) {
+      estIbDebt = ibDebt;
+      ibDebtMode = "有息负债";
+    } else if (
+      !isFinQ
+      && ttmIntExp !== null
+      && Number.isFinite(ttmIntExp)
+      && debt != null
+      && (ttmIntExp > 0 || (ttmIntExp === 0 && (cash || 0) >= debt * 0.5))
+    ) {
+      estIbDebt = clamp(ttmIntExp / 0.035, 0, Math.max(0, debt));
+      ibDebtMode = "利息反推(去OPM)";
+    }
 
     const erd = resolveEffectiveReportDate(r);
     const sharesBasisDate = String(r.report_date || erd || r.period_end || `${r.fiscal_year}-12-31`).slice(0, 10);
@@ -753,13 +774,17 @@ export function buildQuarterlyValuationSeries(finData, symbolName = "") {
       isFinancial: isFinQ,
       divIncludesBondInterest: isFinQ,
       equity,
+      equityTotal,
+      equityBasis,
       assets,
       cash,
       accountsReceivable,
       debt,
       treasuryStock,
       shareCapital,
-      ibDebt
+      ibDebt,
+      estIbDebt,
+      ibDebtMode
     });
   }
 
@@ -1551,8 +1576,8 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
       roeSamples5y.push(roeVal);
       if (!isFinCompany) {
         const nopat = q.ttmNp + (q.ttmIntExp > 0 ? q.ttmIntExp * 0.75 : 0);
-        const nonCashDebt = q.ibDebt != null ? q.ibDebt : Math.max(0, (q.debt || 0) - (q.cash || 0));
-        const ic = Math.max(q.equity * 0.6, q.equity + nonCashDebt);
+        const icDebt = q.estIbDebt != null ? q.estIbDebt : Math.max(0, (q.debt || 0) - (q.cash || 0));
+        const ic = Math.max(q.equity * 0.6, q.equity + icDebt);
         if (ic > 0) {
           const roicVal = clamp((nopat / ic) * 100, -50, 80);
           if (k < 3) roicSamples3y.push(roicVal);
@@ -1752,6 +1777,11 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
 
   const debtRatioPct = (qNow?.assets > 0 && qNow?.debt != null) ? (qNow.debt / qNow.assets) * 100 : null;
   const ibDebtRatioPct = (qNow?.assets > 0 && qNow?.ibDebt != null) ? (qNow.ibDebt / qNow.assets) * 100 : null;
+  const estIbDebtRatioPct = (!isFinCompany && qNow?.assets > 0 && qNow?.estIbDebt != null)
+    ? clamp((qNow.estIbDebt / qNow.assets) * 100, 0, 100)
+    : null;
+  const roicDebtBasis = isFinCompany ? "金融ROE代理" : (qNow?.ibDebtMode || "总负债净额");
+  const equityBasis = qNow?.equityBasis || "--";
   const isHighRiskFlag = (!isFinCompany && debtRatioPct !== null && debtRatioPct > 70)
     || (maxDd3y !== null && maxDd3y < -45)
     || (vol3y !== null && vol3y > 42);
@@ -1871,6 +1901,9 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
     maxDd3y,
     debtRatioPct,
     ibDebtRatioPct,
+    estIbDebtRatioPct,
+    roicDebtBasis,
+    equityBasis,
     riskFlag,
     peg,
     epsTtm,
@@ -1983,9 +2016,16 @@ export function computePeerMetrics(snap, opts = {}) {
   const qRoicRef = snap.roic5yMean ?? snap.roic3yMean ?? snap.roeMean5y ?? snap.roeTtm;
   const qCashConvRef = snap.cashConv5y ?? snap.cashConv3y;
   const qRoeVolRef = snap.roeVol5y ?? snap.roeVol3y;
+  const effIbDebtPct = snap.ibDebtRatioPct ?? snap.estIbDebtRatioPct;
+  const isHighFinLeverage = !snap.isFinancial && (
+    (effIbDebtPct != null && effIbDebtPct > 45)
+    || (snap.interestCoverage != null && snap.interestCoverage < 4.0)
+    || (snap.debtRatioPct != null && snap.debtRatioPct > 75 && (snap.cashToDebtPct == null || snap.cashToDebtPct < 25))
+    || (effIbDebtPct == null && snap.interestCoverage == null && snap.debtRatioPct != null && snap.debtRatioPct > 65 && (snap.cashToDebtPct == null || snap.cashToDebtPct < 35))
+  );
   const isQualityVeto = (!snap.isFinancial && qCashConvRef != null && qCashConvRef < 0.70)
     || (!snap.isFinancial && snap.accrualRatio != null && snap.accrualRatio > 8.0)
-    || (!snap.isFinancial && snap.debtRatioPct != null && snap.debtRatioPct > 65)
+    || isHighFinLeverage
     || (qRoeVolRef != null && qRoeVolRef > 8.0)
     || (snap.roeMin5y != null && snap.roeMin5y < 5.0);
   const isQualityShield = !isQualityVeto
@@ -2123,6 +2163,9 @@ export function computePeerMetrics(snap, opts = {}) {
     maxDd3y: snap.maxDd3y ?? null,
     debtRatioPct: snap.debtRatioPct ?? null,
     ibDebtRatioPct: snap.ibDebtRatioPct ?? null,
+    estIbDebtRatioPct: snap.estIbDebtRatioPct ?? null,
+    roicDebtBasis: snap.roicDebtBasis || "--",
+    equityBasis: snap.equityBasis || "--",
     netCashToMktCap: snap.netCashToMktCap ?? null,
     accrualRatio: snap.accrualRatio ?? null,
     arToRevPct: snap.arToRevPct ?? null,

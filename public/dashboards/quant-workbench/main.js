@@ -905,6 +905,12 @@ function bindEvents() {
       renderCompareResults();
     });
   });
+  document.querySelectorAll("#seg-cmp-qual-comp button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      STATE.compare.qualCompAxis = btn.dataset.val || "irr";
+      renderCompareResults();
+    });
+  });
   document.querySelectorAll("#seg-cmp-qual-cash button").forEach(btn => {
     btn.addEventListener("click", () => {
       STATE.compare.qualCashAxis = btn.dataset.val || "cash_conv";
@@ -983,7 +989,7 @@ function bindEvents() {
       "shareholder_yield_pct", "div_yield_ttm", "buyback_yield_pct", "buyback_source", "payout_pct",
       "div_stability_score", "div_stability_grade", "div_consec_years", "div_cv_5y", "div_cut_count_5y", "div_cagr_3y", "div_cagr_5y",
       "div_elasticity_fwd", "fcf_div_coverage", "capex_to_ocf_pct", "div_risk_flag",
-      "fcf_yield_pct", "fcf_3y_yield_pct", "fcf_5y_yield_pct", "cash_conv_5y", "roic_5y_mean", "roe_vol_5y", "accrual_ratio_pct", "ar_to_rev_pct", "quality_risk_flag",
+      "fcf_yield_pct", "fcf_3y_yield_pct", "fcf_5y_yield_pct", "cash_conv_5y", "roic_5y_mean", "roe_vol_5y", "accrual_ratio_pct", "ar_to_rev_pct", "equity_basis", "roic_debt_basis", "est_ib_debt_ratio_pct", "quality_risk_flag",
       "ev_to_ebit_ttm", "ev_to_ebit_3y", "ev_to_ebit_5y", "ebit_yield_5y", "ebit_cycle_pos", "ev_debt_basis",
       "q_gm_yoy_pp", "delta_roe_margin_pp", "capex_to_rev_pct", "interest_coverage", "cash_to_debt_pct", "cycle_risk_flag",
       "np_cagr_3y", "rev_yoy_1y", "rev_cagr_3y", "np_accel_pp", "peg_3y", "psg", "rd_ratio_pct", "ttm_gm_pct", "fcf_margin_3y", "growth_risk_flag",
@@ -1002,7 +1008,7 @@ function bindEvents() {
         r.shareholderYieldPct, r.divYieldPct, r.buybackYieldPct, r.buybackSource, r.payoutPct,
         r.divStabilityScore, r.divStabilityGrade, r.divConsecYears, r.divCv5y, r.divCutCount5y, r.divCagr3y, r.divCagr5y,
         r.divElasticityForward, r.fcfDivCoverage, r.capexToOcfPct, r.divRiskFlag,
-        r.fcfYieldPct, r.fcf3yYieldPct, r.fcf5yYieldPct, r.cashConv5y, r.roic5yMean, r.roeVol5y, r.accrualRatio, r.arToRevPct, r.qualityRiskFlag,
+        r.fcfYieldPct, r.fcf3yYieldPct, r.fcf5yYieldPct, r.cashConv5y, r.roic5yMean, r.roeVol5y, r.accrualRatio, r.arToRevPct, r.equityBasis, r.roicDebtBasis, r.estIbDebtRatioPct, r.qualityRiskFlag,
         r.evToEbitTtm, r.evToEbit3y, r.evToEbit5y, r.ebitYield5y, r.ebitCyclePos, r.evDebtBasis,
         r.qGmYoyPp, r.deltaRoeMarginPp, r.capexToRevPct, r.interestCoverage, r.cashToDebtPct, r.cycleRiskFlag,
         r.npCagr3y, r.revYoy1yRaw, r.revCagr3y, r.npAccelPp, r.peg3y, r.psg, r.rdRatioPct, r.ttmGmPct, r.fcfMargin3y, r.growthRiskFlag,
