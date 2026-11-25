@@ -853,7 +853,8 @@ function bindEvents() {
         evEbit: { ttm: "evToEbitTtm", "3y": "evToEbit3y", "5y": "evToEbit5y" },
         roeToPb: { ttm: "roeToPbTtm", "3y": "roeToPb3y", "5y": "roeToPb5y" },
         fcf: { ttm: "fcfYieldPct", "3y": "fcf3yYieldPct", "5y": "fcf5yYieldPct" },
-        roic: { ttm: "roic5yMean", "3y": "roic3yMean", "5y": "roic5yMean" }
+        roic: { ttm: "roic5yMean", "3y": "roic3yMean", "5y": "roic5yMean" },
+        roiic: { ttm: "roiic3yPct", "3y": "roiic3yPct", "5y": "roiic5yPct" }
       };
       for (const grp of Object.values(sortRemap)) {
         if (Object.values(grp).includes(STATE.compare.sortBy)) {
@@ -905,9 +906,15 @@ function bindEvents() {
       renderCompareResults();
     });
   });
+  document.querySelectorAll("#seg-cmp-qual-grow button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      STATE.compare.qualGrowAxis = btn.dataset.val || "g_cagr";
+      renderCompareResults();
+    });
+  });
   document.querySelectorAll("#seg-cmp-qual-comp button").forEach(btn => {
     btn.addEventListener("click", () => {
-      STATE.compare.qualCompAxis = btn.dataset.val || "irr";
+      STATE.compare.qualCompAxis = btn.dataset.val || "bogle_ret";
       renderCompareResults();
     });
   });
@@ -990,6 +997,7 @@ function bindEvents() {
       "div_stability_score", "div_stability_grade", "div_consec_years", "div_cv_5y", "div_cut_count_5y", "div_cagr_3y", "div_cagr_5y",
       "div_elasticity_fwd", "fcf_div_coverage", "capex_to_ocf_pct", "div_risk_flag",
       "fcf_yield_pct", "fcf_3y_yield_pct", "fcf_5y_yield_pct", "cash_conv_5y", "roic_5y_mean", "roe_vol_5y", "accrual_ratio_pct", "ar_to_rev_pct", "equity_basis", "roic_debt_basis", "est_ib_debt_ratio_pct", "quality_risk_flag",
+      "np_cagr_5y", "rev_cagr_5y", "roiic_3y_pct", "roiic_5y_pct", "reinvest_rate_pct", "bogle_ret_3y_pct", "bogle_ret_5y_pct", "quality_archetype",
       "ev_to_ebit_ttm", "ev_to_ebit_3y", "ev_to_ebit_5y", "ebit_yield_5y", "ebit_cycle_pos", "ev_debt_basis",
       "q_gm_yoy_pp", "delta_roe_margin_pp", "capex_to_rev_pct", "interest_coverage", "cash_to_debt_pct", "cycle_risk_flag",
       "np_cagr_3y", "rev_yoy_1y", "rev_cagr_3y", "np_accel_pp", "peg_3y", "psg", "rd_ratio_pct", "ttm_gm_pct", "fcf_margin_3y", "growth_risk_flag",
@@ -1009,6 +1017,7 @@ function bindEvents() {
         r.divStabilityScore, r.divStabilityGrade, r.divConsecYears, r.divCv5y, r.divCutCount5y, r.divCagr3y, r.divCagr5y,
         r.divElasticityForward, r.fcfDivCoverage, r.capexToOcfPct, r.divRiskFlag,
         r.fcfYieldPct, r.fcf3yYieldPct, r.fcf5yYieldPct, r.cashConv5y, r.roic5yMean, r.roeVol5y, r.accrualRatio, r.arToRevPct, r.equityBasis, r.roicDebtBasis, r.estIbDebtRatioPct, r.qualityRiskFlag,
+        r.npCagr5y, r.revCagr5y, r.roiic3yPct, r.roiic5yPct, r.reinvestRatePct, r.bogleRet3y, r.bogleRet5y, r.qualityArchetype,
         r.evToEbitTtm, r.evToEbit3y, r.evToEbit5y, r.ebitYield5y, r.ebitCyclePos, r.evDebtBasis,
         r.qGmYoyPp, r.deltaRoeMarginPp, r.capexToRevPct, r.interestCoverage, r.cashToDebtPct, r.cycleRiskFlag,
         r.npCagr3y, r.revYoy1yRaw, r.revCagr3y, r.npAccelPp, r.peg3y, r.psg, r.rdRatioPct, r.ttmGmPct, r.fcfMargin3y, r.growthRiskFlag,

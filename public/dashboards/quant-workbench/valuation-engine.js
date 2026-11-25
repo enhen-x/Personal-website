@@ -1724,6 +1724,62 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
     ? clamp(revCagr3yRaw, -40, 80)
     : null;
 
+  const qPrev20 = quarters.length >= 21 ? quarters[quarters.length - 21] : null;
+  let npCagr5yRaw = null;
+  if (qNow?.ttmNp > 0 && qPrev20?.ttmNp > 0) {
+    npCagr5yRaw = (Math.pow(qNow.ttmNp / qPrev20.ttmNp, 1 / 5) - 1) * 100;
+  } else if (cagrNp !== null && Number.isFinite(cagrNp)) {
+    npCagr5yRaw = cagrNp;
+  }
+  const npCagr5y = (npCagr5yRaw !== null && Number.isFinite(npCagr5yRaw))
+    ? clamp(npCagr5yRaw, -40, 80)
+    : null;
+  const revCagr5yRaw = (qNow?.ttmRev > 0 && qPrev20?.ttmRev > 0)
+    ? (Math.pow(qNow.ttmRev / qPrev20.ttmRev, 1 / 5) - 1) * 100
+    : null;
+  const revCagr5y = (revCagr5yRaw !== null && Number.isFinite(revCagr5yRaw))
+    ? clamp(revCagr5yRaw, -40, 80)
+    : null;
+
+  const calcReinvestRoiic = (years) => {
+    const startIdx = quarters.length - 1 - 4 * years;
+    if (startIdx < 0) return { roiic: null, reinvestRatePct: null };
+    const qEnd = quarters[quarters.length - 1];
+    const qStart = quarters[startIdx];
+    if (
+      qEnd?.ttmNp === null || qStart?.ttmNp === null
+      || !Number.isFinite(qEnd?.ttmNp) || !Number.isFinite(qStart?.ttmNp)
+    ) {
+      return { roiic: null, reinvestRatePct: null };
+    }
+    let sumPosNp = 0;
+    let cumRetained = 0;
+    for (let k = 0; k < years; k++) {
+      const qk = quarters[quarters.length - 1 - 4 * k];
+      if (!(qk?.ttmNp > 0)) continue;
+      sumPosNp += qk.ttmNp;
+      let divOut = 0;
+      if (isFinCompany) {
+        divOut = qk.ttmNp * clamp((approxPayoutPct ?? 30) / 100, 0, 1);
+      } else if (qk.ttmDiv !== null && Number.isFinite(qk.ttmDiv)) {
+        divOut = clamp(qk.ttmDiv, 0, qk.ttmNp);
+      } else if (approxPayoutPct !== null && Number.isFinite(approxPayoutPct)) {
+        divOut = qk.ttmNp * clamp(approxPayoutPct / 100, 0, 1);
+      }
+      cumRetained += Math.max(0, qk.ttmNp - divOut);
+    }
+    if (!(sumPosNp > 0)) return { roiic: null, reinvestRatePct: null };
+    const reinvestRatePct = clamp((cumRetained / sumPosNp) * 100, 0, 100);
+    const effDenom = Math.max(cumRetained, sumPosNp * 0.15);
+    const roiic = clamp(((qEnd.ttmNp - qStart.ttmNp) / effDenom) * 100, -40, 60);
+    return { roiic, reinvestRatePct };
+  };
+  const reinv3y = calcReinvestRoiic(3);
+  const reinv5y = calcReinvestRoiic(5);
+  const roiic3yPct = reinv3y.roiic;
+  const roiic5yPct = reinv5y.roiic ?? reinv3y.roiic;
+  const reinvestRatePct = reinv3y.reinvestRatePct ?? reinv5y.reinvestRatePct;
+
   const rdRatioPct = !isFinCompany
     ? ((qNow?.ttmRev > 0 && qNow?.ttmRd !== null && Number.isFinite(qNow.ttmRd))
       ? clamp((qNow.ttmRd / qNow.ttmRev) * 100, 0, 80)
@@ -1932,10 +1988,17 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
     cashToDebtPct,
     npCagr3y,
     npCagr3yRaw,
+    npCagr5y,
+    npCagr5yRaw,
     revYoy1y,
     revYoy1yRaw,
     revCagr3y,
     revCagr3yRaw,
+    revCagr5y,
+    revCagr5yRaw,
+    roiic3yPct,
+    roiic5yPct,
+    reinvestRatePct,
     rdRatioPct,
     ttmGmPct,
     fcfMarginTtm,
@@ -2034,6 +2097,22 @@ export function computePeerMetrics(snap, opts = {}) {
     && (qRoeVolRef != null && qRoeVolRef <= 4.5)
     && (snap.isFinancial || snap.accrualRatio == null || snap.accrualRatio <= 4.0);
   const qualityRiskFlag = isQualityVeto ? "high_risk" : (isQualityShield ? "low_vol" : "normal");
+
+  const shRetForBogle = snap.shareholderYieldPct ?? snap.approxDivYieldPct ?? 0;
+  const gRef3yBogle = snap.npCagr3y ?? scen?.g1 ?? null;
+  const gRef5yBogle = snap.npCagr5y ?? scen?.g1 ?? snap.npCagr3y ?? null;
+  const bogleRet3y = gRef3yBogle != null ? clamp(shRetForBogle + gRef3yBogle, -30, 50) : null;
+  const bogleRet5y = gRef5yBogle != null ? clamp(shRetForBogle + gRef5yBogle, -30, 50) : null;
+  const roiicRefArch = snap.roiic3yPct ?? snap.roiic5yPct;
+  const longGRefArch = gRef3yBogle ?? gRef5yBogle;
+  let qualityArchetype = "均衡白马";
+  if (roiicRefArch != null && roiicRefArch >= 15 && longGRefArch != null && longGRefArch >= 8) {
+    qualityArchetype = "复利白马";
+  } else if (shRetForBogle >= 4.0 && ((longGRefArch != null && longGRefArch < 6) || (roiicRefArch != null && roiicRefArch < 12))) {
+    qualityArchetype = "现金奶牛";
+  } else if (snap.reinvestRatePct != null && snap.reinvestRatePct >= 50 && roiicRefArch != null && roiicRefArch < 6) {
+    qualityArchetype = "低效留存";
+  }
 
   const pbCheapness5y = snap.bands?.pb?.pct != null ? clamp(100 - snap.bands.pb.pct, 0, 100) : null;
   const cycEbitYieldRef = snap.ebitYield5y ?? snap.ebitYield3y ?? snap.ebitYieldTtm;
@@ -2188,9 +2267,17 @@ export function computePeerMetrics(snap, opts = {}) {
     pbCheapness5y,
     cycleRiskFlag,
     npCagr3y: snap.npCagr3y ?? null,
+    npCagr5y: snap.npCagr5y ?? null,
     revYoy1y: snap.revYoy1y ?? null,
     revYoy1yRaw: snap.revYoy1yRaw ?? null,
     revCagr3y: snap.revCagr3y ?? null,
+    revCagr5y: snap.revCagr5y ?? null,
+    roiic3yPct: snap.roiic3yPct ?? null,
+    roiic5yPct: snap.roiic5yPct ?? null,
+    reinvestRatePct: snap.reinvestRatePct ?? null,
+    bogleRet3y,
+    bogleRet5y,
+    qualityArchetype,
     npAccelPp,
     revAccelPp,
     rdRatioPct: snap.rdRatioPct ?? null,

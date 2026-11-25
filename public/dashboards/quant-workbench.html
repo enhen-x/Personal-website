@@ -1195,10 +1195,18 @@
               <button type="button" data-val="pb">PB-ROE</button>
             </div>
           </div>
+          <div id="wrap-cmp-qual-grow" class="cmp-sub-seg-wrap hidden">
+            <span class="ctrl-label">复利轴:</span>
+            <div class="seg" id="seg-cmp-qual-grow">
+              <button type="button" data-val="g_cagr" class="active">净利复合增速 g</button>
+              <button type="button" data-val="bogle_ret">复利总回报(回报+g)</button>
+            </div>
+          </div>
           <div id="wrap-cmp-qual-comp" class="cmp-sub-seg-wrap hidden">
             <span class="ctrl-label">回报口径:</span>
             <div class="seg" id="seg-cmp-qual-comp">
-              <button type="button" data-val="irr" class="active">含成长 IRR</button>
+              <button type="button" data-val="bogle_ret" class="active">复利总回报(回报+g)</button>
+              <button type="button" data-val="irr">含成长 IRR</button>
               <button type="button" data-val="roe_pb">静态 ROE/PB</button>
             </div>
           </div>
@@ -1252,7 +1260,7 @@
               <button type="button" data-val="fcf_margin">3Y FCF利润率</button>
             </div>
           </div>
-          <button id="btn-cmp-arrows" class="preset-btn active" type="button" aria-pressed="true" title="在「成长性价比 PEG/PSG」或「股东回报 vs 增速」视图下显示长期→近1Y边际增速拖尾箭头">增速拖尾箭头: 开</button>
+          <button id="btn-cmp-arrows" class="preset-btn active" type="button" aria-pressed="true" title="在「增速 vs 再投资」「成长性价比 PEG/PSG」或「股东回报 vs 增速」视图下显示长期→近1Y边际增速拖尾箭头">增速拖尾箭头: 开</button>
           <button id="btn-cmp-risk-rings" class="preset-btn active" type="button" aria-pressed="true" title="按当前研究模式叠加气泡风控外环">风控外环: 开</button>
           <span class="chart-hint">悬停明细 · 点击跳转个股看板</span>
         </div>
@@ -1278,7 +1286,7 @@
         <table class="cmp-table">
           <thead id="cmp-thead"></thead>
           <tbody id="cmp-tbody">
-            <tr><td colspan="25" class="center flat" style="padding:28px;">切换至此标签页后自动拉取并测算对比标的…</td></tr>
+            <tr><td colspan="26" class="center flat" style="padding:28px;">切换至此标签页后自动拉取并测算对比标的…</td></tr>
           </tbody>
         </table>
       </div>
