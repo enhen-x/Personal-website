@@ -2103,6 +2103,20 @@ export function computePeerMetrics(snap, opts = {}) {
   const gRef5yBogle = snap.npCagr5y ?? scen?.g1 ?? snap.npCagr3y ?? null;
   const bogleRet3y = gRef3yBogle != null ? clamp(shRetForBogle + gRef3yBogle, -30, 50) : null;
   const bogleRet5y = gRef5yBogle != null ? clamp(shRetForBogle + gRef5yBogle, -30, 50) : null;
+  const pbToBogle3y = (snap.pb > 0 && bogleRet3y != null && bogleRet3y > 0.5)
+    ? clamp(snap.pb / bogleRet3y, 0.01, 20)
+    : null;
+  const pbToBogle5y = (snap.pb > 0 && bogleRet5y != null && bogleRet5y > 0.5)
+    ? clamp(snap.pb / bogleRet5y, 0.01, 20)
+    : null;
+  const pe3ForPegy = snap.pe3yNorm ?? snap.peTtm;
+  const pe5ForPegy = snap.pe5yNorm ?? snap.pe3yNorm ?? snap.peTtm;
+  const pegy3y = (pe3ForPegy > 0 && bogleRet3y != null && bogleRet3y > 0.5)
+    ? clamp(pe3ForPegy / bogleRet3y, 0.05, 25)
+    : null;
+  const pegy5y = (pe5ForPegy > 0 && bogleRet5y != null && bogleRet5y > 0.5)
+    ? clamp(pe5ForPegy / bogleRet5y, 0.05, 25)
+    : null;
   const roiicRefArch = snap.roiic3yPct ?? snap.roiic5yPct;
   const longGRefArch = gRef3yBogle ?? gRef5yBogle;
   let qualityArchetype = "均衡白马";
@@ -2277,6 +2291,10 @@ export function computePeerMetrics(snap, opts = {}) {
     reinvestRatePct: snap.reinvestRatePct ?? null,
     bogleRet3y,
     bogleRet5y,
+    pbToBogle3y,
+    pbToBogle5y,
+    pegy3y,
+    pegy5y,
     qualityArchetype,
     npAccelPp,
     revAccelPp,

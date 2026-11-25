@@ -66,6 +66,7 @@ export const STATE = {
     qualValAxis: "pe_norm",
     qualGrowAxis: "g_cagr",
     qualCompAxis: "bogle_ret",
+    qualCompYAxis: "pb",
     qualCashAxis: "cash_conv",
     cycleOddsAxis: "pb_cheap",
     cycleInflectAxis: "gm_yoy",
