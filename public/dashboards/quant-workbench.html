@@ -1188,7 +1188,64 @@
               <button type="button" data-val="vol_3y">3Y年化波动</button>
             </div>
           </div>
-          <button id="btn-cmp-arrows" class="preset-btn active" type="button" aria-pressed="true" title="在「股东回报 vs 增速」视图下显示 5Y→1Y 净利边际增速拖尾箭头">增速拖尾箭头: 开</button>
+          <div id="wrap-cmp-qual-val" class="cmp-sub-seg-wrap hidden">
+            <span class="ctrl-label">估值轴:</span>
+            <div class="seg" id="seg-cmp-qual-val">
+              <button type="button" data-val="pe_norm" class="active">均利 PE</button>
+              <button type="button" data-val="pb">PB-ROE</button>
+            </div>
+          </div>
+          <div id="wrap-cmp-qual-cash" class="cmp-sub-seg-wrap hidden">
+            <span class="ctrl-label">质量轴:</span>
+            <div class="seg" id="seg-cmp-qual-cash">
+              <button type="button" data-val="cash_conv" class="active">净现比 OCF/净利</button>
+              <button type="button" data-val="ar_ratio">应收/营收比</button>
+            </div>
+          </div>
+          <div id="wrap-cmp-cyc-odds" class="cmp-sub-seg-wrap hidden">
+            <span class="ctrl-label">赔率轴:</span>
+            <div class="seg" id="seg-cmp-cyc-odds">
+              <button type="button" data-val="pb_cheap" class="active">5Y PB便宜度</button>
+              <button type="button" data-val="ebit_yield">5Y均 EBIT/EV</button>
+            </div>
+          </div>
+          <div id="wrap-cmp-cyc-inflect" class="cmp-sub-seg-wrap hidden">
+            <span class="ctrl-label">景气轴:</span>
+            <div class="seg" id="seg-cmp-cyc-inflect">
+              <button type="button" data-val="gm_yoy" class="active">单季Δ毛利率</button>
+              <button type="button" data-val="roe_delta">ΔROE边际差</button>
+            </div>
+          </div>
+          <div id="wrap-cmp-cyc-safety" class="cmp-sub-seg-wrap hidden">
+            <span class="ctrl-label">安全轴:</span>
+            <div class="seg" id="seg-cmp-cyc-safety">
+              <button type="button" data-val="int_cov" class="active">利息保障倍数</button>
+              <button type="button" data-val="cash_debt">货币资金/总负债</button>
+            </div>
+          </div>
+          <div id="wrap-cmp-gr-val" class="cmp-sub-seg-wrap hidden">
+            <span class="ctrl-label">估值口径:</span>
+            <div class="seg" id="seg-cmp-gr-val">
+              <button type="button" data-val="peg" class="active">PEG (净利/PE)</button>
+              <button type="button" data-val="psg">PSG (营收/PS)</button>
+            </div>
+          </div>
+          <div id="wrap-cmp-gr-eff" class="cmp-sub-seg-wrap hidden">
+            <span class="ctrl-label">效率轴:</span>
+            <div class="seg" id="seg-cmp-gr-eff">
+              <button type="button" data-val="roic" class="active">ROIC</button>
+              <button type="button" data-val="gm">毛利率</button>
+              <button type="button" data-val="rd">研发率</button>
+            </div>
+          </div>
+          <div id="wrap-cmp-gr-cash" class="cmp-sub-seg-wrap hidden">
+            <span class="ctrl-label">造血轴:</span>
+            <div class="seg" id="seg-cmp-gr-cash">
+              <button type="button" data-val="cash_conv" class="active">3Y净现比</button>
+              <button type="button" data-val="fcf_margin">3Y FCF利润率</button>
+            </div>
+          </div>
+          <button id="btn-cmp-arrows" class="preset-btn active" type="button" aria-pressed="true" title="在「成长性价比 PEG/PSG」或「股东回报 vs 增速」视图下显示长期→近1Y边际增速拖尾箭头">增速拖尾箭头: 开</button>
           <button id="btn-cmp-risk-rings" class="preset-btn active" type="button" aria-pressed="true" title="按当前研究模式叠加气泡风控外环">风控外环: 开</button>
           <span class="chart-hint">悬停明细 · 点击跳转个股看板</span>
         </div>
@@ -1214,7 +1271,7 @@
         <table class="cmp-table">
           <thead id="cmp-thead"></thead>
           <tbody id="cmp-tbody">
-            <tr><td colspan="20" class="center flat" style="padding:28px;">切换至此标签页后自动拉取并测算对比标的…</td></tr>
+            <tr><td colspan="25" class="center flat" style="padding:28px;">切换至此标签页后自动拉取并测算对比标的…</td></tr>
           </tbody>
         </table>
       </div>

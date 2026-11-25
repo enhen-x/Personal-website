@@ -453,6 +453,11 @@ export function buildQuarterlyValuationSeries(finData, symbolName = "") {
   const divGrossYtd = new Array(incList.length).fill(null);
   const intExpYtd = new Array(incList.length).fill(null);
   const basicEpsYtd = new Array(incList.length).fill(null);
+  const profitTotalYtd = new Array(incList.length).fill(null);
+  const opProfitYtd = new Array(incList.length).fill(null);
+  const opCostsYtd = new Array(incList.length).fill(null);
+  const revYtd = new Array(incList.length).fill(null);
+  const rdExpYtd = new Array(incList.length).fill(null);
   for (let i = 0; i < incList.length; i++) {
     const r = incList[i];
     const fp = String(r.fiscal_period || "").toUpperCase();
@@ -470,6 +475,22 @@ export function buildQuarterlyValuationSeries(finData, symbolName = "") {
     }
     if (r.basic_eps != null && Number.isFinite(Number(r.basic_eps))) {
       basicEpsYtd[i] = Number(r.basic_eps);
+    }
+    if (r.profit_total != null && Number.isFinite(Number(r.profit_total))) {
+      profitTotalYtd[i] = Number(r.profit_total);
+    }
+    if (r.operating_profit != null && Number.isFinite(Number(r.operating_profit))) {
+      opProfitYtd[i] = Number(r.operating_profit);
+    }
+    if (r.operating_costs != null && Number.isFinite(Number(r.operating_costs))) {
+      opCostsYtd[i] = Number(r.operating_costs);
+    }
+    if (r.operating_income != null && Number.isFinite(Number(r.operating_income))) {
+      revYtd[i] = Number(r.operating_income);
+    }
+    const rdRaw = r.rd_expenses ?? r.research_and_development_expenses ?? r.rd_exp ?? null;
+    if (rdRaw != null && Number.isFinite(Number(rdRaw))) {
+      rdExpYtd[i] = Math.max(0, Number(rdRaw));
     }
   }
 
@@ -494,6 +515,22 @@ export function buildQuarterlyValuationSeries(finData, symbolName = "") {
     if (rawSharesArr[i]) nextValid = rawSharesArr[i];
     if (!filledShares[i]) filledShares[i] = nextValid;
   }
+
+  const calcYtdTtm = (arr, i, fy, fp) => {
+    if (fp === "Q4") return arr[i] !== null ? arr[i] : null;
+    const prevQ4Idx = idxByYm.get(`${fy - 1}-Q4`);
+    const prevSameIdx = idxByYm.get(`${fy - 1}-${fp}`);
+    if (
+      prevQ4Idx !== undefined &&
+      prevSameIdx !== undefined &&
+      arr[prevQ4Idx] !== null &&
+      arr[prevSameIdx] !== null &&
+      arr[i] !== null
+    ) {
+      return arr[prevQ4Idx] - arr[prevSameIdx] + arr[i];
+    }
+    return null;
+  };
 
   const quarters = [];
   for (let i = 0; i < incList.length; i++) {
@@ -596,14 +633,79 @@ export function buildQuarterlyValuationSeries(finData, symbolName = "") {
       ) {
         ttmBasicEps = basicEpsYtd[prevQ4Idx] - basicEpsYtd[prevSameIdx] + basicEpsYtd[i];
         ttmBasicEpsStartDate = String(incList[prevSameIdx].period_end || `${fy - 1}-01-01`).slice(0, 10);
+      } else {
+        for (let k = i; k >= Math.max(0, i - 4); k--) {
+          if (String(incList[k].fiscal_period || "").toUpperCase() === "Q4" && basicEpsYtd[k] !== null) {
+            break;
+          }
+        }
       }
     }
+
+    // Compute TTM EBIT & single-quarter Gross Margin (%) for cyclical analysis
+    const ttmProfitTotal = calcYtdTtm(profitTotalYtd, i, fy, fp);
+    let ttmOpProfit = calcYtdTtm(opProfitYtd, i, fy, fp);
+    if (ttmOpProfit === null && i >= 3 && qi - quarterIndex(incList[i - 3].fiscal_year, incList[i - 3].fiscal_period) === 3) {
+      let opS = 0;
+      let opOk = true;
+      for (let k = i - 3; k <= i; k++) {
+        if (incList[k].q_operating_profit == null) { opOk = false; break; }
+        opS += Number(incList[k].q_operating_profit);
+      }
+      if (opOk) ttmOpProfit = opS;
+    }
+    const ebitBase = ttmProfitTotal !== null ? ttmProfitTotal : ttmOpProfit;
+    const ttmEbit = ebitBase !== null ? (ebitBase + (ttmIntExp !== null && ttmIntExp > 0 ? ttmIntExp : 0)) : null;
+
+    let qRev = r.q_operating_income != null && Number.isFinite(Number(r.q_operating_income))
+      ? Number(r.q_operating_income)
+      : null;
+    if (qRev === null) {
+      if (fp === "Q1") qRev = revYtd[i];
+      else if (i >= 1 && Number(incList[i - 1].fiscal_year) === fy && qi - quarterIndex(incList[i - 1].fiscal_year, incList[i - 1].fiscal_period) === 1 && revYtd[i] !== null && revYtd[i - 1] !== null) {
+        qRev = revYtd[i] - revYtd[i - 1];
+      }
+    }
+    let qCost = r.q_operating_costs != null && Number.isFinite(Number(r.q_operating_costs))
+      ? Number(r.q_operating_costs)
+      : null;
+    if (qCost === null) {
+      if (fp === "Q1") qCost = opCostsYtd[i];
+      else if (i >= 1 && Number(incList[i - 1].fiscal_year) === fy && qi - quarterIndex(incList[i - 1].fiscal_year, incList[i - 1].fiscal_period) === 1 && opCostsYtd[i] !== null && opCostsYtd[i - 1] !== null) {
+        qCost = opCostsYtd[i] - opCostsYtd[i - 1];
+      }
+    }
+    const qGrossMarginPct = (qRev > 0 && qCost !== null && Number.isFinite(qCost))
+      ? clamp(((qRev - qCost) / qRev) * 100, -50, 99)
+      : null;
+
+    // TTM R&D expenses, YTD R&D ratio fallback, TTM operating costs & TTM gross margin (%)
+    const ttmRd = calcYtdTtm(rdExpYtd, i, fy, fp);
+    const ytdRdRatioPct = (rdExpYtd[i] !== null && revYtd[i] > 0)
+      ? clamp((rdExpYtd[i] / revYtd[i]) * 100, 0, 80)
+      : null;
+    let ttmOpCosts = calcYtdTtm(opCostsYtd, i, fy, fp);
+    if (ttmOpCosts === null && i >= 3 && qi - quarterIndex(incList[i - 3].fiscal_year, incList[i - 3].fiscal_period) === 3) {
+      let costS = 0;
+      let costOk = true;
+      for (let k = i - 3; k <= i; k++) {
+        if (incList[k].q_operating_costs == null) { costOk = false; break; }
+        costS += Number(incList[k].q_operating_costs);
+      }
+      if (costOk) ttmOpCosts = costS;
+    }
+    const ttmGrossMarginPct = (ttmRev > 0 && ttmOpCosts !== null && Number.isFinite(ttmOpCosts))
+      ? clamp(((ttmRev - ttmOpCosts) / ttmRev) * 100, -50, 99)
+      : qGrossMarginPct;
 
     const isFinQ = detectFinancialCompany(symbolName, r, b, ttmOcf, ttmNp);
     const ttmFcf = ttmOcf !== null ? (ttmOcf - (ttmCapex || 0)) : null;
     const equity = b.holder_equity_total != null ? Number(b.holder_equity_total) : null;
     const assets = b.assets_total != null ? Number(b.assets_total) : null;
     const cash = b.cash != null ? Number(b.cash) : null;
+    const accountsReceivable = b.accounts_receivable != null && Number.isFinite(Number(b.accounts_receivable))
+      ? Math.max(0, Number(b.accounts_receivable))
+      : null;
     const debt = b.total_debt != null ? Number(b.total_debt) : null;
     const tsRaw = b.treasury_stock ?? b.less_treasury_stock ?? null;
     const treasuryStock = tsRaw != null && Number.isFinite(Number(tsRaw)) ? Math.max(0, Number(tsRaw)) : null;
@@ -640,6 +742,11 @@ export function buildQuarterlyValuationSeries(finData, symbolName = "") {
       ttmOcf,
       ttmCapex,
       ttmFcf,
+      ttmEbit,
+      qGrossMarginPct,
+      ttmRd,
+      ytdRdRatioPct,
+      ttmGrossMarginPct,
       ttmDivGross,
       ttmIntExp,
       ttmDiv: ttmDivGross,
@@ -648,6 +755,7 @@ export function buildQuarterlyValuationSeries(finData, symbolName = "") {
       equity,
       assets,
       cash,
+      accountsReceivable,
       debt,
       treasuryStock,
       shareCapital,
@@ -1328,6 +1436,9 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
   const accrualRatio = (qNow?.assets > 0 && qNow?.ttmNp !== null && qNow?.ttmOcf !== null)
     ? ((qNow.ttmNp - qNow.ttmOcf) / qNow.assets) * 100
     : null;
+  const arToRevPct = (!isFinCompany && qNow?.ttmRev > 0 && qNow?.accountsReceivable != null)
+    ? clamp((qNow.accountsReceivable / qNow.ttmRev) * 100, 0, 200)
+    : null;
   const netCashToMktCap = (impliedMktCap && qNow?.cash !== null && qNow?.debt !== null)
     ? ((qNow.cash - qNow.debt) / impliedMktCap) * 100
     : null;
@@ -1399,6 +1510,11 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
   const npSamples3y = [];
   const npSamples5y = [];
   const fcfSamples5y = [];
+  const ebitSamples3y = [];
+  const ebitSamples5y = [];
+  let sumFcf3y = 0;
+  let sumRev3y = 0;
+  let fcfRevPairs3y = 0;
   for (let k = 0; k < 5; k++) {
     const idx = quarters.length - 1 - 4 * k;
     if (idx < 0) break;
@@ -1406,6 +1522,15 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
     if (q?.ttmNp !== null && Number.isFinite(q.ttmNp)) {
       if (k < 3) npSamples3y.push(q.ttmNp);
       npSamples5y.push(q.ttmNp);
+    }
+    if (!isFinCompany && q?.ttmEbit !== null && Number.isFinite(q.ttmEbit)) {
+      if (k < 3) ebitSamples3y.push(q.ttmEbit);
+      ebitSamples5y.push(q.ttmEbit);
+    }
+    if (k < 3 && !isFinCompany && q?.ttmFcf !== null && Number.isFinite(q.ttmFcf) && q?.ttmRev > 0) {
+      sumFcf3y += q.ttmFcf;
+      sumRev3y += q.ttmRev;
+      fcfRevPairs3y++;
     }
     if (q?.ttmFcf !== null && Number.isFinite(q.ttmFcf)) {
       fcfSamples5y.push(q.ttmFcf);
@@ -1460,6 +1585,50 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
   const fcf5yAvg = calcMean(fcfSamples5y);
   const fcf3yYieldPct = (impliedMktCap > 0 && fcf3yAvg !== null) ? (fcf3yAvg / impliedMktCap) * 100 : null;
   const fcf5yYieldPct = (impliedMktCap > 0 && fcf5yAvg !== null) ? (fcf5yAvg / impliedMktCap) * 100 : null;
+  const ebit3yAvg = calcMean(ebitSamples3y);
+  const ebit5yAvg = calcMean(ebitSamples5y);
+  const evDebtUsed = qNow?.ibDebt != null ? qNow.ibDebt : (qNow?.debt != null ? qNow.debt : null);
+  const evDebtBasis = isFinCompany ? "金融免算" : (qNow?.ibDebt != null ? "有息负债" : (qNow?.debt != null ? "总负债近似" : "--"));
+  const evRaw = (!isFinCompany && impliedMktCap > 0 && evDebtUsed !== null)
+    ? (impliedMktCap + evDebtUsed - (qNow?.cash || 0))
+    : null;
+  const enterpriseValue = (evRaw !== null && Number.isFinite(evRaw) && evRaw > 0) ? evRaw : null;
+  const evToEbitTtm = (enterpriseValue > 0 && qNow?.ttmEbit > 0) ? clamp(enterpriseValue / qNow.ttmEbit, 0.5, 200) : null;
+  const evToEbit3y = (enterpriseValue > 0 && ebit3yAvg > 0) ? clamp(enterpriseValue / ebit3yAvg, 0.5, 200) : null;
+  const evToEbit5y = (enterpriseValue > 0 && ebit5yAvg > 0) ? clamp(enterpriseValue / ebit5yAvg, 0.5, 200) : null;
+  const ebitYieldTtm = (enterpriseValue > 0 && qNow?.ttmEbit !== null && Number.isFinite(qNow.ttmEbit))
+    ? clamp((qNow.ttmEbit / enterpriseValue) * 100, -50, 80)
+    : null;
+  const ebitYield3y = (enterpriseValue > 0 && ebit3yAvg !== null && Number.isFinite(ebit3yAvg))
+    ? clamp((ebit3yAvg / enterpriseValue) * 100, -50, 80)
+    : null;
+  const ebitYield5y = (enterpriseValue > 0 && ebit5yAvg !== null && Number.isFinite(ebit5yAvg))
+    ? clamp((ebit5yAvg / enterpriseValue) * 100, -50, 80)
+    : null;
+  const ebitNormRef = ebit5yAvg ?? ebit3yAvg;
+  const ebitCyclePos = (!isFinCompany && qNow?.ttmEbit !== null && Number.isFinite(qNow.ttmEbit) && ebitNormRef > 0)
+    ? clamp(qNow.ttmEbit / ebitNormRef, -2, 5)
+    : null;
+  const qGmLatest = (!isFinCompany && qNow?.qGrossMarginPct != null && Number.isFinite(qNow.qGrossMarginPct))
+    ? qNow.qGrossMarginPct
+    : null;
+  const qGmYoyPp = (!isFinCompany && qNow?.qGrossMarginPct != null && qPrev4?.qGrossMarginPct != null)
+    ? clamp(qNow.qGrossMarginPct - qPrev4.qGrossMarginPct, -40, 40)
+    : null;
+  const deltaRoeMarginPp = (roeTtm !== null && roeMean3y !== null)
+    ? clamp(roeTtm - roeMean3y, -40, 40)
+    : null;
+  const capexToRevPct = (!isFinCompany && qNow?.ttmRev > 0 && qNow?.ttmCapex !== null && Number.isFinite(qNow.ttmCapex))
+    ? clamp((Math.abs(qNow.ttmCapex) / qNow.ttmRev) * 100, 0, 100)
+    : null;
+  const interestCoverage = (!isFinCompany && qNow?.ttmEbit !== null && Number.isFinite(qNow.ttmEbit))
+    ? (qNow.ttmIntExp > 0
+      ? clamp(qNow.ttmEbit / qNow.ttmIntExp, -10, 50)
+      : (qNow.ttmIntExp === 0 && qNow.ttmEbit > 0 ? 50 : null))
+    : null;
+  const cashToDebtPct = (!isFinCompany && qNow?.debt > 0 && qNow?.cash !== null && Number.isFinite(qNow.cash))
+    ? clamp((qNow.cash / qNow.debt) * 100, 0, 500)
+    : null;
 
   // Dividend/Shareholder-Return Cash Flow Coverage & CapEx Intensity
   const cashDivOut = (ttmDivActual > 0) ? ttmDivActual : ((qNow?.ttmDiv > 0) ? qNow.ttmDiv : 0);
@@ -1498,6 +1667,59 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
       npYoy1yRaw = null;
     }
   }
+
+  // P2-6c Growth Mode metrics: 3Y NP CAGR, 1Y/3Y Rev Growth, R&D Ratio, TTM Gross Margin, FCF Margin, PEG (3Y), PSG
+  const qPrev12 = quarters.length >= 13 ? quarters[quarters.length - 13] : null;
+  const qPrev8 = quarters.length >= 9 ? quarters[quarters.length - 9] : null;
+  let npCagr3yRaw = null;
+  if (qNow?.ttmNp > 0 && qPrev12?.ttmNp > 0) {
+    npCagr3yRaw = (Math.pow(qNow.ttmNp / qPrev12.ttmNp, 1 / 3) - 1) * 100;
+  } else if (qNow?.ttmNp > 0 && qPrev8?.ttmNp > 0) {
+    npCagr3yRaw = (Math.pow(qNow.ttmNp / qPrev8.ttmNp, 1 / 2) - 1) * 100;
+  } else if (cagrNp !== null && Number.isFinite(cagrNp)) {
+    npCagr3yRaw = cagrNp;
+  }
+  const npCagr3y = (npCagr3yRaw !== null && Number.isFinite(npCagr3yRaw))
+    ? clamp(npCagr3yRaw, -40, 80)
+    : null;
+
+  const revYoy1yRaw = (qNow?.ttmRev !== null && qPrev4?.ttmRev > 0)
+    ? ((qNow.ttmRev / qPrev4.ttmRev) - 1) * 100
+    : null;
+  const revYoy1y = (revYoy1yRaw !== null && Number.isFinite(revYoy1yRaw))
+    ? clamp(revYoy1yRaw, -40, 80)
+    : null;
+  let revCagr3yRaw = null;
+  if (qNow?.ttmRev > 0 && qPrev12?.ttmRev > 0) {
+    revCagr3yRaw = (Math.pow(qNow.ttmRev / qPrev12.ttmRev, 1 / 3) - 1) * 100;
+  } else if (qNow?.ttmRev > 0 && qPrev8?.ttmRev > 0) {
+    revCagr3yRaw = (Math.pow(qNow.ttmRev / qPrev8.ttmRev, 1 / 2) - 1) * 100;
+  }
+  const revCagr3y = (revCagr3yRaw !== null && Number.isFinite(revCagr3yRaw))
+    ? clamp(revCagr3yRaw, -40, 80)
+    : null;
+
+  const rdRatioPct = !isFinCompany
+    ? ((qNow?.ttmRev > 0 && qNow?.ttmRd !== null && Number.isFinite(qNow.ttmRd))
+      ? clamp((qNow.ttmRd / qNow.ttmRev) * 100, 0, 80)
+      : (qNow?.ytdRdRatioPct ?? null))
+    : null;
+  const ttmGmPct = (!isFinCompany && qNow?.ttmGrossMarginPct != null && Number.isFinite(qNow.ttmGrossMarginPct))
+    ? qNow.ttmGrossMarginPct
+    : null;
+  const fcfMarginTtm = (!isFinCompany && qNow?.ttmRev > 0 && qNow?.ttmFcf !== null && Number.isFinite(qNow.ttmFcf))
+    ? clamp((qNow.ttmFcf / qNow.ttmRev) * 100, -80, 80)
+    : null;
+  const fcfMargin3y = (!isFinCompany && sumRev3y > 0 && fcfRevPairs3y >= 1)
+    ? clamp((sumFcf3y / sumRev3y) * 100, -80, 80)
+    : fcfMarginTtm;
+  const peg3y = (peTtm > 0 && npCagr3y > 0)
+    ? clamp(peTtm / npCagr3y, 0.05, 10)
+    : (peg !== null && Number.isFinite(peg) && peg > 0 ? clamp(peg, 0.05, 10) : null);
+  const revGrowthForPsg = revCagr3y > 0 ? revCagr3y : (revYoy1y > 0 ? revYoy1y : null);
+  const psg = (psTtm > 0 && revGrowthForPsg > 0)
+    ? clamp(psTtm / revGrowthForPsg, 0.01, 5)
+    : null;
 
   // 3Y Realized Volatility & Max Drawdown from trailing 750 total-return bars
   const riskBarsRaw = (kAdj?.items?.length >= 45 ? kAdj.items : kUnadj?.items) || [];
@@ -1658,7 +1880,35 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
     equityMultiplier,
     roeTtm,
     accrualRatio,
+    arToRevPct,
     netCashToMktCap,
+    enterpriseValue,
+    evDebtBasis,
+    evToEbitTtm,
+    evToEbit3y,
+    evToEbit5y,
+    ebitYieldTtm,
+    ebitYield3y,
+    ebitYield5y,
+    ebitCyclePos,
+    qGmLatest,
+    qGmYoyPp,
+    deltaRoeMarginPp,
+    capexToRevPct,
+    interestCoverage,
+    cashToDebtPct,
+    npCagr3y,
+    npCagr3yRaw,
+    revYoy1y,
+    revYoy1yRaw,
+    revCagr3y,
+    revCagr3yRaw,
+    rdRatioPct,
+    ttmGmPct,
+    fcfMarginTtm,
+    fcfMargin3y,
+    peg3y,
+    psg,
     bands
   };
 }
@@ -1729,6 +1979,55 @@ export function computePeerMetrics(snap, opts = {}) {
     && (snap.vol3y != null && snap.vol3y <= 24)
     && (snap.maxDd3y != null && snap.maxDd3y >= -25);
   const divRiskFlag = isDivVeto ? "high_risk" : (isDivShield ? "low_vol" : "normal");
+
+  const qRoicRef = snap.roic5yMean ?? snap.roic3yMean ?? snap.roeMean5y ?? snap.roeTtm;
+  const qCashConvRef = snap.cashConv5y ?? snap.cashConv3y;
+  const qRoeVolRef = snap.roeVol5y ?? snap.roeVol3y;
+  const isQualityVeto = (!snap.isFinancial && qCashConvRef != null && qCashConvRef < 0.70)
+    || (!snap.isFinancial && snap.accrualRatio != null && snap.accrualRatio > 8.0)
+    || (!snap.isFinancial && snap.debtRatioPct != null && snap.debtRatioPct > 65)
+    || (qRoeVolRef != null && qRoeVolRef > 8.0)
+    || (snap.roeMin5y != null && snap.roeMin5y < 5.0);
+  const isQualityShield = !isQualityVeto
+    && (qRoicRef != null && qRoicRef >= 12.0)
+    && (snap.isFinancial || (qCashConvRef != null && qCashConvRef >= 0.90))
+    && (qRoeVolRef != null && qRoeVolRef <= 4.5)
+    && (snap.isFinancial || snap.accrualRatio == null || snap.accrualRatio <= 4.0);
+  const qualityRiskFlag = isQualityVeto ? "high_risk" : (isQualityShield ? "low_vol" : "normal");
+
+  const pbCheapness5y = snap.bands?.pb?.pct != null ? clamp(100 - snap.bands.pb.pct, 0, 100) : null;
+  const cycEbitYieldRef = snap.ebitYield5y ?? snap.ebitYield3y ?? snap.ebitYieldTtm;
+  const isCycleVeto = (!snap.isFinancial && snap.debtRatioPct != null && snap.debtRatioPct > 70 && (snap.cashToDebtPct == null || snap.cashToDebtPct < 20))
+    || (!snap.isFinancial && snap.interestCoverage != null && snap.interestCoverage < 2.0)
+    || (snap.qGmYoyPp != null && snap.qGmYoyPp < -4.0 && (snap.capexToOcfPct == null || snap.capexToOcfPct > 100))
+    || (snap.ebitCyclePos != null && snap.ebitCyclePos > 1.8 && snap.bands?.pb?.pct != null && snap.bands.pb.pct > 70)
+    || (snap.maxDd3y != null && snap.maxDd3y < -55);
+  const isCycleShield = !isCycleVeto
+    && ((pbCheapness5y != null && pbCheapness5y >= 55) || (cycEbitYieldRef != null && cycEbitYieldRef >= 8.0))
+    && ((snap.qGmYoyPp != null && snap.qGmYoyPp > 0) || (snap.deltaRoeMarginPp != null && snap.deltaRoeMarginPp > 0))
+    && (snap.isFinancial || snap.debtRatioPct == null || snap.debtRatioPct <= 60);
+  const cycleRiskFlag = isCycleVeto ? "high_risk" : (isCycleShield ? "low_vol" : "normal");
+
+  const npAccelPp = (snap.npYoy1y != null && scen?.g1 != null)
+    ? clamp(snap.npYoy1y - scen.g1, -50, 50)
+    : ((snap.npYoy1y != null && snap.npCagr3y != null) ? clamp(snap.npYoy1y - snap.npCagr3y, -50, 50) : null);
+  const revAccelPp = (snap.revYoy1y != null && snap.revCagr3y != null)
+    ? clamp(snap.revYoy1y - snap.revCagr3y, -50, 50)
+    : null;
+  const gPegRef = snap.peg3y ?? ((snap.peTtm > 0 && scen?.g1 > 0) ? clamp(snap.peTtm / scen.g1, 0.05, 10) : snap.peg);
+  const gCashConvRef = snap.cashConv3y ?? snap.cashConv5y;
+  const gRoicRef = snap.roic3yMean ?? snap.roic5yMean ?? snap.roeMean3y ?? snap.roeTtm;
+  const isGrowthVeto = (gPegRef != null && gPegRef > 2.2)
+    || (npAccelPp != null && npAccelPp < -12.0 && (snap.npYoy1y == null || snap.npYoy1y < 10))
+    || (!snap.isFinancial && gCashConvRef != null && gCashConvRef < 0.60 && (snap.buybackYieldPct ?? 0) <= -2.0)
+    || (!snap.isFinancial && snap.fcfMargin3y != null && snap.fcfMargin3y < -5.0 && (snap.buybackYieldPct ?? 0) <= -2.0)
+    || (snap.npYoy1y != null && snap.npYoy1y < -15.0 && (snap.revYoy1y == null || snap.revYoy1y < 0));
+  const isGrowthShield = !isGrowthVeto
+    && (npAccelPp != null && npAccelPp > 0)
+    && ((gPegRef != null && gPegRef <= 1.2) || (snap.psg != null && snap.psg <= 0.22 && snap.revYoy1y != null && snap.revYoy1y >= 15))
+    && (gRoicRef != null && gRoicRef >= 10.0)
+    && (snap.isFinancial || gCashConvRef == null || gCashConvRef >= 0.80);
+  const growthRiskFlag = isGrowthVeto ? "high_risk" : (isGrowthShield ? "low_vol" : "normal");
 
   const fmtDpsTrim = (v) => {
     const n = Number(v);
@@ -1825,6 +2124,39 @@ export function computePeerMetrics(snap, opts = {}) {
     debtRatioPct: snap.debtRatioPct ?? null,
     ibDebtRatioPct: snap.ibDebtRatioPct ?? null,
     netCashToMktCap: snap.netCashToMktCap ?? null,
+    accrualRatio: snap.accrualRatio ?? null,
+    arToRevPct: snap.arToRevPct ?? null,
+    qualityRiskFlag,
+    enterpriseValue: snap.enterpriseValue ?? null,
+    evDebtBasis: snap.evDebtBasis || "--",
+    evToEbitTtm: snap.evToEbitTtm ?? null,
+    evToEbit3y: snap.evToEbit3y ?? null,
+    evToEbit5y: snap.evToEbit5y ?? null,
+    ebitYieldTtm: snap.ebitYieldTtm ?? null,
+    ebitYield3y: snap.ebitYield3y ?? null,
+    ebitYield5y: snap.ebitYield5y ?? null,
+    ebitCyclePos: snap.ebitCyclePos ?? null,
+    qGmLatest: snap.qGmLatest ?? null,
+    qGmYoyPp: snap.qGmYoyPp ?? null,
+    deltaRoeMarginPp: snap.deltaRoeMarginPp ?? null,
+    capexToRevPct: snap.capexToRevPct ?? null,
+    interestCoverage: snap.interestCoverage ?? null,
+    cashToDebtPct: snap.cashToDebtPct ?? null,
+    pbCheapness5y,
+    cycleRiskFlag,
+    npCagr3y: snap.npCagr3y ?? null,
+    revYoy1y: snap.revYoy1y ?? null,
+    revYoy1yRaw: snap.revYoy1yRaw ?? null,
+    revCagr3y: snap.revCagr3y ?? null,
+    npAccelPp,
+    revAccelPp,
+    rdRatioPct: snap.rdRatioPct ?? null,
+    ttmGmPct: snap.ttmGmPct ?? null,
+    fcfMarginTtm: snap.fcfMarginTtm ?? null,
+    fcfMargin3y: snap.fcfMargin3y ?? null,
+    peg3y: snap.peg3y ?? null,
+    psg: snap.psg ?? null,
+    growthRiskFlag,
     riskFlag: snap.riskFlag || "normal",
     dcfBase,
     dcfBaseLabel: dcfBaseLabelMap[dcfBase] || "DCF",
