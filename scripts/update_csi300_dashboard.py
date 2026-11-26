@@ -437,6 +437,7 @@ def compute_panel_and_payloads(base_df: pd.DataFrame) -> tuple[dict, dict, pd.Da
     core_payload = {
         "dates": df["date"].dt.strftime("%Y-%m-%d").tolist(),
         "h300": _round_list(df["h00300"], 2),
+        "ew": _round_list(df["ew_secbond"], 2),
         "ey": _round_list(df["ey"], 2),
         "dy": _round_list(df["dy_ttm"], 2),
         "cn10y": _round_list(df["cn10y"], 2),
@@ -455,6 +456,7 @@ def compute_panel_and_payloads(base_df: pd.DataFrame) -> tuple[dict, dict, pd.Da
     }
 
     bench93_payload = {
+        "b93": _round_list(df["idx_930897_scaled"], 2),
         "log_93": _round_list(df["log_r_93"], 4),
         "log_93_p20": _round_list(df["log_r_93_p20"], 4),
         "log_93_p50": _round_list(df["log_r_93_p50"], 4),

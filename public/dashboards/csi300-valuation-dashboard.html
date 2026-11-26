@@ -780,9 +780,9 @@
       <div class="slider-box">
         <div class="slider-head">
           <span class="slider-name">盈利收益率 EY 绝对下限 (≥)</span>
-          <span id="val-ey-thresh" class="slider-val">≥ 8.0% (PE ≤ 12.5x)</span>
+          <span id="val-ey-thresh" class="slider-val">≥ 9.0% (PE ≤ 11.1x)</span>
         </div>
-        <input id="rng-ey" type="range" min="6.5" max="10.0" step="0.1" value="8.0" />
+        <input id="rng-ey" type="range" min="6.5" max="10.0" step="0.1" value="9.0" />
         <div class="slider-hint">即 100 / PE_TTM；12.5x 对应 8.0%，10x 对应 10.0%（2011中起有数据）</div>
       </div>
 
@@ -799,7 +799,7 @@
     <div class="presets-row">
       <div class="preset-pills">
         <span class="ctrl-label">预设策略:</span>
-        <button class="preset-btn active" data-preset="classic">经典稳健 (5Y≤20% | EY≥8.0% | DY≥2.5% | ≥2/3)</button>
+        <button class="preset-btn active" data-preset="classic">经典稳健 (5Y≤20% | EY≥9.0% | DY≥2.5% | ≥2/3)</button>
         <button class="preset-btn" data-preset="extreme">极度左侧 (5Y≤10% | EY≥8.5% | DY≥2.8% | AND)</button>
         <button class="preset-btn" data-preset="lowrate">低利率适配 (3Y≤25% | EY≥7.5% | DY≥2.5% | ≥2/3)</button>
         <button class="preset-btn" data-preset="absonly">纯绝对估值 (EY≥8.0% + DY≥2.5%)</button>
@@ -812,7 +812,7 @@
   <section class="module-card">
     <div class="mod-header">
       <h2 class="mod-title">一、沪深300全收益走势与动态复合信号回测</h2>
-      <span class="mod-desc">绿色阴影为满足当前组合规则的左侧配置区间；绿色三角 ▲ 为按 120 个交易日冷却期去重后的触发买点</span>
+      <span class="mod-desc">债基基准与 H00300 同以 2004-12-31 = 1000 对齐（曲线交点对应图三 ln=0）；绿色阴影为左侧配置区间，绿色三角 ▲ 为 120 日冷却去重买点</span>
     </div>
     <div id="chart-hero" class="chart-box-hero">
       <div class="chart-loading">数据加载中…</div>
@@ -938,13 +938,13 @@ const STATE = {
   logic: "2of3",   // "and" | "2of3" | "or" | "pct_only" | "abs_only"
   scale: "log",    // "log" | "linear"
   pctThresh: 20,
-  eyThresh: 8.0,
+  eyThresh: 9.0,
   dyThresh: 2.5,
   preset: "classic"
 };
 
 const PRESETS = {
-  classic: { win: "5y",  logic: "2of3",     pctThresh: 20, eyThresh: 8.0, dyThresh: 2.5 },
+  classic: { win: "5y",  logic: "2of3",     pctThresh: 20, eyThresh: 9.0, dyThresh: 2.5 },
   extreme: { win: "5y",  logic: "and",      pctThresh: 10, eyThresh: 8.5, dyThresh: 2.8 },
   lowrate: { win: "3y",  logic: "2of3",     pctThresh: 25, eyThresh: 7.5, dyThresh: 2.5 },
   absonly: { win: "5y",  logic: "abs_only", pctThresh: 20, eyThresh: 8.0, dyThresh: 2.5 }
@@ -1030,6 +1030,15 @@ function getActivePctArray() {
 
 function getBenchLabel() {
   return STATE.bench === "ew" ? "自建二级债基" : "中证非纯债基(930897)";
+}
+
+function getActiveBenchSeries() {
+  if (STATE.bench === "ew") {
+    if (Array.isArray(D.ew)) return D.ew;
+    return D.h300.map((h, i) => (h !== null && D.log_ew[i] !== null) ? +(h / Math.exp(D.log_ew[i])).toFixed(2) : null);
+  }
+  if (Array.isArray(D.b93)) return D.b93;
+  return D.h300.map((h, i) => (h !== null && D.log_93?.[i] !== null && D.log_93?.[i] !== undefined) ? +(h / Math.exp(D.log_93[i])).toFixed(2) : null);
 }
 
 function getWinLabel() {
@@ -1492,8 +1501,11 @@ function mountChart(key, containerId, legendItems, buildOpts, data, rowsBuilder,
 function renderCharts(evalRes) {
   const pctArr = getActivePctArray();
   const b = STATE.bench;
+  const benchSeries = getActiveBenchSeries();
+  const benchLegendLabel = b === "ew" ? "自建二级债基 (885007复刻)" : "中证非纯债基 (930897等比对齐)";
+  const benchShortLabel = b === "ew" ? "二级债基" : "930897(对齐)";
 
-  // 1. Hero Chart: H00300 + Signal spans + Trigger triangles
+  // 1. Hero Chart: H00300 + Active Bond Benchmark + Signal spans + Trigger triangles
   const epSet = new Set(evalRes.episodes);
   const spans = buildSignalSpans(evalRes.mask);
   const epCount = evalRes.episodes.length;
@@ -1503,6 +1515,7 @@ function renderCharts(evalRes) {
     "chart-hero",
     [
       { label: "沪深300全收益 (H00300)", color: "#111827", thick: true },
+      { label: benchLegendLabel, color: "#B45309", thick: false },
       { label: `复合触发买点 (n=${epCount})`, kind: "triangle" }
     ],
     (width, height, onCursor) => ({
@@ -1543,6 +1556,12 @@ function renderCharts(evalRes) {
           label: "H00300",
           stroke: "#111827",
           width: 1.8,
+          points: { show: false }
+        },
+        {
+          label: benchLegendLabel,
+          stroke: "#B45309",
+          width: 1.6,
           points: { show: false }
         }
       ],
@@ -1595,11 +1614,18 @@ function renderCharts(evalRes) {
         ]
       }
     }),
-    [D.ts, D.h300],
+    [D.ts, D.h300, benchSeries],
     (idx) => {
+      const hVal = D.h300[idx];
+      const bVal = benchSeries[idx];
       const rows = [
-        { name: "H00300", color: "#111827", val: D.h300[idx].toFixed(1) }
+        { name: "H00300", color: "#111827", val: hVal.toFixed(1) }
       ];
+      if (bVal !== null && bVal !== undefined) {
+        rows.push({ name: benchShortLabel, color: "#B45309", val: bVal.toFixed(1) });
+        const ratio = hVal / bVal;
+        rows.push({ name: "比值 H00300/债基", color: "#6B7280", val: `${ratio.toFixed(3)}x` });
+      }
       let extraHtml = "";
       if (epSet.has(idx)) {
         const p = pctArr[idx] !== null ? pctArr[idx].toFixed(1) + "%" : "--";
