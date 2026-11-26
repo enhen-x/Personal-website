@@ -633,16 +633,7 @@
         </div>
       </div>
 
-      <div class="preset-pills">
-        <span class="ctrl-label">快捷切换:</span>
-        <button type="button" class="preset-btn stk-chip" data-code="600519.SH">600519.SH 贵州茅台</button>
-        <button type="button" class="preset-btn stk-chip" data-code="000858.SZ">000858.SZ 五粮液</button>
-        <button type="button" class="preset-btn stk-chip" data-code="300750.SZ">300750.SZ 宁德时代</button>
-        <button type="button" class="preset-btn stk-chip" data-code="600036.SH">600036.SH 招商银行</button>
-        <button type="button" class="preset-btn stk-chip" data-code="601318.SH">601318.SH 中国平安</button>
-        <button type="button" class="preset-btn stk-chip" data-code="002594.SZ">002594.SZ 比亚迪</button>
-      </div>
-      <div class="preset-pills" id="stk-watchlist-bar" style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);"></div>
+      <div class="preset-pills" id="stk-watchlist-bar" style="padding-top:8px;border-top:1px dashed var(--border);"></div>
     </div>
 
     <!-- Stock 5 KPI Cards -->
@@ -811,7 +802,7 @@
 
         <div class="kpi-card">
           <div class="kpi-head">
-            <span class="kpi-title">股东总回报 (股息+净回购)</span>
+            <span class="kpi-title" title="综合股东回报率（现金股息 + 净回购；除息后股本扩张按利润与分红比例不变摊薄）">股东回报</span>
             <span id="val-kpi-div-pill" class="status-pill pill-mid">--</span>
           </div>
           <div id="val-kpi-div" class="kpi-num">--</div>
@@ -1077,15 +1068,6 @@
         <span id="cmp-status" class="mono" style="font-size:11.5px;color:var(--ink-muted);">准备就绪</span>
       </div>
 
-      <div class="preset-pills" style="margin-bottom:10px;">
-        <span class="ctrl-label">同业对比预设:</span>
-        <button type="button" class="preset-btn cmp-preset" data-group="fin">金融高息 (银行/保险)</button>
-        <button type="button" class="preset-btn cmp-preset" data-group="liquor">白酒核心</button>
-        <button type="button" class="preset-btn cmp-preset" data-group="dividend">红利公用/能源</button>
-        <button type="button" class="preset-btn cmp-preset" data-group="mfg">高端制造/新能源</button>
-        <button type="button" class="preset-btn cmp-preset" data-group="watchlist">导入我的自选池</button>
-      </div>
-
       <div class="val-subhead" style="margin-bottom:6px;padding-top:8px;border-top:1px dashed var(--border);">
         <div class="inline-group">
           <span class="ctrl-label">折现率 r 口径:</span>
@@ -1146,8 +1128,7 @@
           <div class="seg cmp-research-seg" id="seg-cmp-research-mode">
             <button type="button" data-val="dividend" class="active">红利模式</button>
             <button type="button" data-val="quality">白马质量</button>
-            <button type="button" data-val="cycle">周期右侧</button>
-            <button type="button" data-val="growth">成长模式</button>
+            <button type="button" data-val="cycle">周期模式</button>
           </div>
         </div>
         <span id="cmp-mode-brief" class="cmp-mode-brief">吃现金回报 + 防缩水断供 + 赚提息弹性（风控外环自动切换红利排雷口径）</span>
@@ -1165,6 +1146,18 @@
           <span><b>PB/总回报 · PEGY</b>当前 PB 或均利 PE ÷ 复利总回报，数值越低代表同等复利速度下估值越便宜</span>
         </div>
       </div>
+      <div id="cmp-cycle-glossary" class="cmp-glossary-bar hidden">
+        <div class="cmp-glossary-row">
+          <strong>长周期质地与反炒作估值：</strong>
+          <span><b>5Y财务健康分(0~100)</b>5Y均负债率30分 + 5Y现金垫20分 + 5Y累计OCF/CapEx 30分 + 5Y正现金流/正盈利季占比20分，当季亏损也能辨真龙头</span>
+          <span><b>跨周期回报(5Y均ROE÷PB)</b>用完整周期真实盈利锚定当前绝对PB，不受A股历史炒作高点PB分位误导</span>
+        </div>
+        <div class="cmp-glossary-row">
+          <strong>造血与反转弹性：</strong>
+          <span><b>5Y累计OCF/CapEx</b>≥1.0x 代表整轮周期靠自身造血覆盖扩产、不靠借债续命</span>
+          <span><b>5Y峰值盈利收益 / 毛利+1pp弹性</b>5Y峰值净利÷市值 与 TTM营收÷市值×1%，配绝对PB/破净1x底线筛选高赔率反转标的</span>
+        </div>
+      </div>
       <div class="mod-header cmp-scatter-head">
         <div>
           <h2 class="mod-title">一、同业性价比二维散点图</h2>
@@ -1179,9 +1172,9 @@
 
       <div class="scatter-legend-bar">
         <div class="chart-legend-items">
-          <span class="legend-item"><span class="legend-swatch" style="background:#0F766E;"></span><span>低估空间 ≥ +15%</span></span>
-          <span class="legend-item"><span class="legend-swatch" style="background:#374151;"></span><span>估值合理 (-10% ~ +15%)</span></span>
-          <span class="legend-item"><span class="legend-swatch" style="background:#B91C1C;"></span><span>偏贵 ≤ -10%</span></span>
+          <span class="legend-item"><span class="legend-swatch" style="background:#0F766E;"></span><span id="cmp-legend-fill-good">低估空间 ≥ +15%</span></span>
+          <span class="legend-item"><span class="legend-swatch" style="background:#374151;"></span><span id="cmp-legend-fill-mid">估值合理 (-10% ~ +15%)</span></span>
+          <span class="legend-item"><span class="legend-swatch" style="background:#B91C1C;"></span><span id="cmp-legend-fill-bad">偏贵 ≤ -10%</span></span>
           <span class="legend-item"><span class="legend-ring-swatch low-vol"></span><span id="cmp-legend-ring-good">稳健真红利</span></span>
           <span class="legend-item"><span class="legend-ring-swatch high-risk"></span><span id="cmp-legend-ring-bad">红利排雷(覆盖&lt;1x/不稳/大回撤)</span></span>
           <span class="legend-item" style="color:var(--ink-faint);">· 面积 ~ 总市值</span>
@@ -1238,50 +1231,71 @@
               <button type="button" data-val="ar_ratio">应收/营收比</button>
             </div>
           </div>
-          <div id="wrap-cmp-cyc-odds" class="cmp-sub-seg-wrap hidden">
-            <span class="ctrl-label">赔率轴:</span>
-            <div class="seg" id="seg-cmp-cyc-odds">
-              <button type="button" data-val="pb_cheap" class="active">5Y PB便宜度</button>
-              <button type="button" data-val="ebit_yield">5Y均 EBIT/EV</button>
+          <div id="wrap-cmp-cyc-qual-x" class="cmp-sub-seg-wrap hidden">
+            <span class="ctrl-label">质地轴:</span>
+            <div class="seg" id="seg-cmp-cyc-qual-x">
+              <button type="button" data-val="roe_5y" class="active">5Y均ROE</button>
+              <button type="button" data-val="health">5Y财务健康分</button>
+              <button type="button" data-val="roic_5y">5Y均ROIC</button>
+              <button type="button" data-val="gm_5y">5Y均毛利</button>
             </div>
           </div>
-          <div id="wrap-cmp-cyc-inflect" class="cmp-sub-seg-wrap hidden">
-            <span class="ctrl-label">景气轴:</span>
-            <div class="seg" id="seg-cmp-cyc-inflect">
-              <button type="button" data-val="gm_yoy" class="active">单季Δ毛利率</button>
-              <button type="button" data-val="roe_delta">ΔROE边际差</button>
+          <div id="wrap-cmp-cyc-qual-y" class="cmp-sub-seg-wrap hidden">
+            <span class="ctrl-label">估值轴:</span>
+            <div class="seg" id="seg-cmp-cyc-qual-y">
+              <button type="button" data-val="pb" class="active">当前 PB</button>
+              <button type="button" data-val="ev_ebit_norm">5Y正常化EV/EBIT</button>
+            </div>
+          </div>
+          <div id="wrap-cmp-cyc-moat" class="cmp-sub-seg-wrap hidden">
+            <span class="ctrl-label">长期健康轴:</span>
+            <div class="seg" id="seg-cmp-cyc-moat">
+              <button type="button" data-val="health" class="active">5Y财务健康分</button>
+              <button type="button" data-val="debt_5y">5Y均负债率</button>
+              <button type="button" data-val="gm_5y">5Y均毛利</button>
             </div>
           </div>
           <div id="wrap-cmp-cyc-safety" class="cmp-sub-seg-wrap hidden">
-            <span class="ctrl-label">安全轴:</span>
+            <span class="ctrl-label">长期造血轴:</span>
             <div class="seg" id="seg-cmp-cyc-safety">
-              <button type="button" data-val="int_cov" class="active">利息保障倍数</button>
-              <button type="button" data-val="cash_debt">货币资金/总负债</button>
+              <button type="button" data-val="ocf_capex_5y" class="active">5Y OCF/CapEx</button>
+              <button type="button" data-val="fcf_assets_5y">5Y FCF/总资产</button>
+              <button type="button" data-val="cash_debt_5y">5Y均现金/债</button>
             </div>
           </div>
-          <div id="wrap-cmp-gr-val" class="cmp-sub-seg-wrap hidden">
-            <span class="ctrl-label">估值口径:</span>
-            <div class="seg" id="seg-cmp-gr-val">
-              <button type="button" data-val="peg" class="active">PEG (净利/PE)</button>
-              <button type="button" data-val="psg">PSG (营收/PS)</button>
+          <div id="wrap-cmp-cyc-elast" class="cmp-sub-seg-wrap hidden">
+            <span class="ctrl-label">弹性轴:</span>
+            <div class="seg" id="seg-cmp-cyc-elast">
+              <button type="button" data-val="peak_yield" class="active">5Y峰值盈利收益</button>
+              <button type="button" data-val="gm_elast">毛利+1pp弹性</button>
+              <button type="button" data-val="rev_ev_5y">5Y均营收/EV</button>
             </div>
           </div>
-          <div id="wrap-cmp-gr-eff" class="cmp-sub-seg-wrap hidden">
-            <span class="ctrl-label">效率轴:</span>
-            <div class="seg" id="seg-cmp-gr-eff">
-              <button type="button" data-val="roic" class="active">ROIC</button>
-              <button type="button" data-val="gm">毛利率</button>
-              <button type="button" data-val="rd">研发率</button>
+          <div id="wrap-cmp-cyc-elast-y" class="cmp-sub-seg-wrap hidden">
+            <span class="ctrl-label">估值轴:</span>
+            <div class="seg" id="seg-cmp-cyc-elast-y">
+              <button type="button" data-val="pb" class="active">当前 PB</button>
+              <button type="button" data-val="ev_ebit_norm">5Y正常化EV/EBIT</button>
+              <button type="button" data-val="pb_med_ratio">PB÷5Y中位</button>
             </div>
           </div>
-          <div id="wrap-cmp-gr-cash" class="cmp-sub-seg-wrap hidden">
-            <span class="ctrl-label">造血轴:</span>
-            <div class="seg" id="seg-cmp-gr-cash">
-              <button type="button" data-val="cash_conv" class="active">3Y净现比</button>
-              <button type="button" data-val="fcf_margin">3Y FCF利润率</button>
+          <div id="wrap-cmp-cyc-odds" class="cmp-sub-seg-wrap hidden">
+            <span class="ctrl-label">估值赔率轴:</span>
+            <div class="seg" id="seg-cmp-cyc-odds">
+              <button type="button" data-val="roe_pb_5y" class="active">5Y均ROE/PB</button>
+              <button type="button" data-val="ebit_norm_yield">5Y中枢EBIT/EV</button>
+              <button type="button" data-val="pb_med_ratio">相对5Y PB中位折价</button>
             </div>
           </div>
-          <button id="btn-cmp-arrows" class="preset-btn active" type="button" aria-pressed="true" title="在「增速 vs 再投资」「成长性价比 PEG/PSG」或「股东回报 vs 增速」视图下显示长期→近1Y边际增速拖尾箭头">增速拖尾箭头: 开</button>
+          <div id="wrap-cmp-cyc-inflect" class="cmp-sub-seg-wrap hidden">
+            <span class="ctrl-label">周期水位轴:</span>
+            <div class="seg" id="seg-cmp-cyc-inflect">
+              <button type="button" data-val="cycle_pct" class="active">盈利周期分位</button>
+              <button type="button" data-val="gm_yoy">单季Δ毛利同比</button>
+              <button type="button" data-val="gm_qoq">单季Δ毛利环比</button>
+            </div>
+          </div>
+          <button id="btn-cmp-arrows" class="preset-btn active" type="button" aria-pressed="true" title="在「增速 vs 再投资」或「股东回报 vs 增速」视图下显示长期→近1Y边际增速拖尾箭头">增速拖尾箭头: 开</button>
           <button id="btn-cmp-risk-rings" class="preset-btn active" type="button" aria-pressed="true" title="按当前研究模式叠加气泡风控外环">风控外环: 开</button>
           <span class="chart-hint">悬停明细 · 点击跳转个股看板</span>
         </div>
@@ -1307,7 +1321,7 @@
         <table class="cmp-table">
           <thead id="cmp-thead"></thead>
           <tbody id="cmp-tbody">
-            <tr><td colspan="27" class="center flat" style="padding:28px;">切换至此标签页后自动拉取并测算对比标的…</td></tr>
+            <tr><td colspan="29" class="center flat" style="padding:28px;">切换至此标签页后自动拉取并测算对比标的…</td></tr>
           </tbody>
         </table>
       </div>

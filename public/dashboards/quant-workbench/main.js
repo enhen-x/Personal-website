@@ -26,7 +26,6 @@ import {
   toggleCurrentStockWatchlist,
   addCompareStock,
   removeCompareStock,
-  applyComparePreset,
   renderCompareBasketTags,
   syncCompareControls,
   loadComparePeers,
@@ -327,7 +326,6 @@ async function loadStockDashboard(code) {
   STATE.stock.shareData = null;
   STATE.stock.valFwdKlineData = null;
   STATE.stock.valFwdLoadedCode = "";
-  document.querySelectorAll(".stk-chip").forEach(b => b.classList.toggle("active", b.dataset.code === clean));
 
   document.getElementById("chart-stk-price").innerHTML = `<div class="chart-empty">正在载入 ${esc(clean)} 行情…</div>`;
   document.getElementById("chart-stk-vol").innerHTML = `<div class="chart-empty">载入中…</div>`;
@@ -576,14 +574,6 @@ function bindEvents() {
     setTimeout(() => { btn.textContent = "+ 同业对比"; }, 1400);
   });
 
-  document.querySelectorAll(".stk-chip").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const c = btn.dataset.code;
-      setTab("stock", { stockCode: c });
-      loadStockDashboard(c);
-    });
-  });
-
   document.querySelectorAll("#seg-k-adjust button").forEach(btn => {
     btn.addEventListener("click", () => {
       document.querySelectorAll("#seg-k-adjust button").forEach(b => b.classList.toggle("active", b === btn));
@@ -806,9 +796,6 @@ function bindEvents() {
       loadIndustryPeers(STATE.compare.peerAnchorCode, { open: STATE.compare.peerOpen, forceFresh: true });
     }
   });
-  document.querySelectorAll(".cmp-preset").forEach(btn => {
-    btn.addEventListener("click", () => applyComparePreset(btn.dataset.group));
-  });
   document.querySelectorAll("#seg-cmp-peer-level button").forEach(btn => {
     btn.addEventListener("click", () => {
       STATE.compare.peerLevel = btn.dataset.val || "l2";
@@ -942,47 +929,57 @@ function bindEvents() {
       renderCompareResults();
     });
   });
+  document.querySelectorAll("#seg-cmp-cyc-qual-x button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      STATE.compare.cycleQualXAxis = btn.dataset.val || "roe_5y";
+      renderCompareResults();
+    });
+  });
+  document.querySelectorAll("#seg-cmp-cyc-qual-y button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      STATE.compare.cycleQualYAxis = btn.dataset.val || "pb";
+      renderCompareResults();
+    });
+  });
   document.querySelectorAll("#seg-cmp-cyc-odds button").forEach(btn => {
     btn.addEventListener("click", () => {
-      STATE.compare.cycleOddsAxis = btn.dataset.val || "pb_cheap";
+      STATE.compare.cycleOddsAxis = btn.dataset.val || "roe_pb_5y";
       renderCompareResults();
     });
   });
   document.querySelectorAll("#seg-cmp-cyc-inflect button").forEach(btn => {
     btn.addEventListener("click", () => {
-      const nextInflect = btn.dataset.val || "gm_yoy";
+      const nextInflect = btn.dataset.val || "cycle_pct";
       STATE.compare.cycleInflectAxis = nextInflect;
-      if (STATE.compare.sortBy === "qGmYoyPp" || STATE.compare.sortBy === "deltaRoeMarginPp") {
-        STATE.compare.sortBy = nextInflect === "roe_delta" ? "deltaRoeMarginPp" : "qGmYoyPp";
+      if (["ebitCyclePct5y", "qGmYoyPp", "qGmQoqPp", "deltaRoeMarginPp"].includes(STATE.compare.sortBy)) {
+        STATE.compare.sortBy = nextInflect === "gm_yoy"
+          ? "qGmYoyPp"
+          : (nextInflect === "gm_qoq" ? "qGmQoqPp" : "ebitCyclePct5y");
       }
+      renderCompareResults();
+    });
+  });
+  document.querySelectorAll("#seg-cmp-cyc-moat button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      STATE.compare.cycleMoatAxis = btn.dataset.val || "health";
       renderCompareResults();
     });
   });
   document.querySelectorAll("#seg-cmp-cyc-safety button").forEach(btn => {
     btn.addEventListener("click", () => {
-      STATE.compare.cycleSafetyAxis = btn.dataset.val || "int_cov";
+      STATE.compare.cycleSafetyAxis = btn.dataset.val || "ocf_capex_5y";
       renderCompareResults();
     });
   });
-  document.querySelectorAll("#seg-cmp-gr-val button").forEach(btn => {
+  document.querySelectorAll("#seg-cmp-cyc-elast button").forEach(btn => {
     btn.addEventListener("click", () => {
-      const nextVal = btn.dataset.val || "peg";
-      STATE.compare.growthValAxis = nextVal;
-      if (STATE.compare.sortBy === "peg3y" || STATE.compare.sortBy === "psg") {
-        STATE.compare.sortBy = nextVal === "psg" ? "psg" : "peg3y";
-      }
+      STATE.compare.cycleElastAxis = btn.dataset.val || "peak_yield";
       renderCompareResults();
     });
   });
-  document.querySelectorAll("#seg-cmp-gr-eff button").forEach(btn => {
+  document.querySelectorAll("#seg-cmp-cyc-elast-y button").forEach(btn => {
     btn.addEventListener("click", () => {
-      STATE.compare.growthEffAxis = btn.dataset.val || "roic";
-      renderCompareResults();
-    });
-  });
-  document.querySelectorAll("#seg-cmp-gr-cash button").forEach(btn => {
-    btn.addEventListener("click", () => {
-      STATE.compare.growthCashAxis = btn.dataset.val || "cash_conv";
+      STATE.compare.cycleElastYAxis = btn.dataset.val || "pb";
       renderCompareResults();
     });
   });
@@ -1016,9 +1013,9 @@ function bindEvents() {
       "div_elasticity_fwd", "fcf_div_coverage", "capex_to_ocf_pct", "div_risk_flag",
       "fcf_yield_pct", "fcf_3y_yield_pct", "fcf_5y_yield_pct", "cash_conv_5y", "roic_5y_mean", "roe_vol_5y", "accrual_ratio_pct", "ar_to_rev_pct", "equity_basis", "roic_debt_basis", "est_ib_debt_ratio_pct", "quality_risk_flag",
       "np_cagr_5y", "rev_cagr_5y", "roiic_3y_pct", "roiic_5y_pct", "reinvest_rate_pct", "bogle_ret_3y_pct", "bogle_ret_5y_pct", "pb_to_bogle_3y", "pb_to_bogle_5y", "pegy_3y", "pegy_5y", "quality_archetype",
-      "ev_to_ebit_ttm", "ev_to_ebit_3y", "ev_to_ebit_5y", "ebit_yield_5y", "ebit_cycle_pos", "ev_debt_basis",
-      "q_gm_yoy_pp", "delta_roe_margin_pp", "capex_to_rev_pct", "interest_coverage", "cash_to_debt_pct", "cycle_risk_flag",
-      "np_cagr_3y", "rev_yoy_1y", "rev_cagr_3y", "np_accel_pp", "peg_3y", "psg", "rd_ratio_pct", "ttm_gm_pct", "fcf_margin_3y", "growth_risk_flag",
+      "ev_to_ebit_ttm", "ev_to_ebit_3y", "ev_to_ebit_5y", "ev_to_ebit_norm_3y", "ev_to_ebit_norm_5y", "ebit_yield_5y", "ebit_norm_yield_5y", "ebit_peak_yield_5y", "ebit_cycle_pos", "ebit_cycle_pct_5y", "ev_debt_basis",
+      "q_gm_yoy_pp", "q_gm_qoq_pp", "ttm_gm_min_5y", "ttm_gm_mean_5y", "ocf_margin_ttm", "fcf_to_assets_3y_pct", "fcf_to_assets_5y_pct", "debt_ratio_5y_mean", "cash_to_debt_5y_mean", "ocf_to_capex_5y", "rev_5y_to_ev", "pos_ocf_ratio_5y", "pos_np_ratio_5y", "cyc_health_score", "pb_to_med_5y", "pb_med_discount_pct", "delta_roe_margin_pp", "capex_to_rev_pct", "interest_coverage", "ocf_interest_coverage", "cash_to_debt_pct", "cash_to_ib_debt_pct", "net_cash_to_assets_pct", "gm_elasticity_pct", "peak_earn_yield_5y", "cycle_archetype", "cycle_risk_flag",
+      "np_cagr_3y",
       "g1_base", "np_yoy_1y", "dcf_base", "dcf_mid", "dcf_upside_pct",
       "rim_mid", "rim_upside_pct", "implied_irr", "r_used", "net_cash_per_share",
       "debt_ratio_pct", "net_cash_to_mktcap", "vol_3y", "max_dd_3y", "risk_flag"
@@ -1036,9 +1033,9 @@ function bindEvents() {
         r.divElasticityForward, r.fcfDivCoverage, r.capexToOcfPct, r.divRiskFlag,
         r.fcfYieldPct, r.fcf3yYieldPct, r.fcf5yYieldPct, r.cashConv5y, r.roic5yMean, r.roeVol5y, r.accrualRatio, r.arToRevPct, r.equityBasis, r.roicDebtBasis, r.estIbDebtRatioPct, r.qualityRiskFlag,
         r.npCagr5y, r.revCagr5y, r.roiic3yPct, r.roiic5yPct, r.reinvestRatePct, r.bogleRet3y, r.bogleRet5y, r.pbToBogle3y, r.pbToBogle5y, r.pegy3y, r.pegy5y, r.qualityArchetype,
-        r.evToEbitTtm, r.evToEbit3y, r.evToEbit5y, r.ebitYield5y, r.ebitCyclePos, r.evDebtBasis,
-        r.qGmYoyPp, r.deltaRoeMarginPp, r.capexToRevPct, r.interestCoverage, r.cashToDebtPct, r.cycleRiskFlag,
-        r.npCagr3y, r.revYoy1yRaw, r.revCagr3y, r.npAccelPp, r.peg3y, r.psg, r.rdRatioPct, r.ttmGmPct, r.fcfMargin3y, r.growthRiskFlag,
+        r.evToEbitTtm, r.evToEbit3y, r.evToEbit5y, r.evToEbitNorm3y, r.evToEbitNorm5y, r.ebitYield5y, r.ebitNormYield5y, r.ebitPeakYield5y, r.ebitCyclePos, r.ebitCyclePct5y, r.evDebtBasis,
+        r.qGmYoyPp, r.qGmQoqPp, r.ttmGmMin5y, r.ttmGmMean5y, r.ocfMarginTtm, r.fcfToAssets3yPct, r.fcfToAssets5yPct, r.debtRatio5yMean, r.cashToDebt5yMean, r.ocfToCapex5y, r.rev5yToEv, r.posOcfRatio5y, r.posNpRatio5y, r.cycHealthScore, r.pbToMed5y, r.pbMedDiscountPct, r.deltaRoeMarginPp, r.capexToRevPct, r.interestCoverage, r.ocfInterestCoverage, r.cashToDebtPct, r.cashToIbDebtPct, r.netCashToAssetsPct, r.gmElasticityPct, r.peakEarnYield5y, r.cycleArchetype, r.cycleRiskFlag,
+        r.npCagr3y,
         r.g1Base, r.npYoy1yRaw, r.dcfBase, r.dcfMid, r.dcfUpsidePct,
         r.rimMid, r.rimUpsidePct, r.impliedIrr, r.rUsed, r.netCashPerShare,
         r.debtRatioPct, r.netCashToMktCap, r.vol3y, r.maxDd3y, r.riskFlag

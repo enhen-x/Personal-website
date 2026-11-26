@@ -343,14 +343,16 @@ html.is-embedded .wrap {
 .kpi-card:hover { border-color: var(--border-strong); }
 .kpi-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: 4px 6px;
   margin-bottom: 6px;
 }
 .kpi-title {
   font-size: 12px;
   font-weight: 700;
+  line-height: 1.3;
   color: var(--ink-muted);
 }
 .kpi-num {

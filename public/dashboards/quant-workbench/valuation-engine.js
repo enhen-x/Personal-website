@@ -128,6 +128,16 @@ export function normalizeShareTimeline(shareData, maxDate = "2099-12-31") {
   return [...byDate.values()].sort((a, b) => a.change_date.localeCompare(b.change_date));
 }
 
+export function lookupSharesBeforeDate(shareTimeline, targetDate) {
+  if (!Array.isArray(shareTimeline) || !shareTimeline.length || !targetDate) return null;
+  const td = String(targetDate).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(td)) return null;
+  for (let i = shareTimeline.length - 1; i >= 0; i--) {
+    if (shareTimeline[i].change_date < td) return shareTimeline[i];
+  }
+  return null;
+}
+
 export function computeNetBuybackFromShares(shareData, refDate, splitHelper) {
   const effectiveRefDate = /^\d{4}-\d{2}-\d{2}/.test(String(refDate || ""))
     ? String(refDate).slice(0, 10)
@@ -739,8 +749,11 @@ export function buildQuarterlyValuationSeries(finData, symbolName = "") {
       && debt != null
       && (ttmIntExp > 0 || (ttmIntExp === 0 && (cash || 0) >= debt * 0.5))
     ) {
-      estIbDebt = clamp(ttmIntExp / 0.035, 0, Math.max(0, debt));
-      ibDebtMode = "利息反推(去OPM)";
+      const impliedIb = ttmIntExp / 0.035;
+      if (impliedIb >= debt * 0.08 || (cash || 0) >= debt * 0.50) {
+        estIbDebt = clamp(impliedIb, 0, Math.max(0, debt));
+        ibDebtMode = "利息反推(去OPM)";
+      }
     }
 
     const erd = resolveEffectiveReportDate(r);
@@ -1413,26 +1426,64 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
       : null);
 
   let dpsTtm = null;
+  let dpsTtmRaw = null;
   let ttmDivActual = null;
   let approxDivYieldPct = null;
+  let rawDivYieldPct = null;
   let approxPayoutPct = null;
+  let hasPostExDilution = false;
+  let postExDilutePct = 0;
   if (exDiv !== null && (exDiv.count > 0 || snapDpsRaw === null)) {
-    dpsTtm = exDiv.dpsTtm;
+    dpsTtmRaw = exDiv.dpsTtm;
+    rawDivYieldPct = (unadjPrice > 0) ? (dpsTtmRaw / unadjPrice) * 100 : null;
+    for (const ev of (exDiv.events || [])) {
+      const evRawDps = ev.rawDps ?? ev.dpsOld ?? ev.dps;
+      const sExRow = lookupSharesBeforeDate(shareTimeline, ev.date);
+      const isValidExShares = Boolean(
+        sExRow
+        && shares > 0
+        && daysBetweenDates(sExRow.change_date, ev.date) <= 400
+        && (sExRow.total_shares / shares) >= 0.35
+      );
+      if (isValidExShares) {
+        const candDiluted = evRawDps * (sExRow.total_shares / shares);
+        if (candDiluted > 0 && candDiluted < ev.dps * 0.999) {
+          ev.dpsDiluted = candDiluted;
+          ev.sharesAtEx = sExRow.total_shares;
+          ev.sharesAtExDate = sExRow.change_date;
+          ev.postExDilutePct = ((shares / sExRow.total_shares) - 1) * 100;
+          continue;
+        }
+      }
+      ev.dpsDiluted = ev.dps;
+      ev.sharesAtEx = sExRow ? sExRow.total_shares : null;
+      ev.sharesAtExDate = sExRow ? sExRow.change_date : null;
+      ev.postExDilutePct = 0;
+    }
+    const dpsTtmDiluted = (exDiv.events || []).reduce((s, e) => s + (e.dpsDiluted ?? e.dps), 0);
+    hasPostExDilution = dpsTtmRaw > 0 && dpsTtmDiluted > 0 && dpsTtmDiluted < dpsTtmRaw * 0.999;
+    postExDilutePct = hasPostExDilution ? ((dpsTtmRaw / dpsTtmDiluted) - 1) * 100 : 0;
+    dpsTtm = hasPostExDilution ? dpsTtmDiluted : dpsTtmRaw;
     approxDivYieldPct = (unadjPrice > 0) ? (dpsTtm / unadjPrice) * 100 : null;
     approxPayoutPct = (epsForPayout > 0) ? (dpsTtm / epsForPayout) * 100 : null;
     ttmDivActual = (shares > 0) ? dpsTtm * shares : (qNow?.ttmDiv ?? null);
   } else if (snapDpsRaw !== null && Number.isFinite(snapDpsRaw)) {
     dpsTtm = snapDpsRaw;
+    dpsTtmRaw = dpsTtm;
     approxDivYieldPct = (unadjPrice > 0) ? (dpsTtm / unadjPrice) * 100 : null;
+    rawDivYieldPct = approxDivYieldPct;
     approxPayoutPct = (epsForPayout > 0) ? (dpsTtm / epsForPayout) * 100 : null;
     ttmDivActual = (shares > 0) ? dpsTtm * shares : (qNow?.ttmDiv ?? null);
   } else if (exDiv !== null) {
     dpsTtm = exDiv.dpsTtm;
+    dpsTtmRaw = dpsTtm;
     approxDivYieldPct = (unadjPrice > 0) ? (dpsTtm / unadjPrice) * 100 : null;
+    rawDivYieldPct = approxDivYieldPct;
     approxPayoutPct = (epsForPayout > 0) ? (dpsTtm / epsForPayout) * 100 : null;
     ttmDivActual = (shares > 0) ? dpsTtm * shares : (qNow?.ttmDiv ?? null);
   } else {
     approxDivYieldPct = (impliedMktCap && qNow?.ttmDiv !== null) ? (qNow.ttmDiv / impliedMktCap) * 100 : null;
+    rawDivYieldPct = approxDivYieldPct;
     const npDenom = isFinCompany ? ordinaryNpTtm : qNow?.ttmNp;
     approxPayoutPct = (npDenom > 0 && qNow?.ttmDiv !== null) ? (qNow.ttmDiv / npDenom) * 100 : null;
     ttmDivActual = qNow?.ttmDiv ?? null;
@@ -1517,9 +1568,10 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
       buybackSource = hasEstimatedBuyback ? "库存股/注销估算" : "仅现金分红";
     }
   }
+  const netBuybackAddPct = Math.max(0, buybackYieldPct);
   const shareholderYieldPct = approxDivYieldPct !== null
-    ? (approxDivYieldPct + buybackYieldPct)
-    : (Math.abs(buybackYieldPct) >= 0.05 ? buybackYieldPct : null);
+    ? (approxDivYieldPct + netBuybackAddPct)
+    : (netBuybackAddPct >= 0.05 ? netBuybackAddPct : null);
 
   // 3Y & 5Y Normalized Cash Conversion, ROIC Mean, ROE Mean/Vol/Min, and Earnings/FCF Averages
   let sumOcf3y = 0;
@@ -1540,10 +1592,40 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
   let sumFcf3y = 0;
   let sumRev3y = 0;
   let fcfRevPairs3y = 0;
+  let sumOcfCap5y = 0;
+  let sumCapex5y = 0;
+  let ocfCapPairs5y = 0;
+  let sumRev5y = 0;
+  let revPairs5y = 0;
+  const debtRatioSamples5y = [];
+  const cashDebtSamples5y = [];
+  const fcfAssetsSamples5y = [];
   for (let k = 0; k < 5; k++) {
     const idx = quarters.length - 1 - 4 * k;
     if (idx < 0) break;
     const q = quarters[idx];
+    if (q?.ttmRev !== null && Number.isFinite(q.ttmRev) && q.ttmRev > 0) {
+      sumRev5y += q.ttmRev;
+      revPairs5y++;
+    }
+    if (!isFinCompany && q?.ttmOcf !== null && q?.ttmCapex !== null && Number.isFinite(q.ttmOcf) && Number.isFinite(q.ttmCapex)) {
+      sumOcfCap5y += q.ttmOcf;
+      sumCapex5y += Math.abs(q.ttmCapex);
+      ocfCapPairs5y++;
+    }
+    if (!isFinCompany && q?.assets > 0) {
+      const effD = q.ibDebt ?? q.estIbDebt ?? q.debt;
+      if (effD != null && Number.isFinite(effD)) {
+        debtRatioSamples5y.push(clamp((effD / q.assets) * 100, 0, 100));
+        if (q.cash != null && Number.isFinite(q.cash)) {
+          if (effD > 0) cashDebtSamples5y.push(clamp((q.cash / effD) * 100, 0, 200));
+          else if (q.cash > 0) cashDebtSamples5y.push(200);
+        }
+      }
+      if (q.ttmFcf !== null && Number.isFinite(q.ttmFcf)) {
+        fcfAssetsSamples5y.push(clamp((q.ttmFcf / q.assets) * 100, -40, 40));
+      }
+    }
     if (q?.ttmNp !== null && Number.isFinite(q.ttmNp)) {
       if (k < 3) npSamples3y.push(q.ttmNp);
       npSamples5y.push(q.ttmNp);
@@ -1612,15 +1694,35 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
   const fcf5yYieldPct = (impliedMktCap > 0 && fcf5yAvg !== null) ? (fcf5yAvg / impliedMktCap) * 100 : null;
   const ebit3yAvg = calcMean(ebitSamples3y);
   const ebit5yAvg = calcMean(ebitSamples5y);
-  const evDebtUsed = qNow?.ibDebt != null ? qNow.ibDebt : (qNow?.debt != null ? qNow.debt : null);
-  const evDebtBasis = isFinCompany ? "金融免算" : (qNow?.ibDebt != null ? "有息负债" : (qNow?.debt != null ? "总负债近似" : "--"));
+  const evDebtUsed = qNow?.ibDebt != null
+    ? qNow.ibDebt
+    : (qNow?.estIbDebt != null ? qNow.estIbDebt : (qNow?.debt != null ? qNow.debt : null));
+  const evDebtBasis = isFinCompany
+    ? "金融免算"
+    : (qNow?.ibDebt != null
+      ? "有息负债"
+      : (qNow?.estIbDebt != null ? "去OPM估算有息债" : (qNow?.debt != null ? "总负债近似" : "--")));
   const evRaw = (!isFinCompany && impliedMktCap > 0 && evDebtUsed !== null)
     ? (impliedMktCap + evDebtUsed - (qNow?.cash || 0))
     : null;
   const enterpriseValue = (evRaw !== null && Number.isFinite(evRaw) && evRaw > 0) ? evRaw : null;
+
+  // Cross-cycle normalized EBIT, cycle percentile, trough gross margin & OPM-calibrated safety
+  const recent20 = quarters.slice(-20);
+  const recent12 = quarters.slice(-12);
+  const ebitAll5y = !isFinCompany ? recent20.map(q => q.ttmEbit).filter(v => v != null && Number.isFinite(v)) : [];
+  const ebitAll3y = !isFinCompany ? recent12.map(q => q.ttmEbit).filter(v => v != null && Number.isFinite(v)) : [];
+  const posEbit5y = ebitAll5y.filter(v => v > 0);
+  const posEbit3y = ebitAll3y.filter(v => v > 0);
+  const ebitNorm5y = posEbit5y.length ? median(posEbit5y) : null;
+  const ebitNorm3y = posEbit3y.length ? median(posEbit3y) : null;
+  const ebitPeak5y = posEbit5y.length ? Math.max(...posEbit5y) : null;
+
   const evToEbitTtm = (enterpriseValue > 0 && qNow?.ttmEbit > 0) ? clamp(enterpriseValue / qNow.ttmEbit, 0.5, 200) : null;
   const evToEbit3y = (enterpriseValue > 0 && ebit3yAvg > 0) ? clamp(enterpriseValue / ebit3yAvg, 0.5, 200) : null;
   const evToEbit5y = (enterpriseValue > 0 && ebit5yAvg > 0) ? clamp(enterpriseValue / ebit5yAvg, 0.5, 200) : null;
+  const evToEbitNorm5y = (enterpriseValue > 0 && ebitNorm5y > 0) ? clamp(enterpriseValue / ebitNorm5y, 0.5, 120) : null;
+  const evToEbitNorm3y = (enterpriseValue > 0 && ebitNorm3y > 0) ? clamp(enterpriseValue / ebitNorm3y, 0.5, 120) : null;
   const ebitYieldTtm = (enterpriseValue > 0 && qNow?.ttmEbit !== null && Number.isFinite(qNow.ttmEbit))
     ? clamp((qNow.ttmEbit / enterpriseValue) * 100, -50, 80)
     : null;
@@ -1630,9 +1732,23 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
   const ebitYield5y = (enterpriseValue > 0 && ebit5yAvg !== null && Number.isFinite(ebit5yAvg))
     ? clamp((ebit5yAvg / enterpriseValue) * 100, -50, 80)
     : null;
-  const ebitNormRef = ebit5yAvg ?? ebit3yAvg;
+  const ebitNormYield5y = (enterpriseValue > 0 && ebitNorm5y > 0) ? clamp((ebitNorm5y / enterpriseValue) * 100, 0, 100) : null;
+  const ebitNormYield3y = (enterpriseValue > 0 && ebitNorm3y > 0) ? clamp((ebitNorm3y / enterpriseValue) * 100, 0, 100) : null;
+  const ebitPeakYield5y = (enterpriseValue > 0 && ebitPeak5y > 0) ? clamp((ebitPeak5y / enterpriseValue) * 100, 0, 120) : null;
+
+  let ebitCyclePct5y = null;
+  if (!isFinCompany && qNow?.ttmEbit != null && Number.isFinite(qNow.ttmEbit) && ebitAll5y.length >= 4) {
+    const minE = Math.min(...ebitAll5y);
+    const maxE = Math.max(...ebitAll5y);
+    ebitCyclePct5y = maxE > minE ? clamp(((qNow.ttmEbit - minE) / (maxE - minE)) * 100, 0, 100) : 50;
+  }
+  const ebitNormRef = ebitNorm5y ?? ebitNorm3y ?? ebit5yAvg ?? ebit3yAvg;
   const ebitCyclePos = (!isFinCompany && qNow?.ttmEbit !== null && Number.isFinite(qNow.ttmEbit) && ebitNormRef > 0)
     ? clamp(qNow.ttmEbit / ebitNormRef, -2, 5)
+    : null;
+
+  const qPrev1 = (quarters.length >= 2 && qNow && (qNow.qi - quarters[quarters.length - 2].qi === 1))
+    ? quarters[quarters.length - 2]
     : null;
   const qGmLatest = (!isFinCompany && qNow?.qGrossMarginPct != null && Number.isFinite(qNow.qGrossMarginPct))
     ? qNow.qGrossMarginPct
@@ -1640,20 +1756,89 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
   const qGmYoyPp = (!isFinCompany && qNow?.qGrossMarginPct != null && qPrev4?.qGrossMarginPct != null)
     ? clamp(qNow.qGrossMarginPct - qPrev4.qGrossMarginPct, -40, 40)
     : null;
+  const qGmQoqPp = (!isFinCompany && qNow?.qGrossMarginPct != null && qPrev1?.qGrossMarginPct != null)
+    ? clamp(qNow.qGrossMarginPct - qPrev1.qGrossMarginPct, -40, 40)
+    : null;
+  const gmVals5y = !isFinCompany
+    ? recent20.map(q => q.ttmGrossMarginPct).filter(v => v != null && Number.isFinite(v))
+    : [];
+  const ttmGmMin5y = gmVals5y.length ? Math.min(...gmVals5y) : null;
+  const ttmGmMean5y = gmVals5y.length ? calcMean(gmVals5y) : null;
+
   const deltaRoeMarginPp = (roeTtm !== null && roeMean3y !== null)
     ? clamp(roeTtm - roeMean3y, -40, 40)
     : null;
   const capexToRevPct = (!isFinCompany && qNow?.ttmRev > 0 && qNow?.ttmCapex !== null && Number.isFinite(qNow.ttmCapex))
     ? clamp((Math.abs(qNow.ttmCapex) / qNow.ttmRev) * 100, 0, 100)
     : null;
+  const ocfMarginTtm = (!isFinCompany && qNow?.ttmRev > 0 && qNow?.ttmOcf !== null && Number.isFinite(qNow.ttmOcf))
+    ? clamp((qNow.ttmOcf / qNow.ttmRev) * 100, -60, 80)
+    : null;
+  const fcfRefForAssets = fcf3yAvg ?? qNow?.ttmFcf ?? null;
+  const fcfToAssets3yPct = (!isFinCompany && qNow?.assets > 0 && fcfRefForAssets !== null && Number.isFinite(fcfRefForAssets))
+    ? clamp((fcfRefForAssets / qNow.assets) * 100, -40, 40)
+    : null;
   const interestCoverage = (!isFinCompany && qNow?.ttmEbit !== null && Number.isFinite(qNow.ttmEbit))
     ? (qNow.ttmIntExp > 0
       ? clamp(qNow.ttmEbit / qNow.ttmIntExp, -10, 50)
       : (qNow.ttmIntExp === 0 && qNow.ttmEbit > 0 ? 50 : null))
     : null;
+  const ocfInterestCoverage = (!isFinCompany && qNow?.ttmOcf !== null && Number.isFinite(qNow.ttmOcf))
+    ? (qNow.ttmIntExp > 0
+      ? clamp(qNow.ttmOcf / qNow.ttmIntExp, -10, 50)
+      : (qNow.ttmIntExp === 0 && qNow.ttmOcf > 0 ? 50 : null))
+    : null;
   const cashToDebtPct = (!isFinCompany && qNow?.debt > 0 && qNow?.cash !== null && Number.isFinite(qNow.cash))
     ? clamp((qNow.cash / qNow.debt) * 100, 0, 500)
     : null;
+  const effIbDebtNow = qNow?.ibDebt ?? qNow?.estIbDebt ?? qNow?.debt ?? null;
+  const cashDebtBasis = isFinCompany
+    ? "金融免算"
+    : (qNow?.ibDebt != null
+      ? "有息负债"
+      : (qNow?.estIbDebt != null ? "估算有息债" : (qNow?.debt != null ? "总负债" : "--")));
+  const cashToIbDebtPct = (!isFinCompany && qNow?.cash !== null && Number.isFinite(qNow.cash))
+    ? (effIbDebtNow > 0
+      ? clamp((qNow.cash / effIbDebtNow) * 100, 0, 500)
+      : (effIbDebtNow === 0 && qNow.cash > 0 ? 500 : null))
+    : null;
+  const netCashToAssetsPct = (!isFinCompany && qNow?.assets > 0 && qNow?.cash !== null && Number.isFinite(qNow.cash) && effIbDebtNow !== null)
+    ? clamp(((qNow.cash - effIbDebtNow) / qNow.assets) * 100, -80, 80)
+    : null;
+
+  // Cycle reversal elasticity: +1pp gross-margin profit yield (% of MktCap) & 5Y peak profit yield
+  const npAll5y = recent20.map(q => q.ttmNp).filter(v => v != null && Number.isFinite(v) && v > 0);
+  const npPeak5y = npAll5y.length ? Math.max(...npAll5y) : null;
+  const gmElasticityPct = (!isFinCompany && impliedMktCap > 0 && qNow?.ttmRev > 0)
+    ? clamp(qNow.ttmRev / impliedMktCap, 0, 25)
+    : null;
+  const peakEarnYield5y = (impliedMktCap > 0 && npPeak5y > 0)
+    ? clamp((npPeak5y / impliedMktCap) * 100, 0, 150)
+    : null;
+
+  // Long-term 5Y full-cycle financial health & normalized scale
+  const debtRatio5yMean = !isFinCompany ? calcMean(debtRatioSamples5y) : null;
+  const cashToDebt5yMean = !isFinCompany ? calcMean(cashDebtSamples5y) : null;
+  const ocfToCapex5y = (!isFinCompany && ocfCapPairs5y >= 1 && sumCapex5y > 0)
+    ? clamp(sumOcfCap5y / sumCapex5y, -2, 8)
+    : null;
+  const fcfToAssets5yPct = !isFinCompany ? calcMean(fcfAssetsSamples5y) : null;
+  const rev5yAvg = revPairs5y >= 1 ? (sumRev5y / revPairs5y) : null;
+  const rev5yToEv = (!isFinCompany && enterpriseValue > 0 && rev5yAvg > 0)
+    ? clamp(rev5yAvg / enterpriseValue, 0, 10)
+    : null;
+  const ocfQ20 = recent20.map(q => q.ttmOcf).filter(v => v != null && Number.isFinite(v));
+  const npQ20 = recent20.map(q => q.ttmNp).filter(v => v != null && Number.isFinite(v));
+  const posOcfRatio5y = ocfQ20.length ? (ocfQ20.filter(v => v > 0).length / ocfQ20.length) : null;
+  const posNpRatio5y = npQ20.length ? (npQ20.filter(v => v > 0).length / npQ20.length) : null;
+  let cycHealthScore = null;
+  if (!isFinCompany && (debtRatio5yMean != null || ocfToCapex5y != null)) {
+    const p1 = debtRatio5yMean != null ? clamp((75 - debtRatio5yMean) / 50, 0, 1) * 30 : 15;
+    const p2 = cashToDebt5yMean != null ? clamp((Math.min(cashToDebt5yMean, 120) - 10) / 90, 0, 1) * 20 : 10;
+    const p3 = ocfToCapex5y != null ? (ocfToCapex5y <= 0 ? 0 : clamp(ocfToCapex5y / 2.0, 0, 1) * 30) : 15;
+    const p4 = (posOcfRatio5y != null ? posOcfRatio5y * 12 : 6) + (posNpRatio5y != null ? posNpRatio5y * 8 : 4);
+    cycHealthScore = Math.round(clamp(p1 + p2 + p3 + p4, 0, 100));
+  }
 
   // Dividend/Shareholder-Return Cash Flow Coverage & CapEx Intensity
   const cashDivOut = (ttmDivActual > 0) ? ttmDivActual : ((qNow?.ttmDiv > 0) ? qNow.ttmDiv : 0);
@@ -1693,7 +1878,7 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
     }
   }
 
-  // P2-6c Growth Mode metrics: 3Y NP CAGR, 1Y/3Y Rev Growth, R&D Ratio, TTM Gross Margin, FCF Margin, PEG (3Y), PSG
+  // Multi-year NP/Revenue CAGRs & ROIIC reinvestment efficiency (used by Quality mode)
   const qPrev12 = quarters.length >= 13 ? quarters[quarters.length - 13] : null;
   const qPrev8 = quarters.length >= 9 ? quarters[quarters.length - 9] : null;
   let npCagr3yRaw = null;
@@ -1780,28 +1965,6 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
   const roiic5yPct = reinv5y.roiic ?? reinv3y.roiic;
   const reinvestRatePct = reinv3y.reinvestRatePct ?? reinv5y.reinvestRatePct;
 
-  const rdRatioPct = !isFinCompany
-    ? ((qNow?.ttmRev > 0 && qNow?.ttmRd !== null && Number.isFinite(qNow.ttmRd))
-      ? clamp((qNow.ttmRd / qNow.ttmRev) * 100, 0, 80)
-      : (qNow?.ytdRdRatioPct ?? null))
-    : null;
-  const ttmGmPct = (!isFinCompany && qNow?.ttmGrossMarginPct != null && Number.isFinite(qNow.ttmGrossMarginPct))
-    ? qNow.ttmGrossMarginPct
-    : null;
-  const fcfMarginTtm = (!isFinCompany && qNow?.ttmRev > 0 && qNow?.ttmFcf !== null && Number.isFinite(qNow.ttmFcf))
-    ? clamp((qNow.ttmFcf / qNow.ttmRev) * 100, -80, 80)
-    : null;
-  const fcfMargin3y = (!isFinCompany && sumRev3y > 0 && fcfRevPairs3y >= 1)
-    ? clamp((sumFcf3y / sumRev3y) * 100, -80, 80)
-    : fcfMarginTtm;
-  const peg3y = (peTtm > 0 && npCagr3y > 0)
-    ? clamp(peTtm / npCagr3y, 0.05, 10)
-    : (peg !== null && Number.isFinite(peg) && peg > 0 ? clamp(peg, 0.05, 10) : null);
-  const revGrowthForPsg = revCagr3y > 0 ? revCagr3y : (revYoy1y > 0 ? revYoy1y : null);
-  const psg = (psTtm > 0 && revGrowthForPsg > 0)
-    ? clamp(psTtm / revGrowthForPsg, 0.01, 5)
-    : null;
-
   // 3Y Realized Volatility & Max Drawdown from trailing 750 total-return bars
   const riskBarsRaw = (kAdj?.items?.length >= 45 ? kAdj.items : kUnadj?.items) || [];
   const riskBars = riskBarsRaw.slice(-750);
@@ -1881,6 +2044,8 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
   const roeToPb5y = (roeMean5y !== null && pb > 0) ? (roeMean5y / pb) : null;
   const histRoeToPb3y = (roeMean3y !== null && pb3yAvg > 0) ? (roeMean3y / pb3yAvg) : null;
   const histRoeToPb5y = (roeMean5y !== null && pb5yAvg > 0) ? (roeMean5y / pb5yAvg) : null;
+  const pbToMed5y = (pb > 0 && bands?.pb?.p50 > 0) ? clamp(pb / bands.pb.p50, 0.1, 5.0) : null;
+  const pbMedDiscountPct = pbToMed5y != null ? clamp((1 - pbToMed5y) * 100, -150, 90) : null;
 
   return {
     code,
@@ -1920,9 +2085,13 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
     fcfYieldPct,
     pFcf,
     dpsTtm,
+    dpsTtmRaw,
     exDiv,
     ttmDivActual,
     approxDivYieldPct,
+    rawDivYieldPct,
+    hasPostExDilution,
+    postExDilutePct,
     approxPayoutPct,
     epsOrdinaryTtm: epsForPayout,
     payoutBasis,
@@ -1976,16 +2145,43 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
     evToEbitTtm,
     evToEbit3y,
     evToEbit5y,
+    evToEbitNorm3y,
+    evToEbitNorm5y,
     ebitYieldTtm,
     ebitYield3y,
     ebitYield5y,
+    ebitNormYield3y,
+    ebitNormYield5y,
+    ebitPeakYield5y,
     ebitCyclePos,
+    ebitCyclePct5y,
     qGmLatest,
     qGmYoyPp,
+    qGmQoqPp,
+    ttmGmMin5y,
+    ttmGmMean5y,
     deltaRoeMarginPp,
     capexToRevPct,
+    ocfMarginTtm,
+    fcfToAssets3yPct,
     interestCoverage,
+    ocfInterestCoverage,
     cashToDebtPct,
+    cashToIbDebtPct,
+    cashDebtBasis,
+    netCashToAssetsPct,
+    gmElasticityPct,
+    peakEarnYield5y,
+    debtRatio5yMean,
+    cashToDebt5yMean,
+    ocfToCapex5y,
+    fcfToAssets5yPct,
+    rev5yToEv,
+    posOcfRatio5y,
+    posNpRatio5y,
+    cycHealthScore,
+    pbToMed5y,
+    pbMedDiscountPct,
     npCagr3y,
     npCagr3yRaw,
     npCagr5y,
@@ -1999,12 +2195,6 @@ export function evaluateStockValuation({ finData, kUnadj, kAdj, kMain = null, sh
     roiic3yPct,
     roiic5yPct,
     reinvestRatePct,
-    rdRatioPct,
-    ttmGmPct,
-    fcfMarginTtm,
-    fcfMargin3y,
-    peg3y,
-    psg,
     bands
   };
 }
@@ -2129,38 +2319,46 @@ export function computePeerMetrics(snap, opts = {}) {
   }
 
   const pbCheapness5y = snap.bands?.pb?.pct != null ? clamp(100 - snap.bands.pb.pct, 0, 100) : null;
-  const cycEbitYieldRef = snap.ebitYield5y ?? snap.ebitYield3y ?? snap.ebitYieldTtm;
-  const isCycleVeto = (!snap.isFinancial && snap.debtRatioPct != null && snap.debtRatioPct > 70 && (snap.cashToDebtPct == null || snap.cashToDebtPct < 20))
-    || (!snap.isFinancial && snap.interestCoverage != null && snap.interestCoverage < 2.0)
-    || (snap.qGmYoyPp != null && snap.qGmYoyPp < -4.0 && (snap.capexToOcfPct == null || snap.capexToOcfPct > 100))
-    || (snap.ebitCyclePos != null && snap.ebitCyclePos > 1.8 && snap.bands?.pb?.pct != null && snap.bands.pb.pct > 70)
-    || (snap.maxDd3y != null && snap.maxDd3y < -55);
-  const isCycleShield = !isCycleVeto
-    && ((pbCheapness5y != null && pbCheapness5y >= 55) || (cycEbitYieldRef != null && cycEbitYieldRef >= 8.0))
-    && ((snap.qGmYoyPp != null && snap.qGmYoyPp > 0) || (snap.deltaRoeMarginPp != null && snap.deltaRoeMarginPp > 0))
-    && (snap.isFinancial || snap.debtRatioPct == null || snap.debtRatioPct <= 60);
+  const cycEbitYieldRef = snap.ebitNormYield5y ?? snap.ebitNormYield3y ?? snap.ebitYield5y ?? snap.ebitYield3y ?? snap.ebitYieldTtm;
+  const cycCashToIb = snap.cashToIbDebtPct ?? snap.cashToDebtPct;
+  const cycIntCov = snap.ocfInterestCoverage ?? snap.interestCoverage;
+  const cycPct = snap.ebitCyclePct5y;
+  const cycValYield = snap.roeToPb5y ?? snap.roeToPb3y;
+  const hs = snap.cycHealthScore;
+  const isCycWeakHealth = !snap.isFinancial && hs != null && hs < 35;
+  const isCycFundingStress = !snap.isFinancial && (
+    (effIbDebtPct != null && effIbDebtPct > 50 && (cycCashToIb == null || cycCashToIb < 40))
+    || (cycIntCov != null && cycIntCov < 2.0 && (cycCashToIb == null || cycCashToIb < 60))
+    || (effIbDebtPct == null && snap.debtRatioPct != null && snap.debtRatioPct > 68 && (cycCashToIb == null || cycCashToIb < 20))
+    || (effIbDebtPct == null && snap.debtRatioPct != null && snap.debtRatioPct > 55 && cycCashToIb != null && cycCashToIb < 10)
+  );
+  const isCycPeakTrap = cycPct != null && cycPct > 80 && (cycValYield != null ? cycValYield < 5.0 : (snap.pb != null && snap.pb > 3.5));
+  const isCycleVeto = isCycWeakHealth || isCycFundingStress || isCycPeakTrap;
+
+  const isQualityCheap = !isCycleVeto
+    && (snap.isFinancial || (hs != null && hs >= 58))
+    && ((cycValYield != null && cycValYield >= 6.0)
+      || (snap.pb != null && snap.pb <= 1.25 && (snap.roeMean5y == null || snap.roeMean5y >= 4))
+      || (snap.evToEbitNorm5y != null && snap.evToEbitNorm5y <= 12));
+  const isCheapHighElast = !isCycleVeto
+    && (snap.isFinancial || (hs != null && hs >= 45))
+    && ((snap.peakEarnYield5y != null && snap.peakEarnYield5y >= 20) || (snap.gmElasticityPct != null && snap.gmElasticityPct >= 1.0))
+    && ((snap.pb != null && snap.pb <= 1.5) || (snap.evToEbitNorm5y != null && snap.evToEbitNorm5y <= 12));
+  const isCycleShield = isQualityCheap || isCheapHighElast;
   const cycleRiskFlag = isCycleVeto ? "high_risk" : (isCycleShield ? "low_vol" : "normal");
 
-  const npAccelPp = (snap.npYoy1y != null && scen?.g1 != null)
-    ? clamp(snap.npYoy1y - scen.g1, -50, 50)
-    : ((snap.npYoy1y != null && snap.npCagr3y != null) ? clamp(snap.npYoy1y - snap.npCagr3y, -50, 50) : null);
-  const revAccelPp = (snap.revYoy1y != null && snap.revCagr3y != null)
-    ? clamp(snap.revYoy1y - snap.revCagr3y, -50, 50)
-    : null;
-  const gPegRef = snap.peg3y ?? ((snap.peTtm > 0 && scen?.g1 > 0) ? clamp(snap.peTtm / scen.g1, 0.05, 10) : snap.peg);
-  const gCashConvRef = snap.cashConv3y ?? snap.cashConv5y;
-  const gRoicRef = snap.roic3yMean ?? snap.roic5yMean ?? snap.roeMean3y ?? snap.roeTtm;
-  const isGrowthVeto = (gPegRef != null && gPegRef > 2.2)
-    || (npAccelPp != null && npAccelPp < -12.0 && (snap.npYoy1y == null || snap.npYoy1y < 10))
-    || (!snap.isFinancial && gCashConvRef != null && gCashConvRef < 0.60 && (snap.buybackYieldPct ?? 0) <= -2.0)
-    || (!snap.isFinancial && snap.fcfMargin3y != null && snap.fcfMargin3y < -5.0 && (snap.buybackYieldPct ?? 0) <= -2.0)
-    || (snap.npYoy1y != null && snap.npYoy1y < -15.0 && (snap.revYoy1y == null || snap.revYoy1y < 0));
-  const isGrowthShield = !isGrowthVeto
-    && (npAccelPp != null && npAccelPp > 0)
-    && ((gPegRef != null && gPegRef <= 1.2) || (snap.psg != null && snap.psg <= 0.22 && snap.revYoy1y != null && snap.revYoy1y >= 15))
-    && (gRoicRef != null && gRoicRef >= 10.0)
-    && (snap.isFinancial || gCashConvRef == null || gCashConvRef >= 0.80);
-  const growthRiskFlag = isGrowthVeto ? "high_risk" : (isGrowthShield ? "low_vol" : "normal");
+  let cycleArchetype = "周期观察";
+  if (isCycleVeto) {
+    cycleArchetype = isCycPeakTrap ? "顶峰溢价预警" : (isCycFundingStress ? "资金链预警" : "长期财务脆弱");
+  } else if (isQualityCheap && isCheapHighElast) {
+    cycleArchetype = "质优高弹性";
+  } else if (isQualityCheap) {
+    cycleArchetype = "质优低估龙头";
+  } else if (isCheapHighElast) {
+    cycleArchetype = "低估高弹性";
+  } else if (!snap.isFinancial && hs != null && hs >= 65 && (snap.roeMean5y != null && snap.roeMean5y >= 12)) {
+    cycleArchetype = "长周期强龙头";
+  }
 
   const fmtDpsTrim = (v) => {
     const n = Number(v);
@@ -2175,9 +2373,16 @@ export function computePeerMetrics(snap, opts = {}) {
     const partsFull = exEvs.map(e => `${e.date} 派¥${fmtDpsTrim(e.dps)}/股`);
     divEventsShort = `${exEvs.length}次除息 共¥${fmtDpsTrim(snap.dpsTtm)} (${partsShort.join(" + ")})`;
     const pxTxt = curPrice > 0 ? ` ÷ 现价¥${curPrice.toFixed(2)}` : "";
-    const dyTxt = snap.approxDivYieldPct != null ? ` = 股息率${snap.approxDivYieldPct.toFixed(2)}%` : "";
+    const dyTxt = snap.approxDivYieldPct != null
+      ? (snap.hasPostExDilution ? ` = 预期股息率${snap.approxDivYieldPct.toFixed(2)}%` : ` = 股息率${snap.approxDivYieldPct.toFixed(2)}%`)
+      : "";
     const payTxt = snap.approxPayoutPct != null ? `\n派息率: ${snap.payoutBasis || "归母TTM"} ≈ ${snap.approxPayoutPct.toFixed(1)}%` : "";
-    divEventsDetail = `近12个月除息 (${snap.exDiv.note || "TTM"}): ${partsFull.join(" + ")} = ¥${fmtDpsTrim(snap.dpsTtm)}/股${pxTxt}${dyTxt}${payTxt}`;
+    if (snap.hasPostExDilution && snap.dpsTtmRaw > 0) {
+      const rawDyTxt = snap.rawDivYieldPct != null ? ` (原TTM股息率 ${snap.rawDivYieldPct.toFixed(2)}%)` : "";
+      divEventsDetail = `近12个月除息 (${snap.exDiv.note || "TTM"}): ${partsFull.join(" + ")} 原派¥${fmtDpsTrim(snap.dpsTtmRaw)}/股${rawDyTxt}；除息后股本扩张 +${snap.postExDilutePct.toFixed(2)}%，按利润与分红率不变摊薄至 ¥${fmtDpsTrim(snap.dpsTtm)}/股${pxTxt}${dyTxt}${payTxt}`;
+    } else {
+      divEventsDetail = `近12个月除息 (${snap.exDiv.note || "TTM"}): ${partsFull.join(" + ")} = ¥${fmtDpsTrim(snap.dpsTtm)}/股${pxTxt}${dyTxt}${payTxt}`;
+    }
   } else if (snap.exDiv?.count === 0) {
     divEventsShort = "近12月零现金除息";
     divEventsDetail = "近12个月无现金分红除息记录";
@@ -2201,7 +2406,11 @@ export function computePeerMetrics(snap, opts = {}) {
     pbPct5y: snap.bands?.pb?.pct ?? null,
     psTtm: snap.psTtm,
     dpsTtm: snap.dpsTtm ?? null,
+    dpsTtmRaw: snap.dpsTtmRaw ?? snap.dpsTtm ?? null,
     divYieldPct: snap.approxDivYieldPct,
+    rawDivYieldPct: snap.rawDivYieldPct ?? snap.approxDivYieldPct ?? null,
+    hasPostExDilution: Boolean(snap.hasPostExDilution),
+    postExDilutePct: snap.postExDilutePct ?? 0,
     buybackYieldPct: snap.buybackYieldPct ?? 0,
     buybackRawPct: snap.buybackRawPct ?? (snap.buybackYieldPct ?? 0),
     buybackSource: snap.buybackSource || "仅现金分红",
@@ -2268,18 +2477,46 @@ export function computePeerMetrics(snap, opts = {}) {
     evToEbitTtm: snap.evToEbitTtm ?? null,
     evToEbit3y: snap.evToEbit3y ?? null,
     evToEbit5y: snap.evToEbit5y ?? null,
+    evToEbitNorm3y: snap.evToEbitNorm3y ?? null,
+    evToEbitNorm5y: snap.evToEbitNorm5y ?? null,
     ebitYieldTtm: snap.ebitYieldTtm ?? null,
     ebitYield3y: snap.ebitYield3y ?? null,
     ebitYield5y: snap.ebitYield5y ?? null,
+    ebitNormYield3y: snap.ebitNormYield3y ?? null,
+    ebitNormYield5y: snap.ebitNormYield5y ?? null,
+    ebitPeakYield5y: snap.ebitPeakYield5y ?? null,
     ebitCyclePos: snap.ebitCyclePos ?? null,
+    ebitCyclePct5y: snap.ebitCyclePct5y ?? null,
     qGmLatest: snap.qGmLatest ?? null,
     qGmYoyPp: snap.qGmYoyPp ?? null,
+    qGmQoqPp: snap.qGmQoqPp ?? null,
+    ttmGmMin5y: snap.ttmGmMin5y ?? null,
+    ttmGmMean5y: snap.ttmGmMean5y ?? null,
     deltaRoeMarginPp: snap.deltaRoeMarginPp ?? null,
     capexToRevPct: snap.capexToRevPct ?? null,
+    ocfMarginTtm: snap.ocfMarginTtm ?? null,
+    fcfToAssets3yPct: snap.fcfToAssets3yPct ?? null,
     interestCoverage: snap.interestCoverage ?? null,
+    ocfInterestCoverage: snap.ocfInterestCoverage ?? null,
     cashToDebtPct: snap.cashToDebtPct ?? null,
+    cashToIbDebtPct: snap.cashToIbDebtPct ?? null,
+    cashDebtBasis: snap.cashDebtBasis || "--",
+    netCashToAssetsPct: snap.netCashToAssetsPct ?? null,
+    gmElasticityPct: snap.gmElasticityPct ?? null,
+    peakEarnYield5y: snap.peakEarnYield5y ?? null,
+    debtRatio5yMean: snap.debtRatio5yMean ?? null,
+    cashToDebt5yMean: snap.cashToDebt5yMean ?? null,
+    ocfToCapex5y: snap.ocfToCapex5y ?? null,
+    fcfToAssets5yPct: snap.fcfToAssets5yPct ?? null,
+    rev5yToEv: snap.rev5yToEv ?? null,
+    posOcfRatio5y: snap.posOcfRatio5y ?? null,
+    posNpRatio5y: snap.posNpRatio5y ?? null,
+    cycHealthScore: snap.cycHealthScore ?? null,
+    pbToMed5y: snap.pbToMed5y ?? null,
+    pbMedDiscountPct: snap.pbMedDiscountPct ?? null,
     pbCheapness5y,
     cycleRiskFlag,
+    cycleArchetype,
     npCagr3y: snap.npCagr3y ?? null,
     npCagr5y: snap.npCagr5y ?? null,
     revYoy1y: snap.revYoy1y ?? null,
@@ -2296,15 +2533,6 @@ export function computePeerMetrics(snap, opts = {}) {
     pegy3y,
     pegy5y,
     qualityArchetype,
-    npAccelPp,
-    revAccelPp,
-    rdRatioPct: snap.rdRatioPct ?? null,
-    ttmGmPct: snap.ttmGmPct ?? null,
-    fcfMarginTtm: snap.fcfMarginTtm ?? null,
-    fcfMargin3y: snap.fcfMargin3y ?? null,
-    peg3y: snap.peg3y ?? null,
-    psg: snap.psg ?? null,
-    growthRiskFlag,
     riskFlag: snap.riskFlag || "normal",
     dcfBase,
     dcfBaseLabel: dcfBaseLabelMap[dcfBase] || "DCF",

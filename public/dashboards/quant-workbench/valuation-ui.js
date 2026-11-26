@@ -187,7 +187,11 @@ export function renderValuationKPIs(snap) {
     if (snap.exDiv.count > 0) {
       const dpsStr = fmtNum(snap.dpsTtm, snap.dpsTtm >= 10 ? 2 : 3);
       const payStr = snap.approxPayoutPct !== null ? `${snap.approxPayoutPct.toFixed(0)}%` : "--";
-      divBaseMeta = `股息 ${divY !== null ? divY.toFixed(2) + "%" : "--"} (¥${dpsStr}·派息${payStr}${snap.exDiv.hasSplit ? "·含送转" : ""})`;
+      if (snap.hasPostExDilution && snap.dpsTtmRaw > 0 && snap.rawDivYieldPct !== null && divY !== null) {
+        divBaseMeta = `原${snap.rawDivYieldPct.toFixed(2)}% → 摊薄¥${dpsStr} · 派息${payStr}${snap.exDiv.hasSplit ? " · 含送转" : ""}`;
+      } else {
+        divBaseMeta = `¥${dpsStr} · 派息${payStr}${snap.exDiv.hasSplit ? " · 含送转" : ""}`;
+      }
     } else {
       divBaseMeta = "近12月零现金除息";
     }
@@ -197,18 +201,20 @@ export function renderValuationKPIs(snap) {
       : `近似股息 ${divY !== null ? divY.toFixed(2) + "%" : "--"} · 派息 ${snap.approxPayoutPct !== null ? snap.approxPayoutPct.toFixed(0) + "%" : "--"}`;
   }
   const bbMeta = Math.abs(bb) >= 0.05
-    ? ` · ${bb > 0 ? "净回购 +" : "净稀释 "}${bb.toFixed(2)}%${snap.buybackNote ? ` (${snap.buybackNote})` : ""}`
+    ? (bb > 0
+      ? ` · 回购+${bb.toFixed(2)}%`
+      : (snap.hasPostExDilution ? "" : " · 除息前扩股"))
     : (snap.shareHistoryCount > 0 && !(snap.exDiv?.count > 0) ? " · 近12月股本无变动" : "");
   const divMeta = `${divBaseMeta}${bbMeta}`;
 
   let shPillText = "--";
   let shPillCls = "pill-fail";
   if (bb >= 0.05) {
-    shPillText = `含回购 +${bb.toFixed(2)}%`;
+    shPillText = `回购+${bb.toFixed(1)}%`;
     shPillCls = "pill-pass";
   } else if (bb <= -0.05) {
-    shPillText = `含稀释 ${bb.toFixed(2)}%`;
-    shPillCls = (shY !== null && shY < 0) ? "pill-hot" : "pill-mid";
+    shPillText = `股本+${Math.abs(bb).toFixed(1)}%`;
+    shPillCls = Math.abs(bb) >= 3 ? "pill-hot" : "pill-mid";
   } else if (shY !== null) {
     shPillText = shY >= 3.0 ? "高股息" : (shY >= 1.5 ? "稳健" : (shY > 0 ? "低派息" : "零派息"));
     shPillCls = shY >= 3.0 ? "pill-pass" : (shY > 0 ? "pill-mid" : "pill-fail");
@@ -226,7 +232,11 @@ export function renderValuationKPIs(snap) {
   if (divMetaEl) {
     const tipParts = [];
     if (snap.exDiv?.events?.length) {
-      tipParts.push("除息: " + snap.exDiv.events.map(e => `${e.date} ¥${e.dps.toFixed(3)}/股`).join(" | "));
+      if (snap.hasPostExDilution && snap.dpsTtmRaw > 0) {
+        tipParts.push("除息(原→按最新股本摊薄): " + snap.exDiv.events.map(e => `${e.date} 原¥${e.dps.toFixed(3)}→¥${(e.dpsDiluted ?? e.dps).toFixed(3)}/股`).join(" | "));
+      } else {
+        tipParts.push("除息: " + snap.exDiv.events.map(e => `${e.date} ¥${e.dps.toFixed(3)}/股`).join(" | "));
+      }
     }
     if (snap.approxPayoutPct !== null) {
       tipParts.push(`派息率口径: ${snap.payoutBasis || "归母TTM"} (${snap.approxPayoutPct.toFixed(1)}%)`);

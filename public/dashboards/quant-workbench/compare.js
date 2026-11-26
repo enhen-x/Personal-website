@@ -1,5 +1,5 @@
 import { esc, fmtNum, fmtPct, fmtMoneyShort, clsSign, median, clamp } from "./utils.js";
-import { STATE, PEER_PRESETS, saveWatchlist, saveCompareList } from "./state.js";
+import { STATE, saveWatchlist, saveCompareList } from "./state.js";
 import { quantFetch, fetchFinancialsChecked, fetchSharesSafe } from "./api.js";
 import { evaluateStockValuation, computePeerMetrics } from "./valuation-engine.js";
 
@@ -355,39 +355,11 @@ export function removeCompareStock(code, rerender = true) {
   }
 }
 
-export function applyComparePreset(groupKey) {
-  document.querySelectorAll(".cmp-preset").forEach(b => b.classList.toggle("active", b.dataset.group === groupKey));
-  if (groupKey === "watchlist") {
-    const items = STATE.watchlist.slice(0, 10);
-    if (!items.length) {
-      const statusEl = document.getElementById("cmp-status");
-      if (statusEl) statusEl.textContent = "自选池为空，请先在个股看板收藏标的";
-      return;
-    }
-    STATE.compare.codes = items.map(it => {
-      if (it.name) STATE.compare.names[it.code] = it.name;
-      return it.code;
-    });
-  } else {
-    const grp = PEER_PRESETS[groupKey];
-    if (!grp) return;
-    STATE.compare.codes = grp.items.map(it => {
-      STATE.compare.names[it.code] = it.name;
-      return it.code;
-    });
-  }
-  STATE.compare.dirty = true;
-  saveCompareList();
-  renderCompareBasketTags();
-  loadComparePeers(false);
-  loadIndustryPeers(STATE.compare.codes[0] || "", { open: true });
-}
-
 export function renderCompareBasketTags() {
   const box = document.getElementById("cmp-basket-tags");
   if (!box) return;
   if (!STATE.compare.codes.length) {
-    box.innerHTML = `<span class="flat" style="font-size:12px;">对比篮子为空，请通过上方搜索或点击 preset 导入同业标的</span>`;
+    box.innerHTML = `<span class="flat" style="font-size:12px;">对比篮子为空，请通过上方搜索或个股看板添加同业标的</span>`;
     return;
   }
   const anchorCode = (STATE.compare.peerAnchorCode || "").trim().toUpperCase();
@@ -438,23 +410,14 @@ export const COMPARE_RESEARCH_MODES = {
     ]
   },
   cycle: {
-    label: "周期右侧",
-    brief: "左侧看PB/EV-EBIT赔率 + 右侧看毛利/ROE拐点 + 供给缩表与抗寒（风控外环自动切换周期排雷口径）",
-    defaultView: "cycle_odds_inflection",
+    label: "周期模式",
+    brief: "看5年完整周期真实盈利与财务健康 + 用绝对PB/均ROE反A股炒作伪低分位 + 辨长周期造血龙头与高弹性反转",
+    defaultView: "cycle_quality_pb",
     views: [
-      { val: "cycle_odds_inflection", label: "赔率 vs 景气拐点" },
-      { val: "cycle_ev_ebit_pos", label: "EV/EBIT 周期水位" },
-      { val: "cycle_supply_safety", label: "供给缩表 vs 抗寒" }
-    ]
-  },
-  growth: {
-    label: "成长模式",
-    brief: "高增速消化估值(PEG/PSG) + 二阶加速与效率 + 自我造血防稀释（风控外环自动切换成长排雷口径）",
-    defaultView: "growth_g_pe",
-    views: [
-      { val: "growth_g_pe", label: "成长性价比 PEG/PSG" },
-      { val: "growth_accel_eff", label: "加速度 vs 投入效率" },
-      { val: "growth_cash_self", label: "增速 vs 造血验证" }
+      { val: "cycle_quality_pb", label: "长期质地 vs 估值" },
+      { val: "cycle_supply_safety", label: "长期财务健康 vs 造血" },
+      { val: "cycle_elasticity_val", label: "反转弹性 vs 绝对估值" },
+      { val: "cycle_odds_inflection", label: "周期水位与边际" }
     ]
   }
 };
@@ -492,6 +455,8 @@ export function syncCompareControls() {
   if (briefEl) briefEl.textContent = COMPARE_RESEARCH_MODES[rMode].brief;
   const qualGlossEl = document.getElementById("cmp-quality-glossary");
   if (qualGlossEl) qualGlossEl.classList.toggle("hidden", rMode !== "quality");
+  const cycGlossEl = document.getElementById("cmp-cycle-glossary");
+  if (cycGlossEl) cycGlossEl.classList.toggle("hidden", rMode !== "cycle");
 
   document.querySelectorAll("#seg-cmp-r-mode button").forEach(b => b.classList.toggle("active", b.dataset.val === cmp.rMode));
   document.querySelectorAll("#seg-cmp-scenario button").forEach(b => b.classList.toggle("active", b.dataset.val === cmp.scenario));
@@ -532,30 +497,52 @@ export function syncCompareControls() {
   if (qcWrap) qcWrap.classList.toggle("hidden", cmp.scatterMode !== "quality_roic_cash");
   document.querySelectorAll("#seg-cmp-qual-cash button").forEach(b => b.classList.toggle("active", b.dataset.val === (cmp.qualCashAxis || "cash_conv")));
 
+  const cqxWrap = document.getElementById("wrap-cmp-cyc-qual-x");
+  if (cqxWrap) cqxWrap.classList.toggle("hidden", cmp.scatterMode !== "cycle_quality_pb");
+  document.querySelectorAll("#seg-cmp-cyc-qual-x button").forEach(b => b.classList.toggle("active", b.dataset.val === (cmp.cycleQualXAxis || "roe_5y")));
+
+  const cqyWrap = document.getElementById("wrap-cmp-cyc-qual-y");
+  if (cqyWrap) cqyWrap.classList.toggle("hidden", cmp.scatterMode !== "cycle_quality_pb");
+  document.querySelectorAll("#seg-cmp-cyc-qual-y button").forEach(b => b.classList.toggle("active", b.dataset.val === (cmp.cycleQualYAxis || "pb")));
+
   const coWrap = document.getElementById("wrap-cmp-cyc-odds");
   if (coWrap) coWrap.classList.toggle("hidden", cmp.scatterMode !== "cycle_odds_inflection");
-  document.querySelectorAll("#seg-cmp-cyc-odds button").forEach(b => b.classList.toggle("active", b.dataset.val === (cmp.cycleOddsAxis || "pb_cheap")));
+  document.querySelectorAll("#seg-cmp-cyc-odds button").forEach(b => b.classList.toggle("active", b.dataset.val === (cmp.cycleOddsAxis || "roe_pb_5y")));
 
   const ciWrap = document.getElementById("wrap-cmp-cyc-inflect");
   if (ciWrap) ciWrap.classList.toggle("hidden", cmp.scatterMode !== "cycle_odds_inflection");
-  document.querySelectorAll("#seg-cmp-cyc-inflect button").forEach(b => b.classList.toggle("active", b.dataset.val === (cmp.cycleInflectAxis || "gm_yoy")));
+  document.querySelectorAll("#seg-cmp-cyc-inflect button").forEach(b => b.classList.toggle("active", b.dataset.val === (cmp.cycleInflectAxis || "cycle_pct")));
+
+  const cmWrap = document.getElementById("wrap-cmp-cyc-moat");
+  if (cmWrap) cmWrap.classList.toggle("hidden", cmp.scatterMode !== "cycle_supply_safety");
+  document.querySelectorAll("#seg-cmp-cyc-moat button").forEach(b => b.classList.toggle("active", b.dataset.val === (cmp.cycleMoatAxis || "health")));
 
   const csWrap = document.getElementById("wrap-cmp-cyc-safety");
   if (csWrap) csWrap.classList.toggle("hidden", cmp.scatterMode !== "cycle_supply_safety");
-  document.querySelectorAll("#seg-cmp-cyc-safety button").forEach(b => b.classList.toggle("active", b.dataset.val === (cmp.cycleSafetyAxis || "int_cov")));
+  document.querySelectorAll("#seg-cmp-cyc-safety button").forEach(b => b.classList.toggle("active", b.dataset.val === (cmp.cycleSafetyAxis || "ocf_capex_5y")));
 
-  const gvWrap = document.getElementById("wrap-cmp-gr-val");
-  if (gvWrap) gvWrap.classList.toggle("hidden", cmp.scatterMode !== "growth_g_pe");
-  document.querySelectorAll("#seg-cmp-gr-val button").forEach(b => b.classList.toggle("active", b.dataset.val === (cmp.growthValAxis || "peg")));
+  const ceWrap = document.getElementById("wrap-cmp-cyc-elast");
+  if (ceWrap) ceWrap.classList.toggle("hidden", cmp.scatterMode !== "cycle_elasticity_val");
+  document.querySelectorAll("#seg-cmp-cyc-elast button").forEach(b => b.classList.toggle("active", b.dataset.val === (cmp.cycleElastAxis || "peak_yield")));
 
-  const geWrap = document.getElementById("wrap-cmp-gr-eff");
-  if (geWrap) geWrap.classList.toggle("hidden", cmp.scatterMode !== "growth_accel_eff");
-  document.querySelectorAll("#seg-cmp-gr-eff button").forEach(b => b.classList.toggle("active", b.dataset.val === (cmp.growthEffAxis || "roic")));
+  const ceyWrap = document.getElementById("wrap-cmp-cyc-elast-y");
+  if (ceyWrap) ceyWrap.classList.toggle("hidden", cmp.scatterMode !== "cycle_elasticity_val");
+  document.querySelectorAll("#seg-cmp-cyc-elast-y button").forEach(b => b.classList.toggle("active", b.dataset.val === (cmp.cycleElastYAxis || "pb")));
 
-  const gcWrap = document.getElementById("wrap-cmp-gr-cash");
-  if (gcWrap) gcWrap.classList.toggle("hidden", cmp.scatterMode !== "growth_cash_self");
-  document.querySelectorAll("#seg-cmp-gr-cash button").forEach(b => b.classList.toggle("active", b.dataset.val === (cmp.growthCashAxis || "cash_conv")));
-
+  const fillGoodLbl = document.getElementById("cmp-legend-fill-good");
+  const fillMidLbl = document.getElementById("cmp-legend-fill-mid");
+  const fillBadLbl = document.getElementById("cmp-legend-fill-bad");
+  if (fillGoodLbl && fillMidLbl && fillBadLbl) {
+    if (rMode === "cycle") {
+      fillGoodLbl.textContent = "跨周期低估 (均ROE/PB ≥ 8% 或优质破净)";
+      fillMidLbl.textContent = "跨周期合理 (4.5%~8%)";
+      fillBadLbl.textContent = "跨周期偏贵/炒作 (< 4.5% 或长期亏损)";
+    } else {
+      fillGoodLbl.textContent = "低估空间 ≥ +15%";
+      fillMidLbl.textContent = "估值合理 (-10% ~ +15%)";
+      fillBadLbl.textContent = "偏贵 ≤ -10%";
+    }
+  }
   const goodLbl = document.getElementById("cmp-legend-ring-good");
   const badLbl = document.getElementById("cmp-legend-ring-bad");
   if (goodLbl && badLbl) {
@@ -566,11 +553,8 @@ export function syncCompareControls() {
       goodLbl.textContent = "核心白马";
       badLbl.textContent = "白马排雷(净现<0.7x/高应计/高有息债/高波动)";
     } else if (rMode === "cycle") {
-      goodLbl.textContent = "右侧拐点";
-      badLbl.textContent = "周期排雷(高负债扩产/顶峰/低保障)";
-    } else if (rMode === "growth") {
-      goodLbl.textContent = "戴维斯双击";
-      badLbl.textContent = "成长排雷(高PEG/失速/烧钱稀释)";
+      goodLbl.textContent = "周期优选(质优低估/低估高弹性)";
+      badLbl.textContent = "周期排雷(长期财务脆弱/资金链/顶峰溢价)";
     } else {
       goodLbl.textContent = "低波稳健";
       badLbl.textContent = "高负债/高回撤预警";
@@ -748,7 +732,6 @@ export function renderCompareScatter(rows) {
   const isDivMode = STATE.compare.researchMode === "dividend";
   const isQualMode = STATE.compare.researchMode === "quality";
   const isCycleMode = STATE.compare.researchMode === "cycle";
-  const isGrowthMode = STATE.compare.researchMode === "growth";
   const hz = STATE.compare.horizon || "ttm";
   const elMode = STATE.compare.divElasticityMode || "dps_cagr";
   const rkMode = STATE.compare.divRiskAxis || "max_dd";
@@ -758,128 +741,120 @@ export function renderCompareScatter(rows) {
   const qCompY = STATE.compare.qualCompYAxis || "pb";
   const qCompEff = (qCompY !== "roe_vol" && qComp === "roe_pb") ? "bogle_ret" : qComp;
   const qcMode = STATE.compare.qualCashAxis || "cash_conv";
-  const cycOdds = STATE.compare.cycleOddsAxis || "pb_cheap";
-  const cycInflect = STATE.compare.cycleInflectAxis || "gm_yoy";
-  const cycSafety = STATE.compare.cycleSafetyAxis || "int_cov";
-  const grVal = STATE.compare.growthValAxis || "peg";
-  const grEff = STATE.compare.growthEffAxis || "roic";
-  const grCash = STATE.compare.growthCashAxis || "cash_conv";
+  const cycQualX = STATE.compare.cycleQualXAxis || "roe_5y";
+  const cycQualY = STATE.compare.cycleQualYAxis || "pb";
+  const cycOdds = STATE.compare.cycleOddsAxis || "roe_pb_5y";
+  const cycInflect = STATE.compare.cycleInflectAxis || "cycle_pct";
+  const cycMoat = STATE.compare.cycleMoatAxis || "health";
+  const cycSafety = STATE.compare.cycleSafetyAxis || "ocf_capex_5y";
+  const cycElast = STATE.compare.cycleElastAxis || "peak_yield";
+  const cycElastY = STATE.compare.cycleElastYAxis || "pb";
   const hzLabel = hz === "5y" ? "5年均" : (hz === "3y" ? "3年均" : "TTM");
   const ltTag = hz === "5y" ? "5年" : "3年";
   const allFin = rows.length > 0 && rows.every(r => r.isFinancial);
   const configs = {
-    growth_g_pe: grVal === "psg"
-      ? {
-          xLabel: "3年营收复合增速 → 近1Y营收增速 (%)",
-          yLabel: "市销率 PS_TTM (倍 · 覆盖高研发/微利成长)",
-          subtitle: "横轴 3 年营收复合增速（拖尾箭头指向近 1Y 营收增速） · 纵轴当前市销率 PS_TTM · 射线为 PSG = 0.20x / 0.35x 前沿，右下兼顾高增长与低估值",
-          badge: "占优区：高营收增速 · 低PSG / 箭头向右加速",
-          badgePos: "br",
-          forceZeroX: false,
-          forceZeroY: true,
-          xFmt: v => `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`,
-          yFmt: v => `${v.toFixed(1)}x`,
-          getX: r => (r.revCagr3y ?? r.revYoy1y),
-          getX2: r => r.revYoy1y,
-          getY: r => r.psTtm
-        }
-      : {
-          xLabel: hz === "3y" ? "3年净利复合增速 → 近1Y边际增速 (%)" : "5年净利基准增速 g₁ → 近1Y边际增速 (%)",
-          yLabel: hz === "5y" ? "5年均利 PE (倍 · 越低越便宜)" : (hz === "3y" ? "3年均利 PE (倍 · 越低越便宜)" : "市盈率 PE_TTM (倍 · 越低越便宜)"),
-          subtitle: `横轴${hz === "3y" ? "近 3 年净利复合增速" : " 5 年净利基准增速 g₁"}（拖尾箭头指向近 1Y 增速） · 纵轴${hz === "ttm" ? "当前 PE_TTM" : ltTag + "均利 PE"} · 绿射线 PEG = 1.0x 为成长黄金前沿，右下高增速低估值占优`,
-          badge: "占优区：高增速 · 低PEG / 箭头向右加速",
-          badgePos: "br",
-          forceZeroX: false,
-          forceZeroY: true,
-          xFmt: v => `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`,
-          yFmt: v => `${v.toFixed(1)}x`,
-          getX: r => (hz === "3y" ? (r.npCagr3y ?? r.g1Base) : (r.g1Base ?? r.npCagr3y)),
-          getX2: r => r.npYoy1y,
-          getY: r => (hz === "5y" ? (r.pe5yNorm ?? r.peTtm) : (hz === "3y" ? (r.pe3yNorm ?? r.peTtm) : r.peTtm))
-        },
-    growth_accel_eff: {
-      xLabel: "净利增速二阶加速度 1Y−5Y (pp · >0为加速扩张)",
-      yLabel: grEff === "rd"
-        ? "研发费用率 R&D / 营收 (% · 技术投入强度)"
-        : (grEff === "gm"
-          ? "TTM 毛利率 (% · 产品定价权/护城河)"
-          : `${hz === "3y" ? "3年" : "5年"} ROIC 均值 (% · 金融切ROE)`),
-      subtitle: `横轴盈利增速二阶加速度（1Y−5Y，X=0 为加速/放缓分界） · 纵轴${grEff === "rd" ? "研发费用占营收比" : (grEff === "gm" ? "TTM 综合毛利率" : `${hz === "3y" ? "3" : "5"} 年平均 ROIC`)} · 绿斜线平衡加速势能与投入效率`,
-      badge: grEff === "rd"
-        ? "占优区：盈利加速 · 高研发投入强度"
-        : (grEff === "gm" ? "占优区：盈利加速 · 高毛利定价权" : "占优区：盈利加速 · 高ROIC复利"),
-      badgePos: "tr",
-      forceZeroX: false,
-      forceZeroY: grEff === "rd",
-      xFmt: v => `${v >= 0 ? "+" : ""}${v.toFixed(1)}pp`,
-      yFmt: v => `${v.toFixed(1)}%`,
-      getX: r => r.npAccelPp,
-      getY: r => (grEff === "rd"
-        ? r.rdRatioPct
-        : (grEff === "gm" ? r.ttmGmPct : (hz === "3y" ? (r.roic3yMean ?? r.roic5yMean) : (r.roic5yMean ?? r.roic3yMean))))
-    },
-    growth_cash_self: {
-      xLabel: hz === "3y" ? "3年净利复合增速 (%)" : "近1年 TTM 净利同比增速 (%)",
-      yLabel: grCash === "fcf_margin"
-        ? "3年自由现金流利润率 FCF / 营收 (% · >0自我造血)"
-        : "3年净现比 OCF / 归母净利 (倍 · ≥0.8x 真造血)",
-      subtitle: `横轴${hz === "3y" ? "近 3 年净利复合增速" : "近 1 年净利同比增速"} · 纵轴${grCash === "fcf_margin" ? "3 年自由现金流利润率" : "3 年盈利现金含量"} · 红线下方配合净稀释预警烧钱续命的伪成长`,
-      badge: grCash === "fcf_margin" ? "占优区：高增速 · 正FCF真造血" : "占优区：高增速 · 高净现比无水分",
-      badgePos: "tr",
-      forceZeroX: false,
-      forceZeroY: false,
-      xFmt: v => `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`,
-      yFmt: v => (grCash === "fcf_margin" ? `${v.toFixed(1)}%` : `${v.toFixed(2)}x`),
-      getX: r => (hz === "3y" ? (r.npCagr3y ?? r.npYoy1y) : (r.npYoy1y ?? r.npCagr3y)),
-      getY: r => (grCash === "fcf_margin" ? (r.fcfMargin3y ?? r.fcfMarginTtm) : (r.cashConv3y ?? r.cashConv5y))
-    },
-    cycle_odds_inflection: {
-      xLabel: cycOdds === "ebit_yield"
-        ? `${hz === "3y" ? "3年" : "5年"}均 EBIT/EV 收益率 (% · 越右越便宜)`
-        : "近5年 PB 历史便宜度 (% · 100-PB分位 · 越右越便宜)",
-      yLabel: cycInflect === "roe_delta"
-        ? "ΔROE 边际差 TTM-3Y均 (pp · >0为景气上行)"
-        : "单季毛利率同比 ΔGM (pp · >0为右侧改善)",
-      subtitle: cycOdds === "ebit_yield"
-        ? `横轴 ${hz === "3y" ? "3" : "5"} 年均 EBIT/EV（非金融按有息/总负债近似 EV） · 纵轴${cycInflect === "roe_delta" ? "ΔROE 边际差" : "单季毛利率同比 ΔGM"} · Y=0 为景气拐点线，右上兼顾赔率与右侧拐头`
-        : `横轴近 5 年 PB 历史便宜度(100-PB分位) · 纵轴${cycInflect === "roe_delta" ? "ΔROE 边际差" : "单季毛利率同比 ΔGM"} · Y=0 为景气拐点线，斜线右上兼顾底部赔率与景气反转`,
-      badge: "占优区：高赔率 · 景气右侧拐头",
-      badgePos: "tr",
-      forceZeroX: false,
-      ...(cycOdds === "ebit_yield" ? {} : { clampX: [0, 100] }),
-      forceZeroY: false,
-      xFmt: v => `${v.toFixed(cycOdds === "ebit_yield" ? 1 : 0)}%`,
-      yFmt: v => `${v >= 0 ? "+" : ""}${v.toFixed(1)}pp`,
-      getX: r => (cycOdds === "ebit_yield"
-        ? (hz === "3y" ? (r.ebitYield3y ?? r.ebitYield5y ?? r.ebitYieldTtm) : (r.ebitYield5y ?? r.ebitYield3y ?? r.ebitYieldTtm))
-        : r.pbCheapness5y),
-      getY: r => (cycInflect === "roe_delta" ? r.deltaRoeMarginPp : r.qGmYoyPp)
-    },
-    cycle_ev_ebit_pos: {
-      xLabel: `${hz === "3y" ? "3年" : "5年"}均化 EV/EBIT (倍 · 越左越便宜 · 非金融)`,
-      yLabel: "盈利周期水位 (TTM EBIT ÷ 均化EBIT)",
-      subtitle: `横轴 ${hz === "3y" ? "3" : "5"} 年均化 EV/EBIT（缺有息债务细项时按总负债近似计算，金融股免算） · 纵轴当期盈利相对跨周期中枢倍数 · Y=1.0x 为中枢，>1.5x 防顶部低PE接盘，左下为低估低位区`,
-      badge: "占优区：低均化EV/EBIT · 盈利低于顶峰",
-      badgePos: "bl",
-      forceZeroX: true,
-      forceZeroY: false,
-      xFmt: v => `${v.toFixed(1)}x`,
-      yFmt: v => `${v.toFixed(2)}x`,
-      getX: r => (hz === "3y" ? (r.evToEbit3y ?? r.evToEbit5y ?? r.evToEbitTtm) : (r.evToEbit5y ?? r.evToEbit3y ?? r.evToEbitTtm)),
-      getY: r => r.ebitCyclePos
+    cycle_quality_pb: {
+      xLabel: cycQualX === "health"
+        ? "5Y财务健康评分 (0~100 · 杠杆/现金/造血/韧性)"
+        : (cycQualX === "roic_5y"
+          ? "5年平均 ROIC (% · 跨周期资本回报)"
+          : (cycQualX === "gm_5y"
+            ? "5年平均毛利率 (% · 跨周期产品力/成本优势)"
+            : "5年完整周期平均 ROE (% · 越右长期赚钱能力越强)")),
+      yLabel: cycQualY === "ev_ebit_norm"
+        ? "5年正常化 EV/EBIT (倍 · 去亏损畸变 · 越低越便宜)"
+        : "当前市净率 PB (绝对倍数 · <1.0x破净 · 越低越便宜)",
+      subtitle: `横轴${cycQualX === "health" ? "近 5 年综合财务健康评分（当季亏损仍可识别长周期龙头）" : (cycQualX === "roic_5y" ? "近 5 年完整周期平均 ROIC" : (cycQualX === "gm_5y" ? "近 5 年平均毛利率" : "近 5 年完整周期平均 ROE"))} · 纵轴${cycQualY === "ev_ebit_norm" ? "5Y 正常化 EV/EBIT" : "当前绝对 PB（不受历史炒作高点 PB 假便宜误导）"} · 右下代表跨周期质优且真便宜`,
+      badge: "占优区：长周期质地优异 · 绝对估值便宜",
+      badgePos: "br",
+      forceZeroX: cycQualX === "health",
+      ...(cycQualX === "health" ? { clampX: [0, 100] } : {}),
+      forceZeroY: true,
+      xFmt: v => (cycQualX === "health" ? `${v.toFixed(0)}分` : `${v.toFixed(1)}%`),
+      yFmt: v => (cycQualY === "ev_ebit_norm" ? `${v.toFixed(1)}x` : `${v.toFixed(2)}x`),
+      getX: r => (cycQualX === "health"
+        ? r.cycHealthScore
+        : (cycQualX === "roic_5y"
+          ? (r.roic5yMean ?? r.roic3yMean)
+          : (cycQualX === "gm_5y" ? r.ttmGmMean5y : (r.roeMean5y ?? r.roeMean3y)))),
+      getY: r => (cycQualY === "ev_ebit_norm" ? (r.evToEbitNorm5y ?? r.evToEbitNorm3y) : r.pb)
     },
     cycle_supply_safety: {
-      xLabel: "资本开支强度 CapEx / TTM 营收 (% · 越左扩产越克制)",
-      yLabel: cycSafety === "cash_debt" ? "货币资金 / 总负债 (% · 越高越抗寒)" : "利息保障倍数 EBIT / 利息 (倍 · 越高越安全)",
-      subtitle: `横轴资本开支占营收比（低值代表供给克制/停止盲目扩产） · 纵轴${cycSafety === "cash_debt" ? "货币资金对总负债覆盖率" : "EBIT 对利息费用保障倍数"} · 左上占优，红线下方为过冬脆弱警报区`,
-      badge: cycSafety === "cash_debt" ? "占优区：低CapEx缩表 · 高现金/负债" : "占优区：低CapEx缩表 · 高利息保障",
-      badgePos: "tl",
+      xLabel: cycMoat === "debt_5y"
+        ? "5年平均资产负债率 (% · 越左长期杠杆越克制)"
+        : (cycMoat === "gm_5y"
+          ? "5年平均毛利率 (% · 跨周期成本护城河)"
+          : "5Y财务健康评分 (0~100 · 杠杆/现金/造血/韧性)"),
+      yLabel: cycSafety === "fcf_assets_5y"
+        ? "5年平均自由现金流 / 总资产 (% · >0跨周期净造血)"
+        : (cycSafety === "cash_debt_5y"
+          ? "5年平均货币资金 / 负债比 (% · 越厚越抗寒)"
+          : "5年累计 OCF / CapEx (倍 · ≥1.0x靠自身造血覆盖扩产)"),
+      subtitle: `横轴${cycMoat === "debt_5y" ? "5 年平均负债率（衡量跨周期加杠杆节制度）" : (cycMoat === "gm_5y" ? "5 年平均毛利率" : "5Y 长期财务健康评分（综合负债、现金垫、造血比与正盈利季占比）")} · 纵轴${cycSafety === "fcf_assets_5y" ? "5 年平均 FCF / 总资产" : (cycSafety === "cash_debt_5y" ? "5 年平均现金覆盖负债比" : "5 年累计经营现金流覆盖资本开支倍数（≥1.0x 自给自足）")} · 专筛整轮周期财务最好的真龙头`,
+      badge: cycMoat === "debt_5y" ? "占优区：低长期负债 · 强跨周期造血" : "占优区：长期财务健康 · 强跨周期造血",
+      badgePos: cycMoat === "debt_5y" ? "tl" : "tr",
+      forceZeroX: cycMoat !== "gm_5y",
+      ...(cycMoat === "health" ? { clampX: [0, 100] } : {}),
+      forceZeroY: cycSafety === "cash_debt_5y",
+      xFmt: v => (cycMoat === "health" ? `${v.toFixed(0)}分` : `${v.toFixed(1)}%`),
+      yFmt: v => (cycSafety === "ocf_capex_5y" ? `${v.toFixed(2)}x` : (cycSafety === "fcf_assets_5y" ? `${v >= 0 ? "+" : ""}${v.toFixed(1)}%` : `${v.toFixed(0)}%`)),
+      getX: r => (cycMoat === "debt_5y"
+        ? r.debtRatio5yMean
+        : (cycMoat === "gm_5y" ? r.ttmGmMean5y : r.cycHealthScore)),
+      getY: r => (cycSafety === "fcf_assets_5y"
+        ? r.fcfToAssets5yPct
+        : (cycSafety === "cash_debt_5y" ? r.cashToDebt5yMean : r.ocfToCapex5y))
+    },
+    cycle_elasticity_val: {
+      xLabel: cycElast === "gm_elast"
+        ? "毛利+1pp盈利弹性 = TTM营收 ÷ 总市值 × 1% (% · 即 1/PS)"
+        : (cycElast === "rev_ev_5y"
+          ? "5年均营收 / 企业价值 EV (倍 · 单位EV买到的产能体量)"
+          : "5年峰值盈利收益率 = 5Y峰值净利 ÷ 总市值 (% · 越右弹性越大)"),
+      yLabel: cycElastY === "ev_ebit_norm"
+        ? "5年正常化 EV/EBIT (倍 · 越低越便宜)"
+        : (cycElastY === "pb_med_ratio"
+          ? "当前 PB ÷ 5年PB中位数 (倍 · <1.0x低于中位)"
+          : "当前市净率 PB (绝对倍数 · <1.0x破净 · 越低越便宜)"),
+      subtitle: `横轴${cycElast === "gm_elast" ? "毛利率每修复 1pp 对应当前市值的税前弹性" : (cycElast === "rev_ev_5y" ? "5 年平均营收 / EV（重资产产能弹性）" : "近 5 年周期高点净利相对当前市值收益率")} · 纵轴${cycElastY === "ev_ebit_norm" ? "5Y 正常化 EV/EBIT" : (cycElastY === "pb_med_ratio" ? "当前 PB 相对 5 年中位数倍数" : "当前绝对 PB（防炒作高 PB）")} · 右下为高反转弹性且低估值标的`,
+      badge: "占优区：高反转弹性 · 低绝对估值",
+      badgePos: "br",
       forceZeroX: true,
-      forceZeroY: cycSafety === "cash_debt",
+      forceZeroY: true,
+      xFmt: v => (cycElast === "rev_ev_5y" ? `${v.toFixed(2)}x` : (cycElast === "gm_elast" ? `${v.toFixed(2)}%` : `${v.toFixed(0)}%`)),
+      yFmt: v => `${v.toFixed(2)}x`,
+      getX: r => (cycElast === "gm_elast"
+        ? r.gmElasticityPct
+        : (cycElast === "rev_ev_5y" ? r.rev5yToEv : r.peakEarnYield5y)),
+      getY: r => (cycElastY === "ev_ebit_norm"
+        ? (r.evToEbitNorm5y ?? r.evToEbitNorm3y)
+        : (cycElastY === "pb_med_ratio" ? r.pbToMed5y : r.pb))
+    },
+    cycle_odds_inflection: {
+      xLabel: cycOdds === "ebit_norm_yield"
+        ? "5年中枢 EBIT/EV 收益率 (% · 正常化盈利收益率 · 越右越便宜)"
+        : (cycOdds === "pb_med_ratio"
+          ? "相对5年PB中位折价 (%) · (1 - PB/P50 · >0低于5年中位)"
+          : "跨周期 implied 回报 = 5Y均ROE ÷ 当前PB (% · 越右越便宜)"),
+      yLabel: cycInflect === "gm_yoy"
+        ? "单季毛利率同比 ΔGM YoY (pp · >0为右侧拐头)"
+        : (cycInflect === "gm_qoq"
+          ? "单季毛利率环比 ΔGM QoQ (pp · >0为边际回暖)"
+          : "盈利周期分位 (TTM EBIT 在5Y峰谷区间 0%~100%)"),
+      subtitle: `横轴${cycOdds === "ebit_norm_yield" ? "5 年正向中枢 EBIT/EV 收益率" : (cycOdds === "pb_med_ratio" ? "当前 PB 相对近 5 年中位数的折价率（剔除历史暴炒极值干扰）" : "5Y 平均 ROE ÷ 当前 PB（跨周期隐含估值回报）")} · 纵轴${cycInflect === "gm_yoy" ? "单季毛利率同比" : (cycInflect === "gm_qoq" ? "单季毛利率环比" : "当前盈利在近 5 年峰谷区间分位（右下=高回报低水位，警惕 >80% 顶峰接盘）")}`,
+      badge: cycInflect === "cycle_pct" ? "占优区：高跨周期回报 · 盈利低分位" : "占优区：高跨周期回报 · 景气右侧拐头",
+      badgePos: cycInflect === "cycle_pct" ? "br" : "tr",
+      forceZeroX: false,
+      forceZeroY: cycInflect === "cycle_pct",
+      ...(cycInflect === "cycle_pct" ? { clampY: [0, 100] } : {}),
       xFmt: v => `${v.toFixed(1)}%`,
-      yFmt: v => (cycSafety === "cash_debt" ? `${v.toFixed(0)}%` : `${v.toFixed(1)}x`),
-      getX: r => r.capexToRevPct,
-      getY: r => (cycSafety === "cash_debt" ? r.cashToDebtPct : r.interestCoverage)
+      yFmt: v => (cycInflect === "cycle_pct" ? `${v.toFixed(0)}%` : `${v >= 0 ? "+" : ""}${v.toFixed(1)}pp`),
+      getX: r => (cycOdds === "ebit_norm_yield"
+        ? (r.ebitNormYield5y ?? r.ebitNormYield3y)
+        : (cycOdds === "pb_med_ratio" ? r.pbMedDiscountPct : (r.roeToPb5y ?? r.roeToPb3y))),
+      getY: r => (cycInflect === "gm_yoy"
+        ? r.qGmYoyPp
+        : (cycInflect === "gm_qoq" ? r.qGmQoqPp : r.ebitCyclePct5y))
     },
     quality_roic_val: qvMode === "pb"
       ? {
@@ -1220,18 +1195,13 @@ export function renderCompareScatter(rows) {
 
   if (!pts.length) {
     const isAllFinCycleNonFin = !STATE.compare.loading && allFin && (
-      mode === "cycle_ev_ebit_pos"
-      || mode === "cycle_supply_safety"
-      || (mode === "cycle_odds_inflection" && (cycOdds === "ebit_yield" || cycInflect === "gm_yoy"))
-    );
-    const isAllFinGrowthNonFin = !STATE.compare.loading && allFin && (
-      (mode === "growth_accel_eff" && (grEff === "gm" || grEff === "rd"))
-      || (mode === "growth_cash_self" && grCash === "fcf_margin")
+      mode === "cycle_supply_safety"
+      || mode === "cycle_odds_inflection"
+      || (mode === "cycle_quality_pb" && (cycQualX === "health" || cycQualX === "gm_5y" || cycQualY === "ev_ebit_norm"))
+      || (mode === "cycle_elasticity_val" && (cycElast !== "peak_yield" || cycElastY === "ev_ebit_norm"))
     );
     if (isAllFinCycleNonFin) {
       svg.innerHTML = `<text x="${w / 2}" y="${h / 2 - 8}" text-anchor="middle" fill="#6B7280" font-size="${isNarrow ? 11.5 : 13}" font-family="Noto Sans SC, sans-serif"><tspan x="${w / 2}" dy="0">EV/EBIT、单季毛利率与 CapEx 仅适用于非金融实业标的</tspan><tspan x="${w / 2}" dy="18">请添加实业标的，或切换赔率/景气轴至「ΔROE边际差」</tspan></text>`;
-    } else if (isAllFinGrowthNonFin) {
-      svg.innerHTML = `<text x="${w / 2}" y="${h / 2 - 8}" text-anchor="middle" fill="#6B7280" font-size="${isNarrow ? 11.5 : 13}" font-family="Noto Sans SC, sans-serif"><tspan x="${w / 2}" dy="0">毛利率、研发率与 FCF 利润率仅适用于非金融实业标的</tspan><tspan x="${w / 2}" dy="18">请添加实业成长标的，或切换至「ROIC」/「3Y净现比」</tspan></text>`;
     } else if (isNarrow && !STATE.compare.loading) {
       svg.innerHTML = `<text x="${w / 2}" y="${h / 2 - 8}" text-anchor="middle" fill="#6B7280" font-size="12" font-family="Noto Sans SC, sans-serif"><tspan x="${w / 2}" dy="0">当前篮子暂无足够有效散点数据</tspan><tspan x="${w / 2}" dy="18">请添加标的或切换上方对比模式</tspan></text>`;
     } else {
@@ -1244,7 +1214,7 @@ export function renderCompareScatter(rows) {
   const plotW = Math.max(120, w - pad.l - pad.r);
   const plotH = Math.max(120, h - pad.t - pad.b);
 
-  const showArrows = (mode === "div_growth" || mode === "growth_g_pe" || (mode === "quality_compound_roiic" && qGrow === "g_cagr")) && Boolean(STATE.compare.showGrowthArrows);
+  const showArrows = (mode === "div_growth" || (mode === "quality_compound_roiic" && qGrow === "g_cagr")) && Boolean(STATE.compare.showGrowthArrows);
   const showRings = Boolean(STATE.compare.showRiskRings);
   const xValsForRange = [];
   for (const p of pts) {
@@ -1406,163 +1376,178 @@ export function renderCompareScatter(rows) {
       "#0F766E",
       "right"
     );
+  } else if (mode === "cycle_quality_pb") {
+    drawZeroX();
+    if (cycQualY === "pb") {
+      const ry1 = toPxY(1.0);
+      if (ry1 >= pad.t && ry1 <= pad.t + plotH) {
+        refParts.push(`<line x1="${pad.l}" y1="${ry1}" x2="${pad.l + plotW}" y2="${ry1}" stroke="#0F766E" stroke-width="1.15" stroke-dasharray="4 3" opacity="0.72" />`);
+        if (ry1 >= pad.t + 14 && ry1 <= pad.t + plotH - 4) {
+          refParts.push(`<text x="${pad.l + 8}" y="${ry1 - 5}" text-anchor="start" font-size="10" font-weight="600" fill="#0F766E" font-family="Noto Sans SC, sans-serif">1.0x 破净重置底线</text>`);
+        }
+      }
+      if (cycQualX === "roe_5y" || cycQualX === "roic_5y") {
+        addSlopeRegion(x => x / 8.0, "below", "rgba(15,118,110,0.065)");
+        const posSlopes = pts.filter(p => p.x > 1 && p.y > 0).map(p => p.y / p.x);
+        const medSlope = posSlopes.length >= 2 ? clamp(median(posSlopes), 0.03, 1.5) : null;
+        if (medSlope != null && Math.abs(medSlope - 1 / 8.0) > 0.025) {
+          addSlopeLine(x => medSlope * x, "#6B7280", 1.0, "3 4", 0.72, `同业中位 (5Y均/PB = ${(1 / medSlope).toFixed(1)}%)`, "#6B7280", "mid");
+        }
+        addSlopeLine(x => x / 8.0, "#0F766E", 1.35, "5 4", 0.88, "8% 跨周期回报前沿 (PB = 均回报/8%)", "#0F766E", "right");
+      } else {
+        const medX = median(pts.map(p => p.x));
+        const medY = median(pts.map(p => p.y));
+        const splitX = cycQualX === "health" ? 60 : (medX ?? 20);
+        const splitY = medY ?? 2.0;
+        const rxS = toPxX(splitX);
+        const ryS = toPxY(splitY);
+        if (rxS < pad.l + plotW && ryS < pad.t + plotH) {
+          const optX = Math.max(pad.l, rxS);
+          const optY = Math.max(pad.t, ryS);
+          const optW = pad.l + plotW - optX;
+          const optH = pad.t + plotH - optY;
+          if (optW > 0 && optH > 0) {
+            refParts.push(`<rect x="${optX.toFixed(1)}" y="${optY.toFixed(1)}" width="${optW.toFixed(1)}" height="${optH.toFixed(1)}" fill="rgba(15,118,110,0.065)" />`);
+          }
+        }
+        if (rxS >= pad.l && rxS <= pad.l + plotW) {
+          refParts.push(`<line x1="${rxS.toFixed(1)}" y1="${pad.t}" x2="${rxS.toFixed(1)}" y2="${pad.t + plotH}" stroke="#0F766E" stroke-width="1.2" stroke-dasharray="4 4" opacity="0.75" />`);
+          const lblAnchor = rxS > pad.l + plotW - 120 ? "end" : "start";
+          const lblX = lblAnchor === "end" ? (rxS - 5) : (rxS + 5);
+          refParts.push(`<text x="${lblX.toFixed(1)}" y="${pad.t + 14}" text-anchor="${lblAnchor}" font-size="10" font-weight="600" fill="#0F766E" font-family="Noto Sans SC, sans-serif">${cycQualX === "health" ? "60分 财务健康分界" : `同业中位 (${splitX.toFixed(1)}%)`}</text>`);
+        }
+        if (ryS >= pad.t && ryS <= pad.t + plotH) {
+          refParts.push(`<line x1="${pad.l}" y1="${ryS.toFixed(1)}" x2="${pad.l + plotW}" y2="${ryS.toFixed(1)}" stroke="#6B7280" stroke-width="1.05" stroke-dasharray="3 4" opacity="0.72" />`);
+        }
+      }
+    } else {
+      const medX = median(pts.map(p => p.x));
+      const medY = median(pts.map(p => p.y));
+      const splitX = cycQualX === "health" ? 60 : (medX ?? 10);
+      const splitY = medY ?? 15;
+      const rxS = toPxX(splitX);
+      const ryS = toPxY(splitY);
+      if (rxS < pad.l + plotW && ryS < pad.t + plotH) {
+        const optX = Math.max(pad.l, rxS);
+        const optY = Math.max(pad.t, ryS);
+        const optW = pad.l + plotW - optX;
+        const optH = pad.t + plotH - optY;
+        if (optW > 0 && optH > 0) {
+          refParts.push(`<rect x="${optX.toFixed(1)}" y="${optY.toFixed(1)}" width="${optW.toFixed(1)}" height="${optH.toFixed(1)}" fill="rgba(15,118,110,0.065)" />`);
+        }
+      }
+      if (rxS >= pad.l && rxS <= pad.l + plotW) {
+        refParts.push(`<line x1="${rxS.toFixed(1)}" y1="${pad.t}" x2="${rxS.toFixed(1)}" y2="${pad.t + plotH}" stroke="#0F766E" stroke-width="1.2" stroke-dasharray="4 4" opacity="0.75" />`);
+      }
+      if (ryS >= pad.t && ryS <= pad.t + plotH) {
+        refParts.push(`<line x1="${pad.l}" y1="${ryS.toFixed(1)}" x2="${pad.l + plotW}" y2="${ryS.toFixed(1)}" stroke="#6B7280" stroke-width="1.05" stroke-dasharray="3 4" opacity="0.72" />`);
+      }
+    }
   } else if (mode === "cycle_odds_inflection") {
-    const yFn = cycOdds === "ebit_yield" ? (x => 4.0 - 0.35 * x) : (x => 3.0 - 0.05 * x);
-    addSlopeRegion(yFn, "above", "rgba(15,118,110,0.065)");
-    const ryBad = toPxY(-4.0);
-    const badH = Math.max(0, pad.t + plotH - Math.max(pad.t, ryBad));
-    if (badH > 0) {
-      refParts.push(`<rect x="${pad.l}" y="${Math.max(pad.t, ryBad)}" width="${plotW}" height="${badH}" fill="rgba(185,28,28,0.05)" />`);
-    }
-    if (cycOdds === "ebit_yield") drawZeroX();
-    const ry0 = toPxY(0);
-    if (ry0 >= pad.t && ry0 <= pad.t + plotH) {
-      refParts.push(`<line x1="${pad.l}" y1="${ry0}" x2="${pad.l + plotW}" y2="${ry0}" stroke="#0F766E" stroke-width="1.2" stroke-dasharray="4 4" opacity="0.75" />`);
-      if (ry0 >= pad.t + 14 && ry0 <= pad.t + plotH - 4) {
-        refParts.push(`<text x="${pad.l + 8}" y="${ry0 - 5}" text-anchor="start" font-size="10" font-weight="600" fill="#0F766E" font-family="Noto Sans SC, sans-serif">0pp 景气拐点线</text>`);
+    drawZeroX();
+    if (cycInflect === "cycle_pct") {
+      const xAnchor = clamp(median(pts.map(p => p.x)) || 8, 4, 25);
+      const yFn = x => clamp(25 + (35 / xAnchor) * x, 20, 85);
+      addSlopeRegion(yFn, "below", "rgba(15,118,110,0.065)");
+      const ryTop = toPxY(80);
+      const topH = Math.max(0, Math.min(pad.t + plotH, ryTop) - pad.t);
+      if (topH > 0) {
+        refParts.push(`<rect x="${pad.l}" y="${pad.t}" width="${plotW}" height="${topH}" fill="rgba(185,28,28,0.055)" />`);
       }
-    }
-    addSlopeLine(
-      yFn,
-      "#0F766E",
-      1.35,
-      "5 4",
-      0.85,
-      cycOdds === "ebit_yield" ? "赔率-拐点边界 (Δ+0.35×EBIT/EV≥4)" : "赔率-拐点边界 (Δ+0.05×便宜度≥3)",
-      "#0F766E",
-      "right"
-    );
-  } else if (mode === "cycle_ev_ebit_pos") {
-    const yFn = x => 1.65 - 0.055 * x;
-    addSlopeRegion(yFn, "below", "rgba(15,118,110,0.065)");
-    const ryTop = toPxY(1.5);
-    const topH = Math.max(0, Math.min(pad.t + plotH, ryTop) - pad.t);
-    if (topH > 0) {
-      refParts.push(`<rect x="${pad.l}" y="${pad.t}" width="${plotW}" height="${topH}" fill="rgba(185,28,28,0.055)" />`);
-    }
-    if (ryTop >= pad.t && ryTop <= pad.t + plotH) {
-      refParts.push(`<line x1="${pad.l}" y1="${ryTop}" x2="${pad.l + plotW}" y2="${ryTop}" stroke="#DC2626" stroke-width="1.25" stroke-dasharray="4 4" opacity="0.82" />`);
-      if (ryTop >= pad.t + 14 && ryTop <= pad.t + plotH - 4) {
-        refParts.push(`<text x="${pad.l + 8}" y="${ryTop - 5}" text-anchor="start" font-size="10" font-weight="600" fill="#DC2626" font-family="Noto Sans SC, sans-serif">1.5x 周期顶部警戒线</text>`);
-      }
-    }
-    const ryMid = toPxY(1.0);
-    if (ryMid >= pad.t && ryMid <= pad.t + plotH) {
-      refParts.push(`<line x1="${pad.l}" y1="${ryMid}" x2="${pad.l + plotW}" y2="${ryMid}" stroke="#6B7280" stroke-width="1.1" stroke-dasharray="3 3" opacity="0.8" />`);
-      if (ryMid >= pad.t + 14 && ryMid <= pad.t + plotH - 4) {
-        refParts.push(`<text x="${pad.l + 8}" y="${ryMid - 5}" text-anchor="start" font-size="10" fill="#6B7280" font-family="Noto Sans SC, sans-serif">1.0x 跨周期中枢</text>`);
-      }
-    }
-    if (yLo < 0 && yHi > 0) {
-      const ryZ = toPxY(0);
-      refParts.push(`<line x1="${pad.l}" y1="${ryZ}" x2="${pad.l + plotW}" y2="${ryZ}" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="2 3" />`);
-    }
-    addSlopeLine(yFn, "#0F766E", 1.35, "5 4", 0.85, "跨周期估值防顶前沿", "#0F766E", "right");
-  } else if (mode === "cycle_supply_safety") {
-    if (cycSafety === "cash_debt") {
-      const yFn = x => 20 + 1.5 * x;
-      addSlopeRegion(yFn, "above", "rgba(15,118,110,0.065)");
-      const ryFloor = toPxY(15);
-      const lowH = Math.max(0, pad.t + plotH - Math.max(pad.t, ryFloor));
-      if (lowH > 0) {
-        refParts.push(`<rect x="${pad.l}" y="${Math.max(pad.t, ryFloor)}" width="${plotW}" height="${lowH}" fill="rgba(185,28,28,0.055)" />`);
-      }
-      if (ryFloor >= pad.t && ryFloor <= pad.t + plotH) {
-        refParts.push(`<line x1="${pad.l}" y1="${ryFloor}" x2="${pad.l + plotW}" y2="${ryFloor}" stroke="#DC2626" stroke-width="1.25" stroke-dasharray="4 4" opacity="0.82" />`);
-        if (ryFloor >= pad.t + 14 && ryFloor <= pad.t + plotH - 4) {
-          refParts.push(`<text x="${pad.l + 8}" y="${ryFloor - 5}" text-anchor="start" font-size="10" font-weight="600" fill="#DC2626" font-family="Noto Sans SC, sans-serif">15% 现金负债比警戒线</text>`);
+      if (ryTop >= pad.t && ryTop <= pad.t + plotH) {
+        refParts.push(`<line x1="${pad.l}" y1="${ryTop}" x2="${pad.l + plotW}" y2="${ryTop}" stroke="#DC2626" stroke-width="1.25" stroke-dasharray="4 4" opacity="0.82" />`);
+        if (ryTop >= pad.t + 14 && ryTop <= pad.t + plotH - 4) {
+          refParts.push(`<text x="${pad.l + 8}" y="${ryTop - 5}" text-anchor="start" font-size="10" font-weight="600" fill="#DC2626" font-family="Noto Sans SC, sans-serif">80% 周期顶部警戒线（严防顶峰接盘）</text>`);
         }
       }
-      addSlopeLine(yFn, "#0F766E", 1.35, "5 4", 0.85, "缩表抗寒前沿 (现金比≥20%+1.5×CapEx)", "#0F766E", "right");
-    } else {
-      const yFn = x => 3.0 + 0.30 * x;
-      addSlopeRegion(yFn, "above", "rgba(15,118,110,0.065)");
-      const ryFloor = toPxY(2.0);
-      const lowH = Math.max(0, pad.t + plotH - Math.max(pad.t, ryFloor));
-      if (lowH > 0) {
-        refParts.push(`<rect x="${pad.l}" y="${Math.max(pad.t, ryFloor)}" width="${plotW}" height="${lowH}" fill="rgba(185,28,28,0.055)" />`);
-      }
-      if (ryFloor >= pad.t && ryFloor <= pad.t + plotH) {
-        refParts.push(`<line x1="${pad.l}" y1="${ryFloor}" x2="${pad.l + plotW}" y2="${ryFloor}" stroke="#DC2626" stroke-width="1.25" stroke-dasharray="4 4" opacity="0.82" />`);
-        if (ryFloor >= pad.t + 14 && ryFloor <= pad.t + plotH - 4) {
-          refParts.push(`<text x="${pad.l + 8}" y="${ryFloor - 5}" text-anchor="start" font-size="10" font-weight="600" fill="#DC2626" font-family="Noto Sans SC, sans-serif">2.0x 利息保障红线</text>`);
+      const ryBot = toPxY(25);
+      if (ryBot >= pad.t && ryBot <= pad.t + plotH) {
+        refParts.push(`<line x1="${pad.l}" y1="${ryBot}" x2="${pad.l + plotW}" y2="${ryBot}" stroke="#0F766E" stroke-width="1.1" stroke-dasharray="4 3" opacity="0.72" />`);
+        if (ryBot >= pad.t + 14 && ryBot <= pad.t + plotH - 4) {
+          refParts.push(`<text x="${pad.l + 8}" y="${ryBot - 5}" text-anchor="start" font-size="10" fill="#0F766E" font-family="Noto Sans SC, sans-serif">25% 盈利周期底部区</text>`);
         }
       }
-      addSlopeLine(yFn, "#0F766E", 1.35, "5 4", 0.85, "缩表抗寒前沿 (保障≥3+0.3×CapEx)", "#0F766E", "right");
-    }
-  } else if (mode === "growth_g_pe") {
-    drawZeroX();
-    if (grVal === "psg") {
-      addSlopeRegion(x => 0.20 * x, "below", "rgba(15,118,110,0.065)");
-      addSlopeRegion(x => 0.45 * x, "above", "rgba(185,28,28,0.045)");
-      addSlopeLine(x => 0.35 * x, "#6B7280", 1.0, "3 4", 0.72, "PSG = 0.35x 合理上限", "#6B7280", "mid");
-      addSlopeLine(x => 0.20 * x, "#0F766E", 1.35, "5 4", 0.88, "PSG = 0.20x 黄金前沿", "#0F766E", "right");
+      addSlopeLine(yFn, "#0F766E", 1.35, "5 4", 0.85, "跨周期赔率-水位前沿", "#0F766E", "right");
     } else {
-      addSlopeRegion(x => 1.0 * x, "below", "rgba(15,118,110,0.065)");
-      addSlopeRegion(x => 2.2 * x, "above", "rgba(185,28,28,0.045)");
-      addSlopeLine(x => 1.5 * x, "#6B7280", 1.0, "3 4", 0.72, "PEG = 1.5x 合理上限", "#6B7280", "mid");
-      addSlopeLine(x => 1.0 * x, "#0F766E", 1.35, "5 4", 0.88, "PEG = 1.0x 黄金前沿", "#0F766E", "right");
-    }
-  } else if (mode === "growth_accel_eff") {
-    const yFn = grEff === "rd"
-      ? (x => 6.0 - 0.15 * x)
-      : (grEff === "gm" ? (x => 30.0 - 0.50 * x) : (x => 12.0 - 0.25 * x));
-    addSlopeRegion(yFn, "above", "rgba(15,118,110,0.065)");
-    const rxStall = toPxX(-10.0);
-    const stallW = Math.max(0, Math.min(pad.l + plotW, rxStall) - pad.l);
-    if (stallW > 0) {
-      refParts.push(`<rect x="${pad.l}" y="${pad.t}" width="${stallW}" height="${plotH}" fill="rgba(185,28,28,0.045)" />`);
-    }
-    const rx0 = toPxX(0);
-    if (rx0 >= pad.l && rx0 <= pad.l + plotW) {
-      refParts.push(`<line x1="${rx0}" y1="${pad.t}" x2="${rx0}" y2="${pad.t + plotH}" stroke="#0F766E" stroke-width="1.2" stroke-dasharray="4 4" opacity="0.78" />`);
-      if (rx0 >= pad.l + 6 && rx0 <= pad.l + plotW - 90) {
-        refParts.push(`<text x="${rx0 + 5}" y="${pad.t + 14}" text-anchor="start" font-size="10" font-weight="600" fill="#0F766E" font-family="Noto Sans SC, sans-serif">0pp 加速/放缓分界</text>`);
-      }
-    }
-    addSlopeLine(
-      yFn,
-      "#0F766E",
-      1.35,
-      "5 4",
-      0.85,
-      grEff === "rd" ? "加速-研发强度前沿" : (grEff === "gm" ? "加速-毛利护城河前沿" : "加速-ROIC效率前沿"),
-      "#0F766E",
-      "right"
-    );
-  } else if (mode === "growth_cash_self") {
-    drawZeroX();
-    if (grCash === "fcf_margin") {
-      const yFn = x => 8.0 - 0.25 * x;
+      const yFn = x => 3.0 - 0.35 * x;
       addSlopeRegion(yFn, "above", "rgba(15,118,110,0.065)");
       const ry0 = toPxY(0);
-      const lowH = Math.max(0, pad.t + plotH - Math.max(pad.t, ry0));
-      if (lowH > 0) {
-        refParts.push(`<rect x="${pad.l}" y="${Math.max(pad.t, ry0)}" width="${plotW}" height="${lowH}" fill="rgba(185,28,28,0.055)" />`);
-      }
       if (ry0 >= pad.t && ry0 <= pad.t + plotH) {
-        refParts.push(`<line x1="${pad.l}" y1="${ry0}" x2="${pad.l + plotW}" y2="${ry0}" stroke="#DC2626" stroke-width="1.25" stroke-dasharray="4 4" opacity="0.82" />`);
+        refParts.push(`<line x1="${pad.l}" y1="${ry0}" x2="${pad.l + plotW}" y2="${ry0}" stroke="#0F766E" stroke-width="1.2" stroke-dasharray="4 4" opacity="0.78" />`);
         if (ry0 >= pad.t + 14 && ry0 <= pad.t + plotH - 4) {
-          refParts.push(`<text x="${pad.l + 8}" y="${ry0 - 5}" text-anchor="start" font-size="10" font-weight="600" fill="#DC2626" font-family="Noto Sans SC, sans-serif">0% 自我造血红线</text>`);
+          refParts.push(`<text x="${pad.l + 8}" y="${ry0 - 5}" text-anchor="start" font-size="10" font-weight="600" fill="#0F766E" font-family="Noto Sans SC, sans-serif">0pp 左/右侧分界线</text>`);
         }
       }
-      addSlopeLine(yFn, "#0F766E", 1.35, "5 4", 0.85, "增长-造血前沿 (FCF率+0.25×增速≥8)", "#0F766E", "right");
-    } else {
-      const yFn = x => 1.15 - 0.012 * x;
-      addSlopeRegion(yFn, "above", "rgba(15,118,110,0.065)");
-      const ry08 = toPxY(0.80);
-      const lowH = Math.max(0, pad.t + plotH - Math.max(pad.t, ry08));
-      if (lowH > 0) {
-        refParts.push(`<rect x="${pad.l}" y="${Math.max(pad.t, ry08)}" width="${plotW}" height="${lowH}" fill="rgba(185,28,28,0.055)" />`);
-      }
-      if (ry08 >= pad.t && ry08 <= pad.t + plotH) {
-        refParts.push(`<line x1="${pad.l}" y1="${ry08}" x2="${pad.l + plotW}" y2="${ry08}" stroke="#DC2626" stroke-width="1.25" stroke-dasharray="4 4" opacity="0.82" />`);
-        if (ry08 >= pad.t + 14 && ry08 <= pad.t + plotH - 4) {
-          refParts.push(`<text x="${pad.l + 8}" y="${ry08 - 5}" text-anchor="start" font-size="10" font-weight="600" fill="#DC2626" font-family="Noto Sans SC, sans-serif">0.80x 造血红线</text>`);
-        }
-      }
-      addSlopeLine(yFn, "#0F766E", 1.35, "5 4", 0.85, "增长-现金含金量前沿", "#0F766E", "right");
+      addSlopeLine(yFn, "#0F766E", 1.35, "5 4", 0.85, "赔率-拐点前沿", "#0F766E", "right");
     }
+  } else if (mode === "cycle_supply_safety") {
+    drawZeroX();
+    const safetyFloor = cycSafety === "fcf_assets_5y" ? 0 : (cycSafety === "cash_debt_5y" ? 20 : 1.0);
+    const floorLbl = cycSafety === "fcf_assets_5y"
+      ? "0% 5年净自由现金流红线"
+      : (cycSafety === "cash_debt_5y" ? "20% 5年现金覆盖红线" : "1.0x 5年自我造血红线 (OCF≥CapEx)");
+    const ryFloor = toPxY(safetyFloor);
+    const lowH = Math.max(0, pad.t + plotH - Math.max(pad.t, ryFloor));
+    if (lowH > 0) {
+      refParts.push(`<rect x="${pad.l}" y="${Math.max(pad.t, ryFloor)}" width="${plotW}" height="${lowH}" fill="rgba(185,28,28,0.055)" />`);
+    }
+    if (ryFloor >= pad.t && ryFloor <= pad.t + plotH) {
+      refParts.push(`<line x1="${pad.l}" y1="${ryFloor}" x2="${pad.l + plotW}" y2="${ryFloor}" stroke="#DC2626" stroke-width="1.25" stroke-dasharray="4 4" opacity="0.82" />`);
+      if (ryFloor >= pad.t + 14 && ryFloor <= pad.t + plotH - 4) {
+        refParts.push(`<text x="${pad.l + 8}" y="${ryFloor - 5}" text-anchor="start" font-size="10" font-weight="600" fill="#DC2626" font-family="Noto Sans SC, sans-serif">${esc(floorLbl)}</text>`);
+      }
+    }
+    const medX = median(pts.map(p => p.x));
+    const medY = median(pts.map(p => p.y));
+    const splitX = cycMoat === "health" ? 60 : (medX ?? 50);
+    const targetFloorY = Math.max(safetyFloor, medY ?? safetyFloor);
+    const rxMed = toPxX(splitX);
+    const ryMed = toPxY(targetFloorY);
+    if (cycMoat === "debt_5y") {
+      if (rxMed > pad.l && ryMed > pad.t) {
+        const optW = Math.min(pad.l + plotW, rxMed) - pad.l;
+        const optH = Math.min(pad.t + plotH, ryMed) - pad.t;
+        if (optW > 0 && optH > 0) {
+          refParts.push(`<rect x="${pad.l}" y="${pad.t}" width="${optW.toFixed(1)}" height="${optH.toFixed(1)}" fill="rgba(15,118,110,0.065)" />`);
+        }
+      }
+    } else if (rxMed < pad.l + plotW && ryMed > pad.t) {
+      const optX = Math.max(pad.l, rxMed);
+      const optW = pad.l + plotW - optX;
+      const optH = Math.min(pad.t + plotH, ryMed) - pad.t;
+      if (optW > 0 && optH > 0) {
+        refParts.push(`<rect x="${optX.toFixed(1)}" y="${pad.t}" width="${optW.toFixed(1)}" height="${optH.toFixed(1)}" fill="rgba(15,118,110,0.065)" />`);
+      }
+    }
+    if (rxMed >= pad.l && rxMed <= pad.l + plotW) {
+      refParts.push(`<line x1="${rxMed.toFixed(1)}" y1="${pad.t}" x2="${rxMed.toFixed(1)}" y2="${pad.t + plotH}" stroke="#0F766E" stroke-width="1.2" stroke-dasharray="4 4" opacity="0.72" />`);
+      const putLeft = rxMed > pad.l + plotW - 140;
+      const lblX = putLeft ? (rxMed - 5) : (rxMed + 5);
+      const lblAnchor = putLeft ? "end" : "start";
+      const medTxt = cycMoat === "health" ? "60分 长期健康分界" : `同业中位 (${splitX.toFixed(1)}%)`;
+      refParts.push(`<text x="${lblX.toFixed(1)}" y="${(pad.t + plotH - 8).toFixed(1)}" text-anchor="${lblAnchor}" font-size="10" font-weight="600" fill="#0F766E" font-family="Noto Sans SC, sans-serif">${esc(medTxt)}</text>`);
+    }
+    if (medY != null && Math.abs(medY - safetyFloor) > ySpan * 0.06 && ryMed >= pad.t && ryMed <= pad.t + plotH) {
+      refParts.push(`<line x1="${pad.l}" y1="${ryMed.toFixed(1)}" x2="${pad.l + plotW}" y2="${ryMed.toFixed(1)}" stroke="#6B7280" stroke-width="1.05" stroke-dasharray="3 4" opacity="0.72" />`);
+      if (ryMed >= pad.t + 14 && ryMed <= pad.t + plotH - 4) {
+        refParts.push(`<text x="${pad.l + plotW - 8}" y="${ryMed - 5}" text-anchor="end" font-size="10" fill="#6B7280" font-family="Noto Sans SC, sans-serif">长期造血同业中位</text>`);
+      }
+    }
+  } else if (mode === "cycle_elasticity_val") {
+    drawZeroX();
+    if (cycElastY === "pb" || cycElastY === "pb_med_ratio") {
+      const ry1 = toPxY(1.0);
+      if (ry1 >= pad.t && ry1 <= pad.t + plotH) {
+        refParts.push(`<line x1="${pad.l}" y1="${ry1}" x2="${pad.l + plotW}" y2="${ry1}" stroke="#0F766E" stroke-width="1.15" stroke-dasharray="4 3" opacity="0.75" />`);
+        if (ry1 >= pad.t + 14 && ry1 <= pad.t + plotH - 4) {
+          refParts.push(`<text x="${pad.l + 8}" y="${ry1 - 5}" text-anchor="start" font-size="10" font-weight="600" fill="#0F766E" font-family="Noto Sans SC, sans-serif">${cycElastY === "pb_med_ratio" ? "1.0x 5年中位PB线" : "1.0x 破净重置底线"}</text>`);
+        }
+      }
+    }
+    const posSlopes = pts.filter(p => p.x > 0.05 && p.y > 0).map(p => p.y / p.x);
+    const medSlope = clamp((posSlopes.length >= 2 ? median(posSlopes) : posSlopes[0]) || 0.2, 0.01, 25);
+    addSlopeRegion(x => medSlope * x, "below", "rgba(15,118,110,0.065)");
+    addSlopeLine(x => medSlope * x, "#0F766E", 1.35, "5 4", 0.85, `同业弹性-估值性价比前沿 (斜率=${medSlope.toFixed(2)})`, "#0F766E", "right");
   } else if (mode === "quality_roic_val") {
     drawZeroX();
     if (qvMode === "pb") {
@@ -1785,8 +1770,21 @@ export function renderCompareScatter(rows) {
 
   // Prepare bubbles sorted large-to-small so small bubbles render on top
   const bubbles = pts.map(p => {
-    const up = p.row.dcfUpsidePct ?? p.row.rimUpsidePct;
-    const fill = up == null ? "#6B7280" : (up >= 15 ? "#0F766E" : (up <= -10 ? "#B91C1C" : "#374151"));
+    let fill = "#6B7280";
+    if (isCycleMode) {
+      const cycY = p.row.roeToPb5y ?? p.row.roeToPb3y;
+      const isQualNetNet = p.row.pb != null && p.row.pb <= 1.05 && (p.row.cycHealthScore ?? 0) >= 55 && (cycY == null || cycY >= 2.0);
+      if (isQualNetNet || (cycY != null && cycY >= 8.0)) {
+        fill = "#0F766E";
+      } else if (cycY != null && cycY >= 4.5) {
+        fill = "#374151";
+      } else if (cycY != null) {
+        fill = "#B91C1C";
+      }
+    } else {
+      const up = p.row.dcfUpsidePct ?? p.row.rimUpsidePct;
+      fill = up == null ? "#6B7280" : (up >= 15 ? "#0F766E" : (up <= -10 ? "#B91C1C" : "#374151"));
+    }
     const radius = 7 + clamp(Math.log10(Math.max(1e9, p.row.mktCap || 1e10) / 1e9), 0, 3.6) * 3.8;
     return {
       ...p,
@@ -1821,7 +1819,7 @@ export function renderCompareScatter(rows) {
         ? b.row.divRiskFlag
         : (isQualMode
           ? b.row.qualityRiskFlag
-          : (isCycleMode ? b.row.cycleRiskFlag : (isGrowthMode ? b.row.growthRiskFlag : b.row.riskFlag)));
+          : (isCycleMode ? b.row.cycleRiskFlag : b.row.riskFlag));
       if (rFlag === "high_risk") {
         ringElems.push(`<circle cx="${b.cx.toFixed(1)}" cy="${b.cy.toFixed(1)}" r="${(b.r + 3.8).toFixed(1)}" fill="none" stroke="#DC2626" stroke-width="1.6" stroke-dasharray="3.5 2.5" stroke-opacity="0.92" style="pointer-events:none;" />`);
       } else if (rFlag === "low_vol") {
@@ -1896,13 +1894,19 @@ export function renderCompareScatter(rows) {
       const dcfUp = r.dcfUpsidePct != null ? fmtPct(r.dcfUpsidePct, 1, true) : "--";
       const rimUp = r.rimUpsidePct != null ? fmtPct(r.rimUpsidePct, 1, true) : "--";
       const shTotal = r.shareholderYieldPct != null ? `${r.shareholderYieldPct.toFixed(2)}%` : "--";
-      const divPart = r.divYieldPct != null ? `股息${r.divYieldPct.toFixed(2)}%` : "股息--";
+      const divPart = r.divYieldPct != null
+        ? (r.hasPostExDilution && r.rawDivYieldPct != null
+          ? `原TTM ${r.rawDivYieldPct.toFixed(2)}%`
+          : `股息${r.divYieldPct.toFixed(2)}%`)
+        : "股息--";
       const bbVal = r.buybackYieldPct || 0;
       const bbPart = bbVal >= 0.05
         ? ` + 回购${bbVal.toFixed(2)}%`
-        : (bbVal <= -0.05 ? ` - 稀释${Math.abs(bbVal).toFixed(2)}%` : "");
-      const bbLbl = bbVal >= 0.05 ? "+回购" : (bbVal <= -0.05 ? "-稀释" : "");
-      const bbNoteTag = (Math.abs(bbVal) >= 0.05 && r.buybackNote) ? ` · ${r.buybackNote}` : "";
+        : (r.hasPostExDilution
+          ? ` · 除息后股本摊薄+${r.postExDilutePct.toFixed(1)}%`
+          : (bbVal <= -0.05 ? ` · 股本扩张+${Math.abs(bbVal).toFixed(2)}%(除息前已反映)` : ""));
+      const bbLbl = bbVal >= 0.05 ? "+回购" : "";
+      const bbNoteTag = (!r.hasPostExDilution && Math.abs(bbVal) >= 0.05 && r.buybackNote) ? ` · ${r.buybackNote}` : "";
       const fcfPart = r.fcfYieldPct != null ? `${r.fcfYieldPct.toFixed(1)}%` : "--";
       const ccPart = r.cashConv5y != null ? `${r.cashConv5y.toFixed(2)}x` : "--";
       const roicTag = r.roicIsRoeProxy ? "ROE" : "ROIC";
@@ -1921,7 +1925,7 @@ export function renderCompareScatter(rows) {
         ? r.divRiskFlag
         : (isQualMode
           ? r.qualityRiskFlag
-          : (isCycleMode ? r.cycleRiskFlag : (isGrowthMode ? r.growthRiskFlag : r.riskFlag)));
+          : (isCycleMode ? r.cycleRiskFlag : r.riskFlag));
       const riskBadge = isDivMode
         ? (rFlag === "low_vol"
           ? ` <span style="color:#6EE7B7;">[稳健真红利]</span>`
@@ -1932,15 +1936,15 @@ export function renderCompareScatter(rows) {
             : (rFlag === "high_risk" ? ` <span style="color:#FCA5A5;">[白马排雷预警]</span>` : ""))
           : (isCycleMode
             ? (rFlag === "low_vol"
-              ? ` <span style="color:#6EE7B7;">[右侧拐点]</span>`
-              : (rFlag === "high_risk" ? ` <span style="color:#FCA5A5;">[半山腰预警]</span>` : ""))
-            : (isGrowthMode
-              ? (rFlag === "low_vol"
-                ? ` <span style="color:#6EE7B7;">[戴维斯双击]</span>`
-                : (rFlag === "high_risk" ? ` <span style="color:#FCA5A5;">[成长排雷预警]</span>` : ""))
-              : (rFlag === "low_vol"
-                ? ` <span style="color:#6EE7B7;">[低波稳健]</span>`
-                : (rFlag === "high_risk" ? ` <span style="color:#FCA5A5;">[高负债/回撤预警]</span>` : "")))));
+              ? ` <span style="color:#6EE7B7;">[${esc(r.cycleArchetype || "周期优选")}]</span>`
+              : (rFlag === "high_risk"
+                ? ` <span style="color:#FCA5A5;">[${esc(r.cycleArchetype || "周期排雷")}]</span>`
+                : (r.cycleArchetype && r.cycleArchetype !== "周期观察"
+                  ? ` <span style="color:#FBBF24;">[${esc(r.cycleArchetype)}]</span>`
+                  : "")))
+            : (rFlag === "low_vol"
+              ? ` <span style="color:#6EE7B7;">[低波稳健]</span>`
+              : (rFlag === "high_risk" ? ` <span style="color:#FCA5A5;">[高负债/回撤预警]</span>` : ""))));
       const covVal = hz === "3y" ? (r.fcf3yDivCoverage ?? r.fcfDivCoverage) : r.fcfDivCoverage;
       const covStr = covVal != null ? `${covVal.toFixed(2)}x${r.fcfCoverageIsProfitProxy ? "(净利)" : ""}` : "--";
       const capexStr = r.capexToOcfPct != null ? `CapEx/OCF ${r.capexToOcfPct.toFixed(0)}%` : (r.payoutPct != null ? `派息率 ${r.payoutPct.toFixed(0)}%` : "");
@@ -1978,10 +1982,10 @@ export function renderCompareScatter(rows) {
         <div class="tt-row"><span class="tt-lbl">再投资ROIIC / 复利总回报</span><span class="tt-val">${r.roiic3yPct != null ? fmtPct(r.roiic3yPct, 1, true) : "--"} (留存${r.reinvestRatePct != null ? r.reinvestRatePct.toFixed(0) + "%" : "--"}) / ${r.bogleRet3y != null ? fmtPct(r.bogleRet3y, 1, true) : "--"} [${esc(r.qualityArchetype || "均衡白马")}]</span></div>
         <div class="tt-row"><span class="tt-lbl">PB/复利总回报 · PEGY</span><span class="tt-val">${pbBogleTip != null ? pbBogleTip.toFixed(2) + "x" : "--"} · ${pegyTip != null ? pegyTip.toFixed(2) + "x" : "--"}</span></div>
         <div class="tt-row"><span class="tt-lbl">应计比率 / 应收占比</span><span class="tt-val">${r.accrualRatio != null ? fmtPct(r.accrualRatio, 1, true) : "--"} / ${r.arToRevPct != null ? r.arToRevPct.toFixed(1) + "%" : (r.isFinancial ? "金融免算" : "--")}</span></div>
-        <div class="tt-row"><span class="tt-lbl">EV/EBIT (3Y/5Y · 水位)</span><span class="tt-val">${r.isFinancial ? "金融免算" : `${r.evToEbit3y != null ? r.evToEbit3y.toFixed(1) + "x" : "--"} / ${r.evToEbit5y != null ? r.evToEbit5y.toFixed(1) + "x" : "--"} · 水位 ${r.ebitCyclePos != null ? r.ebitCyclePos.toFixed(2) + "x" : "--"} (${r.evDebtBasis})`}</span></div>
-        <div class="tt-row"><span class="tt-lbl">Δ毛利 / ΔROE / 抗寒</span><span class="tt-val">${r.qGmYoyPp != null ? fmtPct(r.qGmYoyPp, 1, true).replace("%", "pp") : (r.isFinancial ? "金融--" : "--")} / ${r.deltaRoeMarginPp != null ? fmtPct(r.deltaRoeMarginPp, 1, true).replace("%", "pp") : "--"} · 保障 ${r.interestCoverage != null ? r.interestCoverage.toFixed(1) + "x" : "--"} (现金/债 ${r.cashToDebtPct != null ? r.cashToDebtPct.toFixed(0) + "%" : "--"})</span></div>
-        <div class="tt-row"><span class="tt-lbl">PEG / PSG / 加速度</span><span class="tt-val">${r.peg3y != null ? r.peg3y.toFixed(2) + "x" : "--"} / ${r.psg != null ? r.psg.toFixed(2) + "x" : "--"} · 加速度 ${r.npAccelPp != null ? fmtPct(r.npAccelPp, 1, true).replace("%", "pp") : "--"}</span></div>
-        <div class="tt-row"><span class="tt-lbl">营收3Y/1Y · 研发/FCF率</span><span class="tt-val">${r.revCagr3y != null ? fmtPct(r.revCagr3y, 1, true) : "--"} / ${r.revYoy1yRaw != null ? fmtPct(r.revYoy1yRaw, 1, true) : "--"} · ${r.isFinancial ? "金融免算" : `研发 ${r.rdRatioPct != null ? r.rdRatioPct.toFixed(1) + "%" : "--"} · FCF率 ${r.fcfMargin3y != null ? r.fcfMargin3y.toFixed(1) + "%" : "--"}`}</span></div>
+        <div class="tt-row"><span class="tt-lbl">5Y财务健康分 (长周期造血)</span><span class="tt-val">${r.isFinancial ? "金融免算" : `${r.cycHealthScore != null ? r.cycHealthScore + "分" : "--"} · 5Y OCF/CapEx ${r.ocfToCapex5y != null ? r.ocfToCapex5y.toFixed(2) + "x" : "--"} · 5Y均负债 ${r.debtRatio5yMean != null ? r.debtRatio5yMean.toFixed(0) + "%" : "--"}`}</span></div>
+        <div class="tt-row"><span class="tt-lbl">跨周期回报 (5Y均ROE÷PB)</span><span class="tt-val">${r.roeToPb5y != null ? r.roeToPb5y.toFixed(1) + "%" : "--"} · 5Y PB中位比 ${r.pbToMed5y != null ? r.pbToMed5y.toFixed(2) + "x" : "--"} (${r.pbMedDiscountPct != null ? fmtPct(r.pbMedDiscountPct, 0, true) + "折价" : "--"})</span></div>
+        <div class="tt-row"><span class="tt-lbl">正常化 EV/EBIT (5Y · 水位分位)</span><span class="tt-val">${r.isFinancial ? "金融免算" : `${r.evToEbitNorm5y != null ? r.evToEbitNorm5y.toFixed(1) + "x" : "--"} / 3Y ${r.evToEbitNorm3y != null ? r.evToEbitNorm3y.toFixed(1) + "x" : "--"} · 盈利分位 ${r.ebitCyclePct5y != null ? r.ebitCyclePct5y.toFixed(0) + "%" : "--"} (${r.evDebtBasis})`}</span></div>
+        <div class="tt-row"><span class="tt-lbl">反转弹性 (5Y峰值收益/+1pp毛利)</span><span class="tt-val">${r.isFinancial ? `${r.peakEarnYield5y != null ? r.peakEarnYield5y.toFixed(0) + "%" : "--"} / 金融--` : `${r.peakEarnYield5y != null ? r.peakEarnYield5y.toFixed(0) + "%" : "--"} / ${r.gmElasticityPct != null ? r.gmElasticityPct.toFixed(2) + "%" : "--"} · [${esc(r.cycleArchetype || "周期观察")}]`}</span></div>
         <div class="tt-row"><span class="tt-lbl">3Y/5Y 均 ROE/PB</span><span class="tt-val">${r.roeToPb3y != null ? r.roeToPb3y.toFixed(1) + "%" : "--"} / ${r.roeToPb5y != null ? r.roeToPb5y.toFixed(1) + "%" : "--"} (3Y ROE ${r.roeMean3y != null ? r.roeMean3y.toFixed(1) + "%" : "--"} · 均PB ${r.pb3yAvg != null ? r.pb3yAvg.toFixed(2) + "x" : "--"})</span></div>
         <div class="tt-row"><span class="tt-lbl">增速 (5Y→1Y)</span><span class="tt-val">${esc(g5Val)} → ${esc(g1Val)}${esc(gDir)}</span></div>
         <div class="tt-row"><span class="tt-lbl">负债率 / 净现金比</span><span class="tt-val">${esc(debtStr)}${!r.isFinancial && r.estIbDebtRatioPct != null ? ` (有息≈${r.estIbDebtRatioPct.toFixed(0)}%)` : ""} / ${esc(ncStr)}</span></div>
@@ -2018,23 +2022,33 @@ export function renderCompareTable(rows) {
   const isDivMode = STATE.compare.researchMode === "dividend";
   const isQualMode = STATE.compare.researchMode === "quality";
   const isCycleMode = STATE.compare.researchMode === "cycle";
-  const isGrowthMode = STATE.compare.researchMode === "growth";
   const elMode = STATE.compare.divElasticityMode || "dps_cagr";
   const qCompY = STATE.compare.qualCompYAxis || "pb";
-  const cycInflect = STATE.compare.cycleInflectAxis || "gm_yoy";
-  const grVal = STATE.compare.growthValAxis || "peg";
+  const cycInflect = STATE.compare.cycleInflectAxis || "cycle_pct";
+  const cycMoatTbl = STATE.compare.cycleMoatAxis || "health";
+  const cycElastTbl = STATE.compare.cycleElastAxis || "peak_yield";
   const allFinTbl = rows.length > 0 && rows.every(r => r.isFinancial);
   const peKey = hz === "5y" ? "pe5yNorm" : (hz === "3y" ? "pe3yNorm" : "peTtm");
   const peLbl = hz === "5y" ? "5Y均利PE (5Y均PE)" : (hz === "3y" ? "3Y均利PE (3Y均PE)" : "PE_TTM (5Y分位)");
-  const evEbitKey = hz === "5y" ? "evToEbit5y" : (hz === "3y" ? "evToEbit3y" : "evToEbitTtm");
-  const evEbitLbl = hz === "5y" ? "5Y EV/EBIT (水位)" : (hz === "3y" ? "3Y EV/EBIT (水位)" : "EV/EBIT (周期水位)");
-  const cycEdgeKey = cycInflect === "roe_delta" ? "deltaRoeMarginPp" : "qGmYoyPp";
-  const cycEdgeLbl = cycInflect === "roe_delta" ? "ΔROE边际 (Δ毛利)" : "单季Δ毛利 (ΔROE)";
-  const pegPsgKey = grVal === "psg" ? "psg" : "peg3y";
-  const pegPsgLbl = grVal === "psg" ? "PSG (PS/营收增速)" : "PEG (3Y增速/加速)";
+  const evEbitKey = hz === "3y" ? "evToEbitNorm3y" : "evToEbitNorm5y";
+  const evEbitLbl = hz === "3y" ? "3Y正常化EV/EBIT (分位)" : "5Y正常化EV/EBIT (分位)";
+  const cycEdgeKey = cycInflect === "gm_yoy"
+    ? "qGmYoyPp"
+    : (cycInflect === "gm_qoq" ? "qGmQoqPp" : "ebitCyclePct5y");
+  const cycEdgeLbl = cycInflect === "gm_yoy"
+    ? "单季Δ毛利同比 (环比)"
+    : (cycInflect === "gm_qoq" ? "单季Δ毛利环比 (同比)" : "盈利周期分位 (Δ毛利)");
+  const cycMoatKey = "cycHealthScore";
+  const cycMoatLbl = "5Y财务健康 (5Y造血)";
+  const cycElastKey = cycElastTbl === "gm_elast" ? "gmElasticityPct" : "peakEarnYield5y";
+  const cycElastLbl = cycElastTbl === "gm_elast" ? "毛利+1pp弹性 (周期分类)" : "5Y峰值收益 (周期分类)";
   const pbLbl = hz === "ttm" ? "PB (5Y分位)" : (hz === "3y" ? "PB (3Y均值)" : "PB (5Y均值)");
-  const rpbKey = hz === "5y" ? "roeToPb5y" : (hz === "3y" ? "roeToPb3y" : "roeToPbTtm");
-  const rpbLbl = hz === "5y" ? "5Y均ROE/PB (稳定)" : (hz === "3y" ? "3Y均ROE/PB (稳定)" : "ROE/PB (3Y/5Y均)");
+  const rpbKey = isCycleMode
+    ? "roeToPb5y"
+    : (hz === "5y" ? "roeToPb5y" : (hz === "3y" ? "roeToPb3y" : "roeToPbTtm"));
+  const rpbLbl = isCycleMode
+    ? "5Y均ROE/PB (跨周期回报)"
+    : (hz === "5y" ? "5Y均ROE/PB (稳定)" : (hz === "3y" ? "3Y均ROE/PB (稳定)" : "ROE/PB (3Y/5Y均)"));
   const covKey = hz === "3y" ? "fcf3yDivCoverage" : "fcfDivCoverage";
   const covLbl = allFinTbl
     ? (hz === "3y" ? "3Y盈利覆盖 (派息率)" : "盈利覆盖 (派息率)")
@@ -2062,6 +2076,8 @@ export function renderCompareTable(rows) {
     pe: { key: peKey, label: peLbl, align: "", sortable: true },
     evEbit: { key: evEbitKey, label: evEbitLbl, align: "", sortable: true },
     cycEdge: { key: cycEdgeKey, label: cycEdgeLbl, align: "", sortable: true },
+    cycMoat: { key: cycMoatKey, label: cycMoatLbl, align: "", sortable: true },
+    cycElast: { key: cycElastKey, label: cycElastLbl, align: "", sortable: true },
     pb: { key: "pb", label: pbLbl, align: "", sortable: true },
     rpb: { key: rpbKey, label: rpbLbl, align: "", sortable: true },
     sh: { key: "shareholderYieldPct", label: "股东回报 (股息/净回购)", align: "", sortable: true },
@@ -2073,8 +2089,6 @@ export function renderCompareTable(rows) {
     roiic: { key: roiicKey, label: roiicLbl, align: "", sortable: true },
     pbBogle: { key: pbBogleKey, label: pbBogleLbl, align: "", sortable: true },
     qual: { key: "accrualRatio", label: "应计 / 应收比", align: "", sortable: true },
-    pegPsg: { key: pegPsgKey, label: pegPsgLbl, align: "", sortable: true },
-    grQuality: { key: "revYoy1y", label: "营收增速 (研发/FCF率)", align: "", sortable: true },
     g1Base: { key: "g1Base", label: "5Y→1Y净利增速", align: "", sortable: true },
     dcf: { key: "dcfUpsidePct", label: "绝对估值 (口径/空间)", align: "", sortable: true },
     rim: { key: "rimUpsidePct", label: "RIM估值 (空间)", align: "", sortable: true },
@@ -2085,12 +2099,10 @@ export function renderCompareTable(rows) {
   };
 
   const order = isDivMode
-    ? ["code", "name", "mktCap", "unadjPrice", "sh", "dst", "cov", "el", "vol", "pe", "pb", "rpb", "fcf", "roic", "roiic", "pbBogle", "qual", "pegPsg", "grQuality", "evEbit", "cycEdge", "g1Base", "dcf", "rim", "irr", "debt", "actions"]
+    ? ["code", "name", "mktCap", "unadjPrice", "sh", "dst", "cov", "el", "vol", "pe", "pb", "rpb", "fcf", "roic", "roiic", "pbBogle", "qual", "evEbit", "cycEdge", "g1Base", "dcf", "rim", "irr", "debt", "actions"]
     : (isQualMode
-      ? ["code", "name", "mktCap", "unadjPrice", "roic", "roiic", "pbBogle", "irr", "rpb", "fcf", "qual", "pe", "pb", "pegPsg", "grQuality", "evEbit", "cycEdge", "g1Base", "dcf", "rim", "debt", "sh", "vol", "dst", "cov", "el", "actions"]
-      : (isCycleMode
-        ? ["code", "name", "mktCap", "unadjPrice", "evEbit", "pb", "cycEdge", "debt", "pe", "rpb", "roic", "roiic", "pbBogle", "fcf", "qual", "pegPsg", "grQuality", "g1Base", "dcf", "rim", "irr", "vol", "sh", "dst", "cov", "el", "actions"]
-        : ["code", "name", "mktCap", "unadjPrice", "pegPsg", "g1Base", "grQuality", "roic", "roiic", "pbBogle", "pe", "fcf", "qual", "dcf", "irr", "sh", "debt", "vol", "pb", "rpb", "evEbit", "cycEdge", "rim", "dst", "cov", "el", "actions"]));
+      ? ["code", "name", "mktCap", "unadjPrice", "roic", "roiic", "pbBogle", "irr", "rpb", "fcf", "qual", "pe", "pb", "evEbit", "cycEdge", "g1Base", "dcf", "rim", "debt", "sh", "vol", "dst", "cov", "el", "actions"]
+      : ["code", "name", "mktCap", "unadjPrice", "cycMoat", "rpb", "pb", "cycElast", "evEbit", "cycEdge", "debt", "pe", "roic", "roiic", "pbBogle", "fcf", "qual", "g1Base", "dcf", "rim", "irr", "vol", "sh", "dst", "cov", "el", "actions"]);
   const cols = order.map(k => colMap[k]);
 
   thead.innerHTML = `<tr>${cols.map(c => {
@@ -2107,7 +2119,7 @@ export function renderCompareTable(rows) {
         STATE.compare.sortDir = STATE.compare.sortDir === "desc" ? "asc" : "desc";
       } else {
         STATE.compare.sortBy = k;
-        STATE.compare.sortDir = (k === "peTtm" || k === "pe3yNorm" || k === "pe5yNorm" || k === "evToEbitTtm" || k === "evToEbit3y" || k === "evToEbit5y" || k === "peg3y" || k === "psg" || k === "pb" || k === "pbToBogle3y" || k === "pbToBogle5y" || k === "pegy3y" || k === "pegy5y" || k === "code" || k === "vol3y" || k === "debtRatioPct") ? "asc" : "desc";
+        STATE.compare.sortDir = (k === "peTtm" || k === "pe3yNorm" || k === "pe5yNorm" || k === "evToEbitTtm" || k === "evToEbit3y" || k === "evToEbit5y" || k === "evToEbitNorm3y" || k === "evToEbitNorm5y" || k === "pb" || k === "pbToBogle3y" || k === "pbToBogle5y" || k === "pegy3y" || k === "pegy5y" || k === "code" || k === "vol3y" || k === "debtRatioPct") ? "asc" : "desc";
       }
       renderCompareResults();
     });
@@ -2162,12 +2174,16 @@ export function renderCompareTable(rows) {
       : (hz === "3y"
         ? `3Y ROE ${r.roeMean3y != null ? r.roeMean3y.toFixed(1) + "%" : "--"} · 波动±${(r.roeVol3y ?? r.roeVol5y) != null ? (r.roeVol3y ?? r.roeVol5y).toFixed(1) + "%" : "--"}`
         : `3Y均 ${r.roeToPb3y != null ? r.roeToPb3y.toFixed(1) + "%" : "--"} · 5Y均 ${r.roeToPb5y != null ? r.roeToPb5y.toFixed(1) + "%" : "--"}`);
-    const divTxt = r.divYieldPct != null ? `股息${r.divYieldPct.toFixed(1)}%` : "股息--";
+    const divTxt = r.divYieldPct != null
+      ? (r.hasPostExDilution && r.rawDivYieldPct != null
+        ? `原${r.rawDivYieldPct.toFixed(1)}%`
+        : `股息${r.divYieldPct.toFixed(1)}%`)
+      : "股息--";
     const bbVal = r.buybackYieldPct || 0;
     const bbHtml = bbVal >= 0.05
-      ? `<span style="color:var(--emerald);">+回购${bbVal.toFixed(2)}%</span>`
+      ? ` <span style="color:var(--emerald);">+回购${bbVal.toFixed(2)}%</span>`
       : (bbVal <= -0.05
-        ? `<span style="color:var(--crimson);">稀释${bbVal.toFixed(2)}%</span>`
+        ? ` · <span style="color:var(--ochre);">股本+${Math.abs(bbVal).toFixed(1)}%</span>`
         : (r.payoutPct != null ? `·派息${r.payoutPct.toFixed(0)}%` : ""));
     const shColor = (r.shareholderYieldPct != null && r.shareholderYieldPct < 0) ? "color:var(--crimson);" : "";
     const fcfMain = r[fcfKey];
@@ -2201,7 +2217,7 @@ export function renderCompareTable(rows) {
       : "";
     const volTxt = r.vol3y != null ? `${r.vol3y.toFixed(1)}%` : "--";
     const ddSub = r.maxDd3y != null ? `回撤 ${r.maxDd3y.toFixed(0)}%` : "--";
-    const effRisk = isDivMode ? r.divRiskFlag : (isQualMode ? r.qualityRiskFlag : (isCycleMode ? r.cycleRiskFlag : (isGrowthMode ? r.growthRiskFlag : r.riskFlag)));
+    const effRisk = isDivMode ? r.divRiskFlag : (isQualMode ? r.qualityRiskFlag : (isCycleMode ? r.cycleRiskFlag : r.riskFlag));
     const riskMark = isDivMode
       ? (effRisk === "low_vol"
         ? `<span style="color:var(--emerald);font-weight:600;">[真红利] </span>`
@@ -2212,15 +2228,15 @@ export function renderCompareTable(rows) {
           : (effRisk === "high_risk" ? `<span style="color:var(--crimson);font-weight:600;">[排雷] </span>` : ""))
         : (isCycleMode
           ? (effRisk === "low_vol"
-            ? `<span style="color:var(--emerald);font-weight:600;">[拐点] </span>`
-            : (effRisk === "high_risk" ? `<span style="color:var(--crimson);font-weight:600;">[半山腰] </span>` : ""))
-          : (isGrowthMode
-            ? (effRisk === "low_vol"
-              ? `<span style="color:var(--emerald);font-weight:600;">[双击] </span>`
-              : (effRisk === "high_risk" ? `<span style="color:var(--crimson);font-weight:600;">[排雷] </span>` : ""))
-            : (effRisk === "low_vol"
-              ? `<span style="color:var(--emerald);font-weight:600;">[低波] </span>`
-              : (effRisk === "high_risk" ? `<span style="color:var(--crimson);font-weight:600;">[预警] </span>` : "")))));
+            ? `<span style="color:var(--emerald);font-weight:600;">[${esc(r.cycleArchetype || "周期优选")}] </span>`
+            : (effRisk === "high_risk"
+              ? `<span style="color:var(--crimson);font-weight:600;">[${esc(r.cycleArchetype || "周期排雷")}] </span>`
+              : (r.cycleArchetype && r.cycleArchetype !== "周期观察"
+                ? `<span style="color:var(--ochre);font-weight:600;">[${esc(r.cycleArchetype)}] </span>`
+                : "")))
+          : (effRisk === "low_vol"
+            ? `<span style="color:var(--emerald);font-weight:600;">[低波] </span>`
+            : (effRisk === "high_risk" ? `<span style="color:var(--crimson);font-weight:600;">[预警] </span>` : ""))));
     const covVal = r[covKey];
     const covColor = covVal == null ? "var(--ink-faint)" : (covVal >= 1.2 ? "var(--emerald)" : (covVal < 1.0 ? "var(--crimson)" : "var(--ink)"));
     const covSub = r.fcfCoverageIsProfitProxy
@@ -2229,7 +2245,13 @@ export function renderCompareTable(rows) {
     const shTitleParts = [];
     if (r.divEventsDetail) shTitleParts.push(r.divEventsDetail);
     if (Math.abs(bbVal) >= 0.05) {
-      shTitleParts.push(`${bbVal >= 0 ? "净回购" : "净稀释"}: ${bbVal >= 0 ? "+" : ""}${bbVal.toFixed(2)}% (${r.buybackSource}${r.buybackNote ? "·" + r.buybackNote : ""})`);
+      shTitleParts.push(
+        bbVal >= 0
+          ? `净回购: +${bbVal.toFixed(2)}% (${r.buybackSource}${r.buybackNote ? "·" + r.buybackNote : ""})`
+          : (r.hasPostExDilution
+            ? `股本扩张: +${Math.abs(bbVal).toFixed(2)}% (${r.buybackSource}${r.buybackNote ? "·" + r.buybackNote : ""}，已按利润与分红比例不变、最新股本摊薄计算预期股息率)`
+            : `股本扩张: +${Math.abs(bbVal).toFixed(2)}% (${r.buybackSource}${r.buybackNote ? "·" + r.buybackNote : ""}，发生于最近除息前，最新派息已按新股本实施)`)
+      );
     }
     const shTitleAttr = shTitleParts.length ? ` title="${esc(shTitleParts.join("\n"))}"` : "";
     const covTitleTxt = r.fcfCoverageIsProfitProxy
@@ -2251,28 +2273,36 @@ export function renderCompareTable(rows) {
     const evEbitVal = r[evEbitKey];
     const evEbitSub = r.isFinancial
       ? "金融免算"
-      : (r.ebitCyclePos != null ? `水位 ${r.ebitCyclePos.toFixed(2)}x · ${r.evDebtBasis}` : r.evDebtBasis);
+      : `${r.ebitCyclePct5y != null ? `分位 ${r.ebitCyclePct5y.toFixed(0)}%` : "分位 --"} · ${r.evDebtBasis}`;
     const evEbitTitle = r.isFinancial
       ? "金融行业不适用 EV/EBIT"
-      : `EV 口径: ${r.evDebtBasis} (有息负债分项缺失时按总负债近似)；水位 = 当期 TTM EBIT ÷ ${hz === "3y" ? "3年" : "5年"}均化 EBIT (>1.5x 防高景气接盘)`;
+      : `EV 口径: ${r.evDebtBasis}；正常化基准: ${hz === "3y" ? "3年" : "5年"}正向中枢 EBIT；盈利周期分位 = TTM EBIT 在近5年峰谷中的百分位 (>80% 严防周期顶低PE接盘)`;
     const cycEdgeMain = r[cycEdgeKey];
-    const cycEdgeColor = cycEdgeMain == null ? "var(--ink-faint)" : (cycEdgeMain > 0 ? "var(--emerald)" : (cycEdgeMain < -3 ? "var(--crimson)" : "var(--ink)"));
-    const cycEdgeAlt = cycInflect === "roe_delta"
-      ? `Δ毛利 ${r.qGmYoyPp != null ? fmtPct(r.qGmYoyPp, 1, true).replace("%", "pp") : "--"}`
-      : `ΔROE ${r.deltaRoeMarginPp != null ? fmtPct(r.deltaRoeMarginPp, 1, true).replace("%", "pp") : "--"}`;
-    const cycCapexTxt = r.capexToRevPct != null ? ` · CapEx ${r.capexToRevPct.toFixed(0)}%` : "";
-    const pegVal = r[pegPsgKey];
-    const pegColor = pegVal == null
+    const cycEdgeIsPctPos = cycEdgeKey === "ebitCyclePct5y";
+    const cycEdgeColor = cycEdgeMain == null
       ? "var(--ink-faint)"
-      : (grVal === "psg"
-        ? (pegVal <= 0.22 ? "var(--emerald)" : (pegVal > 0.45 ? "var(--crimson)" : "var(--ink)"))
-        : (pegVal <= 1.2 ? "var(--emerald)" : (pegVal > 2.2 ? "var(--crimson)" : "var(--ink)")));
-    const pegSub = grVal === "psg"
-      ? `PS ${r.psTtm != null ? r.psTtm.toFixed(1) + "x" : "--"} · 3Y营收 ${r.revCagr3y != null ? fmtPct(r.revCagr3y, 1, true) : "--"}`
-      : `加速度 ${r.npAccelPp != null ? fmtPct(r.npAccelPp, 1, true).replace("%", "pp") : "--"}${r.psg != null ? ` · PSG ${r.psg.toFixed(2)}x` : ""}`;
-    const revSub = r.isFinancial
-      ? `3Y营收 ${r.revCagr3y != null ? fmtPct(r.revCagr3y, 1, true) : "--"} · 金融免算`
-      : `研发 ${r.rdRatioPct != null ? r.rdRatioPct.toFixed(1) + "%" : "--"} · FCF率 ${r.fcfMargin3y != null ? r.fcfMargin3y.toFixed(1) + "%" : "--"}`;
+      : (cycEdgeIsPctPos
+        ? (cycEdgeMain > 80 ? "var(--crimson)" : (cycEdgeMain <= 30 ? "var(--emerald)" : "var(--ink)"))
+        : (cycEdgeMain > 0 ? "var(--emerald)" : (cycEdgeMain < -3 ? "var(--crimson)" : "var(--ink)")));
+    const cycEdgeAlt = cycEdgeIsPctPos
+      ? `Δ毛利同比 ${r.qGmYoyPp != null ? fmtPct(r.qGmYoyPp, 1, true).replace("%", "pp") : "--"}`
+      : (cycInflect === "gm_qoq"
+        ? `同比 ${r.qGmYoyPp != null ? fmtPct(r.qGmYoyPp, 1, true).replace("%", "pp") : "--"}`
+        : `环比 ${r.qGmQoqPp != null ? fmtPct(r.qGmQoqPp, 1, true).replace("%", "pp") : "--"}`);
+    const cycCapexTxt = r.capexToRevPct != null ? ` · CapEx ${r.capexToRevPct.toFixed(0)}%` : "";
+    const cycMoatMain = r[cycMoatKey];
+    const cycMoatColor = cycMoatMain == null ? "var(--ink-faint)" : (cycMoatMain >= 60 ? "var(--emerald)" : (cycMoatMain < 35 ? "var(--crimson)" : "var(--ink)"));
+    const cycMoatSub = r.isFinancial
+      ? "金融免算"
+      : `5Y造血 ${r.ocfToCapex5y != null ? r.ocfToCapex5y.toFixed(2) + "x" : "--"} · 5Y债率 ${r.debtRatio5yMean != null ? r.debtRatio5yMean.toFixed(0) + "%" : "--"}`;
+    const cycMoatTitle = r.isFinancial
+      ? "金融行业不适用"
+      : `5Y财务健康=${r.cycHealthScore ?? "--"}分；5Y累计OCF/CapEx=${r.ocfToCapex5y != null ? r.ocfToCapex5y.toFixed(2) + "x" : "--"}；5Y平均负债率=${r.debtRatio5yMean != null ? r.debtRatio5yMean.toFixed(1) + "%" : "--"}；5Y平均现金/债=${r.cashToDebt5yMean != null ? r.cashToDebt5yMean.toFixed(0) + "%" : "--"}；5Y平均毛利=${r.ttmGmMean5y != null ? r.ttmGmMean5y.toFixed(1) + "%" : "--"}`;
+    const cycElastMain = r[cycElastKey];
+    const cycElastSub = cycElastTbl === "gm_elast"
+      ? `峰值收益 ${r.peakEarnYield5y != null ? r.peakEarnYield5y.toFixed(0) + "%" : "--"} · ${r.cycleArchetype || "周期观察"}`
+      : `+1pp ${r.gmElasticityPct != null ? r.gmElasticityPct.toFixed(2) + "%" : "--"} · ${r.cycleArchetype || "周期观察"}`;
+    const cycElastTitle = `毛利+1pp盈利弹性 = TTM营收 ÷ 总市值 × 1%（等价 1/PS）；5Y峰值盈利收益率 = 近5年最高年度净利 ÷ 总市值`;
 
     const cellHtml = {
       code: `<td class="left mono"><strong>${esc(r.code)}</strong></td>`,
@@ -2281,9 +2311,9 @@ export function renderCompareTable(rows) {
       unadjPrice: `<td class="mono">¥${fmtNum(r.unadjPrice)}</td>`,
       [peKey]: `<td>${peMainVal != null ? `<strong>${fmtNum(peMainVal, 1)}x</strong><br><small class="flat" style="font-size:10.5px;">${peSub}</small>` : `<span class="flat">亏损/无</span>`}</td>`,
       [evEbitKey]: `<td title="${esc(evEbitTitle)}">${evEbitVal != null ? `<strong>${fmtNum(evEbitVal, 1)}x</strong><br><small class="flat" style="font-size:10.5px;">${esc(evEbitSub)}</small>` : `<span class="flat">${r.isFinancial ? "金融免算" : "亏损/无"}</span>`}</td>`,
-      [cycEdgeKey]: `<td class="mono"><strong style="color:${cycEdgeColor};">${cycEdgeMain != null ? fmtPct(cycEdgeMain, 1, true).replace("%", "pp") : "--"}</strong><br><small class="flat" style="font-size:10.5px;">${esc(cycEdgeAlt + cycCapexTxt)}</small></td>`,
-      [pegPsgKey]: `<td class="mono"><strong style="color:${pegColor};">${pegVal != null ? pegVal.toFixed(2) + "x" : "--"}</strong><br><small class="flat" style="font-size:10.5px;">${esc(pegSub)}</small></td>`,
-      revYoy1y: `<td class="mono ${clsSign(r.revYoy1yRaw)}"><strong>${r.revYoy1yRaw != null ? fmtPct(r.revYoy1yRaw, 1, true) : "--"}</strong><br><small class="flat" style="font-size:10.5px;">${esc(revSub)}</small></td>`,
+      [cycEdgeKey]: `<td class="mono"><strong style="color:${cycEdgeColor};">${cycEdgeMain != null ? (cycEdgeIsPctPos ? cycEdgeMain.toFixed(0) + "%" : fmtPct(cycEdgeMain, 1, true).replace("%", "pp")) : "--"}</strong><br><small class="flat" style="font-size:10.5px;">${esc(cycEdgeAlt + cycCapexTxt)}</small></td>`,
+      [cycMoatKey]: `<td class="mono" title="${esc(cycMoatTitle)}">${r.isFinancial ? `<span class="flat">金融免算</span>` : `<strong style="color:${cycMoatColor};">${cycMoatMain != null ? cycMoatMain.toFixed(0) + "分" : "--"}</strong><br><small class="flat" style="font-size:10.5px;">${esc(cycMoatSub)}</small>`}</td>`,
+      [cycElastKey]: `<td class="mono" title="${esc(cycElastTitle)}">${r.isFinancial && cycElastTbl === "gm_elast" ? `<span class="flat">金融免算</span>` : `<strong>${cycElastMain != null ? cycElastMain.toFixed(cycElastTbl === "gm_elast" ? 2 : 0) + "%" : "--"}</strong><br><small class="flat" style="font-size:10.5px;">${esc(cycElastSub)}</small>`}</td>`,
       pb: `<td>${r.pb != null ? `<strong>${fmtNum(r.pb, 2)}x</strong><br><small class="flat" style="font-size:10.5px;">${pbSub}</small>` : `--`}</td>`,
       [rpbKey]: `<td>${rpbMain != null ? `<strong style="color:${rpbColor};">${rpbMain.toFixed(1)}%</strong><br><small class="flat" style="font-size:10.5px;">${esc(rpbSub)}</small>` : `<span class="flat">--</span><br><small class="flat" style="font-size:10.5px;">${esc(rpbSub)}</small>`}</td>`,
       shareholderYieldPct: `<td${shTitleAttr}>${r.shareholderYieldPct != null ? `<strong style="${shColor}">${r.shareholderYieldPct.toFixed(2)}%</strong><br><small class="flat" style="font-size:10.5px;">${esc(divTxt)}${bbHtml}</small>` : `--`}</td>`,
